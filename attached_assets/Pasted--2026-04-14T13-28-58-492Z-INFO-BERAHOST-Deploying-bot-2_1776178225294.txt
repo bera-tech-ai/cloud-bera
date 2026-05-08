@@ -1,0 +1,401 @@
+[2026-04-14T13:28:58.492Z] [INFO  ] [BERAHOST] Deploying bot...
+[2026-04-14T13:28:58.535Z] [INFO  ] [BERAHOST] Cloning repository (shallow)...
+[2026-04-14T13:28:59.307Z] [INFO  ] [BERAHOST] Starting bot (npm start)...
+[2026-04-14T13:28:59.448Z] [STDOUT] [BERAHOST] Restoring node_modules from cache (bot_2)...
+[2026-04-14T13:28:59.493Z] [INFO  ] [BERAHOST] Bot started with PID 634
+[2026-04-14T13:29:01.135Z] [STDOUT] up to date, audited 310 packages in 1s
+[2026-04-14T13:29:01.135Z] [STDOUT] 65 packages are looking for funding
+[2026-04-14T13:29:01.142Z] [STDOUT] 4 vulnerabilities (1 moderate, 3 high)
+[2026-04-14T13:29:01.186Z] [STDOUT] run `npm fund` for details
+[2026-04-14T13:29:01.186Z] [STDOUT] Some issues need review, and may require choosing
+[2026-04-14T13:29:01.229Z] [STDOUT] a different dependency.
+[2026-04-14T13:29:01.275Z] [STDOUT] Run `npm audit` for details.
+[2026-04-14T13:29:01.327Z] [STDOUT] [BERAHOST] Updating node_modules cache...
+[2026-04-14T13:29:01.332Z] [STDOUT] [BERAHOST] Copying node_modules to cache (this may take a moment)...
+[2026-04-14T13:29:01.673Z] [STDOUT] [BERAHOST] Cache copy done, swapping...
+[2026-04-14T13:29:01.795Z] [STDOUT] [BERAHOST] Cache updated.
+[2026-04-14T13:29:01.798Z] [STDOUT] [BERAHOST] Patching setenv.js to respect platform env vars...
+[2026-04-14T13:29:01.802Z] [STDOUT] [BERAHOST] setenv.js patched.
+[2026-04-14T13:29:01.850Z] [STDOUT] [BERAHOST] Applying library patches...
+[2026-04-14T13:29:01.851Z] [STDOUT] [BERAHOST] ./node_modules/gifted-baileys/lib/Socket/socket.js already patched â€” skipping
+[2026-04-14T13:29:01.852Z] [STDOUT] [BERAHOST] ./node_modules/@whiskeysockets/baileys/lib/Socket/socket.js already patched â€” skipping
+[2026-04-14T13:29:01.925Z] [STDOUT] [BERAHOST] Launching bot...
+[2026-04-14T13:29:02.093Z] [STDOUT] > bera-ai@1.0.0 start
+[2026-04-14T13:29:02.115Z] [STDOUT] [BERAHOST] Running pre-start settings injection...
+[2026-04-14T13:29:02.138Z] [STDOUT] > node ./Connection/start.js
+[2026-04-14T13:29:03.092Z] [STDOUT] [PLUGIN] Loaded: aitools.js
+[2026-04-14T13:29:03.093Z] [STDOUT] [PLUGIN] Loaded: buttons.js
+[2026-04-14T13:29:03.094Z] [STDOUT] [PLUGIN] Loaded: chatbera.js
+[2026-04-14T13:29:03.095Z] [STDOUT] [PLUGIN] Loaded: converters.js
+[2026-04-14T13:29:03.136Z] [STDOUT] [PLUGIN] Loaded: groupplus.js
+[2026-04-14T13:29:03.136Z] [STDOUT] [PLUGIN] Loaded: mediabtns.js
+[2026-04-14T13:29:03.137Z] [STDOUT] [PLUGIN] Loaded: grouptools.js
+[2026-04-14T13:29:03.138Z] [STDOUT] [PLUGIN] Loaded: newpanels.js
+[2026-04-14T13:29:03.179Z] [STDOUT] [PLUGIN] Loaded: status.js
+[2026-04-14T13:29:03.179Z] [STDOUT] [PLUGIN] Loaded: notes.js
+[2026-04-14T13:29:03.182Z] [STDOUT] [PLUGIN] Loaded: texttools.js
+[2026-04-14T13:29:03.184Z] [STDOUT] [PLUGIN] Loaded: tools.js
+[2026-04-14T13:29:03.221Z] [STDOUT] [PLUGIN] Skipped (bad export): tools_extra.js
+[2026-04-14T13:29:03.222Z] [STDOUT] [PLUGIN] Loaded: updater.js
+[2026-04-14T13:29:03.235Z] [STDOUT] â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•—â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—
+[2026-04-14T13:29:03.253Z] [STDOUT] ðŸ¤– Bera Bot | toxic-baileys
+[2026-04-14T13:29:03.263Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_3/Database/db.json
+[2026-04-14T13:29:03.264Z] [STDOUT] [BOT] Health server listening on port 3103
+[2026-04-14T13:29:03.279Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-14T13:29:03.298Z] [STDOUT] Prefix: . | Owner: 254787527753
+[2026-04-14T13:29:03.315Z] [STDOUT] [BOT] No session â€” pairing code mode
+[2026-04-14T13:29:03.315Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-14T13:29:03.323Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-14T13:29:03.345Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-14T13:29:03.356Z] [STDOUT] [BOT] Using owner number from config: 254787527753
+[2026-04-14T13:29:03.361Z] [STDOUT] [PLUGIN] Loaded: copybtns.js
+[2026-04-14T13:29:03.367Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-14T13:29:03.389Z] [STDOUT] [PLUGIN] Loaded: funplus.js
+[2026-04-14T13:29:03.394Z] [STDOUT] [PLUGIN] Loaded: fun.js
+[2026-04-14T13:29:03.396Z] [STDOUT] [PLUGIN] Loaded: extras.js
+[2026-04-14T13:29:03.397Z] [STDOUT] [PLUGIN] Loaded: gcstatus.js
+[2026-04-14T13:29:03.399Z] [STDOUT] [PLUGIN] Loaded: games.js
+[2026-04-14T13:29:03.411Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-14T13:29:03.456Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-14T13:29:03.917Z] [STDOUT] [BOT] Requesting pairing code...
+[2026-04-14T13:29:03.948Z] [STDOUT] â”‚   PAIRING CODE: CWYS-F5BB               â”‚
+[2026-04-14T13:29:03.948Z] [STDOUT] â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+[2026-04-14T13:29:03.992Z] [STDOUT] â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+[2026-04-14T13:29:04.038Z] [STDOUT] â”‚  Open WhatsApp â†’ Settings                â”‚
+[2026-04-14T13:29:04.082Z] [STDOUT] â”‚  â†’ Linked Devices â†’ Link a Device        â”‚
+[2026-04-14T13:29:04.127Z] [STDOUT] â”‚  â†’ Link with phone number instead        â”‚
+[2026-04-14T13:29:04.171Z] [STDOUT] â”‚  â†’ Enter the code above                  â”‚
+[2026-04-14T13:29:04.216Z] [STDOUT] â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+[2026-04-14T13:29:34.953Z] [STDOUT] [BOT] Disconnected â€” code: 515
+[2026-04-14T13:29:35.352Z] [STDOUT] [BOT] Reconnecting in 5s...
+[2026-04-14T13:29:39.853Z] [STDOUT] â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•—â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—
+[2026-04-14T13:29:39.952Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-14T13:29:40.452Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-14T13:29:41.053Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-14T13:29:41.452Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-14T13:29:42.353Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-14T13:29:45.652Z] [STDOUT] ðŸ¤– Bera Bot | toxic-baileys
+[2026-04-14T13:29:45.852Z] [STDOUT] Prefix: . | Owner: 254787527753
+[2026-04-14T13:29:45.853Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_3/Database/db.json
+[2026-04-14T13:29:46.252Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-14T13:29:46.253Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-14T13:30:14.167Z] [STDOUT] [BOT] Disconnected â€” code: 408
+[2026-04-14T13:30:14.214Z] [STDOUT] [BOT] Pairing timed out â€” requesting new code in 5s...
+[2026-04-14T13:30:19.423Z] [STDOUT] â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•—â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—
+[2026-04-14T13:30:19.430Z] [STDOUT] ðŸ¤– Bera Bot | toxic-baileys
+[2026-04-14T13:30:19.437Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_3/Database/db.json
+[2026-04-14T13:30:19.466Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-14T13:30:19.475Z] [STDOUT] Prefix: . | Owner: 254787527753
+[2026-04-14T13:30:19.478Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-14T13:30:19.509Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-14T13:30:19.519Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-14T13:30:19.559Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-14T13:30:19.602Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-14T13:30:19.645Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-14T13:30:21.091Z] [STDOUT] [BOT] âœ… Connected as Bera AI (254787527753@s.whatsapp.net)
+[2026-04-14T13:30:21.091Z] [STDOUT] [BOT] Reminder loop started
+[2026-04-14T13:30:21.135Z] [STDOUT] [BOT] ðŸ¤– Bera is online and ready!
+[2026-04-14T13:30:21.135Z] [STDOUT] [BOT] Auto-bio loop started
+[2026-04-14T13:30:22.642Z] [STDOUT] [BOT] âœ… Bot profile picture updated
+[2026-04-14T13:35:10.961Z] [STDOUT] Interactive send: {
+[2026-04-14T13:35:11.020Z] [STDOUT] type: 'native_flow',
+[2026-04-14T13:35:11.041Z] [STDOUT] [BOT] Disconnected â€” code: 408
+[2026-04-14T13:35:11.062Z] [STDOUT] nodes: [ { tag: 'biz', attrs: {} } ],
+[2026-04-14T13:35:11.084Z] [STDOUT] [BOT] Pairing timed out â€” requesting new code in 5s...
+[2026-04-14T13:35:11.152Z] [STDOUT] private: true,
+[2026-04-14T13:35:11.252Z] [STDOUT] aimode: false
+[2026-04-14T13:35:11.452Z] [STDOUT] }
+[2026-04-14T13:35:13.859Z] [STDOUT] â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•—â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—
+[2026-04-14T13:35:13.860Z] [STDOUT] Prefix: . | Owner: 254787527753
+[2026-04-14T13:35:14.352Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-14T13:35:14.353Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-14T13:35:14.952Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-14T13:35:14.953Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_3/Database/db.json
+[2026-04-14T13:35:15.252Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-14T13:35:15.452Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-14T13:35:15.852Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-14T13:35:15.952Z] [STDOUT] ðŸ¤– Bera Bot | toxic-baileys
+[2026-04-14T13:35:18.652Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-14T13:35:21.852Z] [STDOUT] [BOT] âœ… Connected as Developer Bera (254787527753@s.whatsapp.net)
+[2026-04-14T13:35:22.352Z] [STDOUT] [BOT] ðŸ¤– Bera is online and ready!
+[2026-04-14T13:35:39.752Z] [STDOUT] [BOT] âœ… Bot profile picture updated
+[2026-04-14T13:36:10.254Z] [STDOUT] Interactive send: {
+[2026-04-14T13:36:10.452Z] [STDOUT] type: 'native_flow',
+[2026-04-14T13:36:10.952Z] [STDOUT] nodes: [ { tag: 'biz', attrs: {} } ],
+[2026-04-14T13:36:11.352Z] [STDOUT] private: true,
+[2026-04-14T13:36:15.853Z] [STDOUT] aimode: false
+[2026-04-14T13:36:15.902Z] [STDOUT] }
+[2026-04-14T13:44:23.553Z] [ERROR ] [BERAHOST] âœ– Process exited unexpectedly (code=0, signal=â€”) â€” scheduling restart...
+[2026-04-14T13:44:25.353Z] [INFO  ] [BERAHOST] â†» Auto-restart #1 in 0s (crash recovery â€” no restart limit)...
+[2026-04-14T13:44:26.653Z] [INFO  ] [BERAHOST] Deploying bot...
+[2026-04-14T13:44:27.453Z] [INFO  ] [BERAHOST] Updating existing code...
+[2026-04-14T13:45:49.869Z] [INFO  ] [BERAHOST] Full session restored (creds + pre-keys + sender-keys).
+[2026-04-14T13:45:52.253Z] [INFO  ] [BERAHOST] Starting bot (npm start)...
+[2026-04-14T13:45:54.852Z] [INFO  ] [BERAHOST] Bot started with PID 734
+[2026-04-14T13:45:55.254Z] [STDOUT] [BERAHOST] Restoring node_modules from cache (bot_2)...
+[2026-04-14T13:47:27.053Z] [STDOUT] [BERAHOST] npm install still running... (1 min elapsed)
+[2026-04-14T13:48:26.252Z] [STDOUT] [BERAHOST] Updating node_modules cache...
+[2026-04-14T13:48:27.152Z] [STDOUT] 65 packages are looking for funding
+[2026-04-14T13:48:27.253Z] [STDOUT] run `npm fund` for details
+[2026-04-14T13:48:27.253Z] [STDOUT] 4 vulnerabilities (1 moderate, 3 high)
+[2026-04-14T13:48:27.254Z] [STDOUT] removed 1 package, and audited 310 packages in 2m
+[2026-04-14T13:48:27.552Z] [STDOUT] Some issues need review, and may require choosing
+[2026-04-14T13:48:27.753Z] [STDOUT] a different dependency.
+[2026-04-14T13:48:27.953Z] [STDOUT] Run `npm audit` for details.
+[2026-04-14T13:48:30.252Z] [STDOUT] [BERAHOST] Copying node_modules to cache (this may take a moment)...
+[2026-04-14T13:49:26.752Z] [STDOUT] [BERAHOST] Cache copy done, swapping...
+[2026-04-14T13:49:26.766Z] [STDOUT] [BERAHOST] Cache updated.
+[2026-04-14T13:49:34.152Z] [STDOUT] [BERAHOST] Patching setenv.js to respect platform env vars...
+[2026-04-14T13:49:34.153Z] [STDOUT] [BERAHOST] Applying library patches...
+[2026-04-14T13:49:34.153Z] [STDOUT] [BERAHOST] setenv.js patched.
+[2026-04-14T13:49:45.353Z] [STDOUT] [BERAHOST] ./node_modules/gifted-baileys/lib/Socket/socket.js already patched â€” skipping
+[2026-04-14T13:49:45.653Z] [STDOUT] [BERAHOST] ./node_modules/@whiskeysockets/baileys/lib/Socket/socket.js already patched â€” skipping
+[2026-04-14T13:49:46.153Z] [STDOUT] [BERAHOST] Running pre-start settings injection...
+[2026-04-14T13:49:57.936Z] [STDOUT] [BERAHOST] Launching bot...
+[2026-04-14T13:50:28.759Z] [STDOUT] > bera-ai@1.0.0 start
+[2026-04-14T13:50:28.802Z] [STDOUT] > node ./Connection/start.js
+[2026-04-14T13:52:36.153Z] [STDOUT] [BOT] âœ… Connected as Developer Bera (254787527753@s.whatsapp.net)
+[2026-04-14T13:52:36.197Z] [STDOUT] [BOT] ðŸ¤– Bera is online and ready!
+[2026-04-14T13:52:36.204Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-14T13:52:36.242Z] [STDOUT] [BOT] Reminder loop started
+[2026-04-14T13:52:36.252Z] [STDOUT] [PLUGIN] Loaded: status.js
+[2026-04-14T13:52:36.253Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-14T13:52:36.254Z] [STDOUT] [PLUGIN] Loaded: mediabtns.js
+[2026-04-14T13:52:36.285Z] [STDOUT] [BOT] Auto-bio loop started
+[2026-04-14T13:52:36.298Z] [STDOUT] [PLUGIN] Loaded: texttools.js
+[2026-04-14T13:52:36.307Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-14T13:52:36.307Z] [STDOUT] [BOT] âœ… Bot profile picture updated
+[2026-04-14T13:52:36.349Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-14T13:53:04.294Z] [STDOUT] Interactive send: {
+[2026-04-14T13:53:04.342Z] [STDOUT] type: 'native_flow',
+[2026-04-14T13:53:04.346Z] [STDOUT] Interactive send: {
+[2026-04-14T13:53:04.385Z] [STDOUT] nodes: [ { tag: 'biz', attrs: {} } ],
+[2026-04-14T13:53:04.389Z] [STDOUT] type: 'native_flow',
+[2026-04-14T13:53:04.428Z] [STDOUT] private: true,
+[2026-04-14T13:53:04.432Z] [STDOUT] nodes: [ { tag: 'biz', attrs: {} } ],
+[2026-04-14T13:53:04.471Z] [STDOUT] aimode: false
+[2026-04-14T13:53:04.475Z] [STDOUT] private: true,
+[2026-04-14T13:53:04.514Z] [STDOUT] }
+[2026-04-14T13:53:04.518Z] [STDOUT] aimode: false
+[2026-04-14T13:53:04.561Z] [STDOUT] }
+[2026-04-14T13:59:29.002Z] [STDOUT] Interactive send: {
+[2026-04-14T13:59:29.352Z] [STDOUT] type: 'native_flow',
+[2026-04-14T13:59:32.053Z] [STDOUT] nodes: [ { tag: 'biz', attrs: {} } ],
+[2026-04-14T13:59:32.952Z] [STDOUT] private: true,
+[2026-04-14T13:59:33.453Z] [STDOUT] aimode: false
+[2026-04-14T13:59:34.153Z] [STDOUT] }
+[2026-04-14T14:30:58.953Z] [STDOUT] [BOT] Pairing timed out â€” requesting new code in 5s...
+[2026-04-14T14:30:58.954Z] [STDOUT] [BOT] Disconnected â€” code: 408
+[2026-04-14T14:31:02.955Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_3/Database/db.json
+[2026-04-14T14:31:10.255Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-14T14:31:11.954Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-14T14:31:13.153Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-14T14:31:14.353Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-14T14:31:14.653Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-14T14:31:15.253Z] [STDOUT] ðŸ¤– Bera Bot | toxic-baileys
+[2026-04-14T14:31:15.853Z] [STDOUT] Prefix: . | Owner: 254787527753
+[2026-04-14T14:31:16.855Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-14T14:31:16.926Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-14T14:31:29.853Z] [STDOUT] [BOT] âœ… Connected as Developer Bera (254787527753@s.whatsapp.net)
+[2026-04-14T14:31:30.656Z] [STDOUT] [BOT] ðŸ¤– Bera is online and ready!
+[2026-04-14T14:32:24.952Z] [STDOUT] [BOT] Profile picture update failed: Connection Closed
+[2026-04-14T14:32:25.554Z] [STDOUT] [BOT] Disconnected â€” code: 408
+[2026-04-14T14:32:26.454Z] [STDOUT] [BOT] Pairing timed out â€” requesting new code in 5s...
+[2026-04-14T14:32:30.453Z] [STDOUT] â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•—â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—
+[2026-04-14T14:32:31.954Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-14T14:32:31.954Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_3/Database/db.json
+[2026-04-14T14:32:32.153Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-14T14:32:32.853Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-14T14:32:33.053Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-14T14:32:33.553Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-14T14:32:34.053Z] [STDOUT] ðŸ¤– Bera Bot | toxic-baileys
+[2026-04-14T14:32:34.253Z] [STDOUT] Prefix: . | Owner: 254787527753
+[2026-04-14T14:32:34.453Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-14T14:32:36.053Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-14T14:32:41.154Z] [STDOUT] [BOT] âœ… Connected as Developer Bera (254787527753@s.whatsapp.net)
+[2026-04-14T14:32:41.753Z] [STDOUT] [BOT] ðŸ¤– Bera is online and ready!
+[2026-04-14T14:33:20.623Z] [STDOUT] [BOT] Profile picture update failed: Connection Closed
+[2026-04-14T14:33:20.812Z] [STDOUT] [BOT] Disconnected â€” code: 408
+[2026-04-14T14:33:20.855Z] [STDOUT] [BOT] Pairing timed out â€” requesting new code in 5s...
+[2026-04-14T14:33:30.553Z] [STDOUT] â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•—â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—
+[2026-04-14T14:33:34.553Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-14T14:33:35.553Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-14T14:33:35.953Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-14T14:33:37.353Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-14T14:33:40.553Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-14T14:33:41.855Z] [STDOUT] ðŸ¤– Bera Bot | toxic-baileys
+[2026-04-14T14:33:45.853Z] [STDOUT] Prefix: . | Owner: 254787527753
+[2026-04-14T14:33:46.953Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-14T14:33:47.153Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_3/Database/db.json
+[2026-04-14T14:33:54.977Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-14T14:33:57.953Z] [STDOUT] [BOT] âœ… Connected as Developer Bera (254787527753@s.whatsapp.net)
+[2026-04-14T14:33:59.353Z] [STDOUT] [BOT] ðŸ¤– Bera is online and ready!
+[2026-04-14T14:34:42.653Z] [STDOUT] [BOT] âœ… Bot profile picture updated
+[2026-04-14T14:43:59.453Z] [STDERR] [UPDATER] <ref *1> AxiosError: timeout of 10000ms exceeded
+[2026-04-14T14:44:00.152Z] [STDERR] at RedirectableRequest.handleRequestTimeout (/tmp/berahost_dep_3/node_modules/axios/dist/node/axios.cjs:3329:15)
+[2026-04-14T14:44:07.853Z] [STDERR] at RedirectableRequest.emit (node:events:508:28)
+[2026-04-14T14:44:09.052Z] [STDERR] at Timeout._onTimeout (/tmp/berahost_dep_3/node_modules/follow-redirects/index.js:233:12)
+[2026-04-14T14:44:10.053Z] [STDERR] at listOnTimeout (node:internal/timers:605:17)
+[2026-04-14T14:44:10.253Z] [STDERR] at process.processTimers (node:internal/timers:541:7)
+[2026-04-14T14:44:11.154Z] [STDERR] at Axios.request (/tmp/berahost_dep_3/node_modules/axios/dist/node/axios.cjs:4339:41)
+[2026-04-14T14:44:11.210Z] [STDERR] at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[2026-04-14T14:44:11.261Z] [STDERR] at async handle (/tmp/berahost_dep_3/Plugins/updater.js:125:42)
+[2026-04-14T14:44:11.304Z] [STDERR] at async handleMessage (/tmp/berahost_dep_3/Handler/index.js:2528:13)
+[2026-04-14T14:44:11.357Z] [STDERR] at async EventEmitter.<anonymous> (/tmp/berahost_dep_3/Connection/start.js:348:13) {
+[2026-04-14T14:44:11.452Z] [STDERR] isAxiosError: true,
+[2026-04-14T14:44:11.496Z] [STDERR] code: 'ECONNABORTED',
+[2026-04-14T14:44:11.752Z] [STDERR] config: {
+[2026-04-14T14:44:12.552Z] [STDERR] transitional: {
+[2026-04-14T14:44:15.053Z] [STDERR] silentJSONParsing: true,
+[2026-04-14T14:44:15.653Z] [STDERR] forcedJSONParsing: true,
+[2026-04-14T14:44:17.353Z] [STDERR] clarifyTimeoutError: false,
+[2026-04-14T14:44:21.552Z] [STDERR] legacyInterceptorReqResOrdering: true
+[2026-04-14T14:44:23.254Z] [STDERR] },
+[2026-04-14T14:44:26.653Z] [STDERR] adapter: [ 'xhr', 'http', 'fetch' ],
+[2026-04-14T14:44:29.052Z] [STDERR] transformRequest: [ [Function: transformRequest] ],
+[2026-04-14T14:44:29.453Z] [STDERR] transformResponse: [ [Function: transformResponse] ],
+[2026-04-14T14:44:29.653Z] [STDERR] timeout: 10000,
+[2026-04-14T14:44:32.452Z] [STDERR] xsrfCookieName: 'XSRF-TOKEN',
+[2026-04-14T14:44:34.654Z] [STDERR] xsrfHeaderName: 'X-XSRF-TOKEN',
+[2026-04-14T14:44:34.754Z] [STDERR] maxContentLength: -1,
+[2026-04-14T14:44:37.755Z] [STDERR] maxBodyLength: -1,
+[2026-04-14T14:44:37.802Z] [STDERR] env: { FormData: [Function], Blob: [class Blob] },
+[2026-04-14T14:44:37.854Z] [STDERR] validateStatus: [Function: validateStatus],
+[2026-04-14T14:44:37.899Z] [STDERR] headers: Object [AxiosHeaders] {
+[2026-04-14T14:44:37.961Z] [STDERR] Accept: 'application/json, text/plain, */*',
+[2026-04-14T14:44:38.053Z] [STDERR] 'Content-Type': undefined,
+[2026-04-14T14:44:38.097Z] [STDERR] 'User-Agent': 'BeraBot/2.0',
+[2026-04-14T14:44:38.142Z] [STDERR] 'Accept-Encoding': 'gzip, compress, deflate, br'
+[2026-04-14T14:44:38.186Z] [STDERR] },
+[2026-04-14T14:44:38.253Z] [STDERR] method: 'get',
+[2026-04-14T14:44:38.296Z] [STDERR] url: 'https://api.github.com/repos/bera-tech-ai/bera-ai/commits/main',
+[2026-04-14T14:44:38.362Z] [STDERR] allowAbsoluteUrls: true,
+[2026-04-14T14:44:38.409Z] [STDERR] data: undefined
+[2026-04-14T14:44:38.455Z] [STDERR] },
+[2026-04-14T14:44:38.498Z] [STDERR] request: <ref *2> Writable {
+[2026-04-14T14:44:38.552Z] [STDERR] _events: {
+[2026-04-14T14:44:38.596Z] [STDERR] close: undefined,
+[2026-04-14T14:44:38.640Z] [STDERR] error: [Function: handleRequestError],
+[2026-04-14T14:44:38.684Z] [STDERR] prefinish: undefined,
+[2026-04-14T14:44:38.728Z] [STDERR] finish: undefined,
+[2026-04-14T14:44:38.771Z] [STDERR] drain: undefined,
+[2026-04-14T14:44:38.815Z] [STDERR] response: [Function: handleResponse],
+[2026-04-14T14:44:38.859Z] [STDERR] socket: [Array],
+[2026-04-14T14:44:38.907Z] [STDERR] timeout: undefined,
+[2026-04-14T14:44:38.951Z] [STDERR] abort: undefined
+[2026-04-14T14:44:38.999Z] [STDERR] },
+[2026-04-14T14:44:39.043Z] [STDERR] _writableState: WritableState {
+[2026-04-14T14:44:39.087Z] [STDERR] highWaterMark: 65536,
+[2026-04-14T14:44:39.130Z] [STDERR] length: 0,
+[2026-04-14T14:44:39.174Z] [STDERR] corked: 0,
+[2026-04-14T14:44:39.226Z] [STDERR] onwrite: [Function: bound onwrite],
+[2026-04-14T14:44:39.270Z] [STDERR] writelen: 0,
+[2026-04-14T14:44:39.314Z] [STDERR] bufferedIndex: 0,
+[2026-04-14T14:44:39.357Z] [STDERR] pendingcb: 0,
+[2026-04-14T14:44:39.400Z] [STDERR] Symbol(kState): 17581054,
+[2026-04-14T14:44:39.446Z] [STDERR] Symbol(kBufferedValue): null,
+[2026-04-14T14:44:39.490Z] [STDERR] Symbol(kErroredValue): [Circular *1]
+[2026-04-14T14:44:39.534Z] [STDERR] },
+[2026-04-14T14:44:39.579Z] [STDERR] _maxListeners: undefined,
+[2026-04-14T14:44:39.623Z] [STDERR] _options: {
+[2026-04-14T14:44:39.667Z] [STDERR] maxRedirects: 21,
+[2026-04-14T14:44:39.711Z] [STDERR] maxBodyLength: Infinity,
+[2026-04-14T14:44:39.755Z] [STDERR] protocol: 'https:',
+[2026-04-14T14:44:39.799Z] [STDERR] path: '/repos/bera-tech-ai/bera-ai/commits/main',
+[2026-04-14T14:44:39.844Z] [STDERR] method: 'GET',
+[2026-04-14T14:44:39.888Z] [STDERR] headers: [Object: null prototype],
+[2026-04-14T14:44:39.932Z] [STDERR] agents: [Object],
+[2026-04-14T14:44:39.975Z] [STDERR] auth: undefined,
+[2026-04-14T14:44:40.019Z] [STDERR] family: undefined,
+[2026-04-14T14:44:40.063Z] [STDERR] beforeRedirect: [Function: dispatchBeforeRedirect],
+[2026-04-14T14:44:40.110Z] [STDERR] beforeRedirects: [Object],
+[2026-04-14T14:44:40.154Z] [STDERR] http2Options: undefined,
+[2026-04-14T14:44:40.198Z] [STDERR] hostname: 'api.github.com',
+[2026-04-14T14:44:40.253Z] [STDERR] port: '',
+[2026-04-14T14:44:40.297Z] [STDERR] agent: undefined,
+[2026-04-14T14:44:40.355Z] [STDERR] nativeProtocols: [Object],
+[2026-04-14T14:44:40.399Z] [STDERR] sensitiveHeaders: [],
+[2026-04-14T14:44:40.453Z] [STDERR] pathname: '/repos/bera-tech-ai/bera-ai/commits/main'
+[2026-04-14T14:44:40.496Z] [STDERR] },
+[2026-04-14T14:44:40.556Z] [STDERR] _ended: true,
+[2026-04-14T14:44:40.600Z] [STDERR] _ending: true,
+[2026-04-14T14:44:40.653Z] [STDERR] _redirectCount: 0,
+[2026-04-14T14:44:40.696Z] [STDERR] _redirects: [],
+[2026-04-14T14:44:40.740Z] [STDERR] _requestBodyLength: 0,
+[2026-04-14T14:44:40.784Z] [STDERR] _requestBodyBuffers: [],
+[2026-04-14T14:44:40.827Z] [STDERR] _eventsCount: 3,
+[2026-04-14T14:44:40.871Z] [STDERR] _onNativeResponse: [Function (anonymous)],
+[2026-04-14T14:44:40.915Z] [STDERR] _headerFilter: /^(?:Authorization|Proxy-Authorization|Cookie)$/i,
+[2026-04-14T14:44:40.958Z] [STDERR] _currentRequest: ClientRequest {
+[2026-04-14T14:44:41.002Z] [STDERR] _events: [Object: null prototype],
+[2026-04-14T14:44:41.046Z] [STDERR] _eventsCount: 2,
+[2026-04-14T14:44:41.089Z] [STDERR] _maxListeners: undefined,
+[2026-04-14T14:44:41.133Z] [STDERR] outputData: [],
+[2026-04-14T14:44:41.177Z] [STDERR] outputSize: 0,
+[2026-04-14T14:44:41.221Z] [STDERR] writable: true,
+[2026-04-14T14:44:41.265Z] [STDERR] destroyed: true,
+[2026-04-14T14:44:41.317Z] [STDERR] _last: true,
+[2026-04-14T14:44:41.360Z] [STDERR] chunkedEncoding: false,
+[2026-04-14T14:44:41.408Z] [STDERR] shouldKeepAlive: true,
+[2026-04-14T14:44:41.452Z] [STDERR] maxRequestsOnConnectionReached: false,
+[2026-04-14T14:44:41.496Z] [STDERR] _defaultKeepAlive: true,
+[2026-04-14T14:44:41.540Z] [STDERR] useChunkedEncodingByDefault: false,
+[2026-04-14T14:44:41.584Z] [STDERR] sendDate: false,
+[2026-04-14T14:44:41.628Z] [STDERR] _removedConnection: false,
+[2026-04-14T14:44:41.671Z] [STDERR] _removedContLen: false,
+[2026-04-14T14:44:41.715Z] [STDERR] _removedTE: false,
+[2026-04-14T14:44:41.759Z] [STDERR] strictContentLength: false,
+[2026-04-14T14:44:41.802Z] [STDERR] _contentLength: 0,
+[2026-04-14T14:44:41.846Z] [STDERR] _hasBody: true,
+[2026-04-14T14:44:41.890Z] [STDERR] _trailer: '',
+[2026-04-14T14:44:41.953Z] [STDERR] finished: true,
+[2026-04-14T14:44:41.996Z] [STDERR] _headerSent: true,
+[2026-04-14T14:44:42.040Z] [STDERR] _closed: false,
+[2026-04-14T14:44:42.084Z] [STDERR] _header: 'GET /repos/bera-tech-ai/bera-ai/commits/main HTTP/1.1\r\n' +
+[2026-04-14T14:44:42.156Z] [STDERR] 'Accept: application/json, text/plain, */*\r\n' +
+[2026-04-14T14:44:42.252Z] [STDERR] 'User-Agent: BeraBot/2.0\r\n' +
+[2026-04-14T14:44:42.296Z] [STDERR] 'Accept-Encoding: gzip, compress, deflate, br\r\n' +
+[2026-04-14T14:44:42.353Z] [STDERR] 'Host: api.github.com\r\n' +
+[2026-04-14T14:44:42.397Z] [STDERR] 'Connection: keep-alive\r\n' +
+[2026-04-14T14:44:42.440Z] [STDERR] '\r\n',
+[2026-04-14T14:44:42.485Z] [STDERR] _keepAliveTimeout: 0,
+[2026-04-14T14:44:42.528Z] [STDERR] _onPendingData: [Function: nop],
+[2026-04-14T14:44:42.572Z] [STDERR] agent: [Agent],
+[2026-04-14T14:44:42.616Z] [STDERR] socketPath: undefined,
+[2026-04-14T14:44:42.659Z] [STDERR] method: 'GET',
+[2026-04-14T14:44:42.703Z] [STDERR] maxHeaderSize: undefined,
+[2026-04-14T14:44:42.747Z] [STDERR] insecureHTTPParser: undefined,
+[2026-04-14T14:44:42.791Z] [STDERR] joinDuplicateHeaders: undefined,
+[2026-04-14T14:44:42.835Z] [STDERR] path: '/repos/bera-tech-ai/bera-ai/commits/main',
+[2026-04-14T14:44:42.879Z] [STDERR] _ended: false,
+[2026-04-14T14:44:42.922Z] [STDERR] res: null,
+[2026-04-14T14:44:42.966Z] [STDERR] aborted: false,
+[2026-04-14T14:44:43.010Z] [STDERR] timeoutCb: [Function: emitRequestTimeout],
+[2026-04-14T14:44:43.053Z] [STDERR] upgradeOrConnect: false,
+[2026-04-14T14:44:43.097Z] [STDERR] parser: null,
+[2026-04-14T14:44:43.140Z] [STDERR] maxHeadersCount: null,
+[2026-04-14T14:44:43.184Z] [STDERR] reusedSocket: false,
+[2026-04-14T14:44:43.227Z] [STDERR] host: 'api.github.com',
+[2026-04-14T14:44:43.272Z] [STDERR] protocol: 'https:',
+[2026-04-14T14:44:43.316Z] [STDERR] _redirectable: [Circular *2],
+[2026-04-14T14:44:43.359Z] [STDERR] Symbol(shapeMode): false,
+[2026-04-14T14:44:43.403Z] [STDERR] Symbol(kCapture): false,
+[2026-04-14T14:44:43.447Z] [STDERR] Symbol(kBytesWritten): 0,
+[2026-04-14T14:44:43.491Z] [STDERR] Symbol(kNeedDrain): false,
+[2026-04-14T14:44:43.535Z] [STDERR] Symbol(corked): 0,
+[2026-04-14T14:44:43.578Z] [STDERR] Symbol(kChunkedBuffer): [],
+[2026-04-14T14:44:43.622Z] [STDERR] Symbol(kChunkedLength): 0,
+[2026-04-14T14:44:43.666Z] [STDERR] Symbol(kSocket): [TLSSocket],
+[2026-04-14T14:44:43.709Z] [STDERR] Symbol(kOutHeaders): [Object: null prototype],
+[2026-04-14T14:44:43.753Z] [STDERR] Symbol(errored): null,
+[2026-04-14T14:44:43.797Z] [STDERR] Symbol(kHighWaterMark): 65536,
+[2026-04-14T14:44:43.842Z] [STDERR] Symbol(kRejectNonStandardBodyWrites): false,
+[2026-04-14T14:44:43.885Z] [STDERR] Symbol(kUniqueHeaders): null,
+[2026-04-14T14:44:43.929Z] [STDERR] Symbol(kError): [Circular *1]
+[2026-04-14T14:44:43.973Z] [STDERR] },
+[2026-04-14T14:44:44.017Z] [STDERR] _currentUrl: 'https://api.github.com/repos/bera-tech-ai/bera-ai/commits/main',
+[2026-04-14T14:44:44.073Z] [STDERR] _timeout: null,
+[2026-04-14T14:44:44.117Z] [STDERR] Symbol(shapeMode): true,
+[2026-04-14T14:44:44.161Z] [STDERR] Symbol(kCapture): false
+[2026-04-14T14:44:44.205Z] [STDERR] }
+[2026-04-14T14:44:44.253Z] [STDERR] }
