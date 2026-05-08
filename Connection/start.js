@@ -1,4 +1,4 @@
-require('../setenv')
+try { require('../setenv') } catch (_) { /* setenv.js is optional — env vars may be injected by host */ }
 
 const http = require('http')
 
