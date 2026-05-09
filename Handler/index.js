@@ -780,7 +780,7 @@ const handleMessage = async (conn, rawMsg) => {
         const existingUser = global.db?.data?.users?.[sender]
         if (existingUser?.banned) return
 
-        const text = m.text?.trim() || ''
+        let text = m.text?.trim() || ''
 
         // Command detection
         let isCmd, command, args, body
@@ -801,6 +801,30 @@ const handleMessage = async (conn, rawMsg) => {
             }
         } else {
             isCmd = false; command = ''; args = []; body = ''
+        }
+
+        // ── .agent INTERCEPT: route through the full intent system first ──────────
+        // When the user types ".agent <task>", we detect the intent of <task>.
+        // If it's an actionable intent (not generic chat/AI), we skip bera.js and
+        // run it through the same intent engine that "Bera ..." messages use.
+        // This is what makes ".agent send X to 254xxx", ".agent kick @user" etc. work.
+        let _agentForceMode = false
+        const _PASSTHROUGH_INTENTS = new Set(['chat', 'agent', 'menu', 'search', 'wiki',
+            'weather', 'define', 'translate', 'code_review', 'code_explain', 'bug_finder',
+            'code_gen', 'image_gen', 'music', 'yt_audio', 'yt_video', 'download',
+            'lyrics', 'media_lyrics', 'fun_joke', 'fun_fact', 'fun_quote', 'fun_coin',
+            'fun_8ball', 'fun_truth', 'fun_dare', 'fun_ship', 'fun_trivia', 'fun_roast',
+            'fun_story', 'fun_rap', 'fun_riddle', 'fun_motivate', 'gen_password'])
+        if (isCmd && command === 'agent' && body && authorized) {
+            const { detectIntent: _di } = require('../Library/router')
+            const _preIntent = _di(body)
+            if (!_PASSTHROUGH_INTENTS.has(_preIntent)) {
+                // Actionable intent detected — redirect through the intent engine
+                text = body
+                isCmd = false
+                command = ''; args = []; body = ''
+                _agentForceMode = true
+            }
         }
 
         // ── NON-COMMAND: only do lightweight group checks, then exit ──────
@@ -878,8 +902,9 @@ const handleMessage = async (conn, rawMsg) => {
             // Toggle: settings.beraTrigger (default ON). When false, "bera <text>" without prefix is ignored.
             const _beraTriggerOn   = global.db?.data?.settings?.beraTrigger !== false
             const _agentBeraCall  = _beraTriggerOn && text && /\bbera\b/i.test(text)
-            const _agentAllowed   = _agentMentioned || _agentBeraCall
-            if (!m.fromMe && text && _agentAllowed) {
+            // _agentForceMode: set when user used .agent <task> and we intercepted it above
+            const _agentAllowed   = _agentMentioned || _agentBeraCall || _agentForceMode
+            if ((!m.fromMe || _agentForceMode) && text && _agentAllowed) {
                 const { detectIntent } = require('../Library/router')
                 const intent = detectIntent(text)
                 const agent  = require('../Library/actions/agent')
