@@ -2452,7 +2452,7 @@ const handleMessage = async (conn, rawMsg) => {
                     return
                 }
 
-                if (intent === 'admin_remind') {
+                if (intent === 'remind' || intent === 'admin_remind') {
                     const rM = text.match(/remind\s+me\s+(?:to\s+)?(.+?)\s+(?:in|after)\s+(\d+)\s*(min(?:ute)?s?|hour?s?|sec(?:ond)?s?)/i)
                     if (!rM) { await reply('❓ Format: *Bera remind me to drink water in 5 minutes*'); return }
                     const task   = rM[1].trim()
@@ -2926,6 +2926,432 @@ const handleMessage = async (conn, rawMsg) => {
                     await react('📁')
                     const r = await agent.gitStatus(folder)
                     await reply(`╭══〘 *📁 GIT STATUS* 〙═⊷\n${fmt(r.output)}\n╰══════════════════⊷`)
+                    return
+                }
+
+                // ══ CREATE POLL ════════════════════════════════════════════════
+                if (intent === 'poll_create') {
+                    // Format: "create a poll: Best framework? React | Vue | Angular"
+                    const raw = text.replace(/\b(create|make|start|run)\s+(a\s+)?poll\s*:?\s*/i, '').trim()
+                    const parts = raw.split(/[?!]\s*|\|\s*|,\s+(?=[A-Z])/).map(s => s.trim()).filter(Boolean)
+                    const question = parts[0] || 'Poll'
+                    const options  = parts.slice(1).filter(Boolean)
+                    if (options.length < 2) {
+                        await reply('❓ Format: *agent create a poll: Best language? JavaScript | Python | Go*\nNeed at least 2 options after the question.')
+                        return
+                    }
+                    try {
+                        await react('📊')
+                        await conn.sendMessage(chat, {
+                            poll: {
+                                name: question.slice(0, 255),
+                                values: options.slice(0, 12).map(o => o.slice(0, 100)),
+                                selectableCount: 1
+                            }
+                        }, { quoted: m })
+                        await react('✅')
+                    } catch(e) { await react('❌'); await reply('❌ Poll failed: ' + e.message) }
+                    return
+                }
+
+                // ══ RENAME GROUP ═══════════════════════════════════════════════
+                if (intent === 'set_group_name') {
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    let newGName = text.replace(/\b(rename|change|set|update)\b.{0,20}\b(group|gc|chat)\b.{0,10}\b(name\b)?/gi, '').replace(/\bto\b/i, '').trim()
+                    newGName = newGName.replace(/^["':\s]+|["'\s]+$/g, '').trim()
+                    if (!newGName || newGName.length < 2) { await reply('❓ What should the group be named?\nExample: *agent rename this group to Tech Masters*'); return }
+                    try {
+                        await react('✏️')
+                        await conn.groupUpdateSubject(chat, newGName)
+                        await react('✅')
+                        await reply('✅ Group renamed to *' + newGName + '*')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message + ' (Need admin rights)') }
+                    return
+                }
+
+                // ══ SET GROUP DESCRIPTION ══════════════════════════════════════
+                if (intent === 'set_group_desc') {
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    let descText = text.replace(/\b(set|change|update)\b.{0,20}\b(group\s+)?(description|desc|about|bio|info)\b/gi, '').replace(/\bto\b/i, '').trim()
+                    descText = descText.replace(/^["':\s]+|["'\s]+$/g, '').trim()
+                    if (!descText || descText.length < 2) { await reply('❓ What should the description say?\nExample: *agent set group description to: Welcome to our coding group!*'); return }
+                    try {
+                        await react('📝')
+                        await conn.groupUpdateDescription(chat, descText)
+                        await react('✅')
+                        await reply('✅ Group description updated!')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ SET GROUP PHOTO ════════════════════════════════════════════
+                if (intent === 'set_group_photo') {
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    const imgSrc = m.quoted || (m.message?.imageMessage ? m : null)
+                    if (!imgSrc) { await reply('❓ Quote an image and say:\n*agent set this as group photo*'); return }
+                    try {
+                        await react('🖼️')
+                        const buf = await conn.downloadMediaMessage(imgSrc)
+                        await conn.updateProfilePicture(chat, buf)
+                        await react('✅')
+                        await reply('✅ Group photo updated!')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ PROMOTE ALL MEMBERS TO ADMIN ═══════════════════════════════
+                if (intent === 'promote_all') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    try {
+                        await react('👑')
+                        const meta    = await conn.groupMetadata(chat)
+                        const members = meta.participants.filter(p => !p.admin).map(p => p.id)
+                        if (!members.length) { await reply('ℹ️ All members are already admins.'); return }
+                        // Promote in batches of 10
+                        for (let i = 0; i < members.length; i += 10) {
+                            await conn.groupParticipantsUpdate(chat, members.slice(i, i+10), 'promote')
+                            await new Promise(r => setTimeout(r, 500))
+                        }
+                        await react('✅')
+                        await reply('✅ Promoted *' + members.length + '* member(s) to admin!')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ KICK ALL NON-ADMIN MEMBERS ═════════════════════════════════
+                if (intent === 'kick_non_admins') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    try {
+                        await react('🧹')
+                        const meta    = await conn.groupMetadata(chat)
+                        const botJid  = conn.user.id
+                        const ownerJid = config.owner + '@s.whatsapp.net'
+                        const toKick  = meta.participants.filter(p => !p.admin && p.id !== botJid && p.id !== ownerJid).map(p => p.id)
+                        if (!toKick.length) { await reply('ℹ️ No non-admin members to remove.'); return }
+                        await reply('⚠️ Removing *' + toKick.length + '* non-admin member(s)...')
+                        for (let i = 0; i < toKick.length; i += 10) {
+                            await conn.groupParticipantsUpdate(chat, toKick.slice(i, i+10), 'remove')
+                            await new Promise(r => setTimeout(r, 600))
+                        }
+                        await react('✅')
+                        await reply('✅ Done! Removed *' + toKick.length + '* member(s). Only admins remain.')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ GET ALL MEMBER NUMBERS ════════════════════════════════════
+                if (intent === 'get_all_numbers') {
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    try {
+                        await react('📋')
+                        const meta    = await conn.groupMetadata(chat)
+                        const numbers = meta.participants.map(p => '+' + p.id.split('@')[0]).join('\n')
+                        await reply('📋 *Group Members (' + meta.participants.length + ')*\n\n' + numbers)
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ CHECK IF NUMBER IS ON WHATSAPP ════════════════════════════
+                if (intent === 'check_wa') {
+                    const numMchk = text.match(/\b(\d{7,15})\b/)
+                    if (!numMchk) { await reply('❓ Include a phone number.\nExample: *agent check if 254712345678 is on WhatsApp*'); return }
+                    const chkJid = numMchk[1] + '@s.whatsapp.net'
+                    try {
+                        await react('🔍')
+                        const [result] = await conn.onWhatsApp(numMchk[1])
+                        if (result && result.exists) {
+                            await react('✅')
+                            await reply('✅ *+' + numMchk[1] + '* is on WhatsApp!\n📱 JID: ' + result.jid)
+                        } else {
+                            await react('❌')
+                            await reply('❌ *+' + numMchk[1] + '* is NOT on WhatsApp or number is invalid.')
+                        }
+                    } catch(e) { await react('❌'); await reply('❌ Check failed: ' + e.message) }
+                    return
+                }
+
+                // ══ SET BOT PROFILE PICTURE ═══════════════════════════════════
+                if (intent === 'set_bot_ppic') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    const imgSrc2 = m.quoted || (m.message?.imageMessage ? m : null)
+                    if (!imgSrc2) { await reply('❓ Quote an image and say:\n*agent set this as your profile pic*'); return }
+                    try {
+                        await react('🖼️')
+                        const buf2 = await conn.downloadMediaMessage(imgSrc2)
+                        await conn.updateProfilePicture(conn.user.id, buf2)
+                        await react('✅')
+                        await reply('✅ My profile picture has been updated!')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ SAVE NOTE ══════════════════════════════════════════════════
+                if (intent === 'save_note') {
+                    let noteText = text.replace(/\b(save|store|remember|note\s+down|write\s+down)\b.{0,15}\b(note|this|reminder)?\b\s*:?\s*/i, '').trim()
+                    noteText = noteText || (m.quoted ? (m.quoted.text || '') : '')
+                    if (!noteText || noteText.length < 2) { await reply('❓ What should I save?\nExample: *agent save note: Meeting tomorrow 3pm*'); return }
+                    if (!global.db.data.notes) global.db.data.notes = {}
+                    if (!global.db.data.notes[sender]) global.db.data.notes[sender] = []
+                    const noteId = Date.now()
+                    global.db.data.notes[sender].push({ id: noteId, text: noteText, time: new Date().toLocaleString() })
+                    await global.db.write()
+                    await react('📝')
+                    await reply('📝 *Note saved!*\n\n_' + noteText + '_\n\nSay *agent show my notes* to view all.')
+                    return
+                }
+
+                // ══ GET NOTES ═════════════════════════════════════════════════
+                if (intent === 'get_notes') {
+                    const myNotes = (global.db?.data?.notes?.[sender] || [])
+                    if (!myNotes.length) { await reply('📝 You have no saved notes.\nSay *agent save note: your text here* to save one.'); return }
+                    const lines = myNotes.map((n, i) => `${i+1}. ${n.text}\n   _${n.time}_`).join('\n\n')
+                    await reply('📝 *Your Notes (' + myNotes.length + ')*\n\n' + lines)
+                    return
+                }
+
+                // ══ CLEAR NOTES ═══════════════════════════════════════════════
+                if (intent === 'clear_notes') {
+                    const prev = (global.db?.data?.notes?.[sender] || []).length
+                    if (!prev) { await reply('📝 No notes to clear.'); return }
+                    if (!global.db.data.notes) global.db.data.notes = {}
+                    global.db.data.notes[sender] = []
+                    await global.db.write()
+                    await react('🗑️')
+                    await reply('✅ Cleared *' + prev + '* note(s).')
+                    return
+                }
+
+                // ══ SOFT-MUTE A MEMBER ════════════════════════════════════════
+                if (intent === 'mute_member') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    const muteTargetJids = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
+                    const muteTarget = muteTargetJids[0] || (m.quoted && m.quoted.sender)
+                    if (!muteTarget) { await reply('❓ Mention the user to mute.\nExample: *agent mute @user*'); return }
+                    if (!global.db.data.mutedMembers) global.db.data.mutedMembers = {}
+                    if (!global.db.data.mutedMembers[chat]) global.db.data.mutedMembers[chat] = []
+                    if (!global.db.data.mutedMembers[chat].includes(muteTarget)) {
+                        global.db.data.mutedMembers[chat].push(muteTarget)
+                        await global.db.write()
+                    }
+                    await react('🔇')
+                    await conn.sendMessage(chat, {
+                        text: '🔇 *@' + muteTarget.split('@')[0] + '* has been muted. Their messages will be auto-deleted.',
+                        mentions: [muteTarget]
+                    }, { quoted: m })
+                    return
+                }
+
+                // ══ UNMUTE A MEMBER ═══════════════════════════════════════════
+                if (intent === 'unmute_member') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    const unmuteTargetJids = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
+                    const unmuteTarget = unmuteTargetJids[0] || (m.quoted && m.quoted.sender)
+                    if (!unmuteTarget) { await reply('❓ Mention the user to unmute.'); return }
+                    if (global.db.data.mutedMembers?.[chat]) {
+                        global.db.data.mutedMembers[chat] = global.db.data.mutedMembers[chat].filter(j => j !== unmuteTarget)
+                        await global.db.write()
+                    }
+                    await react('🔊')
+                    await conn.sendMessage(chat, {
+                        text: '🔊 *@' + unmuteTarget.split('@')[0] + '* has been unmuted.',
+                        mentions: [unmuteTarget]
+                    }, { quoted: m })
+                    return
+                }
+
+                // ══ REVEAL BOT NUMBER ══════════════════════════════════════════
+                if (intent === 'reveal_bot_number') {
+                    const botNum = (conn.user?.id || '').split(':')[0].split('@')[0]
+                    await reply(
+                        '╭══〘 *🤖 BOT INFO* 〙═⊷\n' +
+                        '┃ 📱 Number: *+' + botNum + '*\n' +
+                        '┃ 🔗 wa.me/' + botNum + '\n' +
+                        '┃ 🆔 JID: ' + conn.user?.id + '\n' +
+                        '┃ 📛 Name: ' + (conn.user?.name || 'Bera AI') + '\n' +
+                        '╰══════════════════⊷'
+                    )
+                    return
+                }
+
+                // ══ LOCK GROUP INFO (admin-only edit) ═════════════════════════
+                if (intent === 'lock_group_info') {
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    try {
+                        await react('🔒')
+                        await conn.groupSettingUpdate(chat, 'not_announcement')
+                        await conn.groupSettingUpdate(chat, 'locked')
+                        await react('✅')
+                        await reply('🔒 Group info is now *locked* — only admins can edit it.')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ GENERATE OTP / RANDOM CODE ════════════════════════════════
+                if (intent === 'generate_otp') {
+                    const lenM  = text.match(/\b(\d+)[- ]?digit\b/i)
+                    const len   = lenM ? Math.min(parseInt(lenM[1]), 12) : 6
+                    const isPin = /\bpin\b/i.test(text)
+                    const otp   = isPin
+                        ? String(Math.floor(Math.random() * Math.pow(10, len))).padStart(len, '0')
+                        : Array.from({length: len}, () => Math.floor(Math.random() * 10)).join('')
+                    const typeStr = /passphrase/i.test(text)
+                        ? ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel']
+                            .sort(() => Math.random() - 0.5).slice(0, 3).join('-')
+                        : otp
+                    await react('🔑')
+                    await reply(
+                        '╭══〘 *🔑 ' + (isPin ? 'PIN' : 'OTP') + ' GENERATED* 〙═⊷\n' +
+                        '┃\n' +
+                        '┃  🔢 Code: *' + typeStr + '*\n' +
+                        '┃  📏 Length: ' + len + ' digit' + (len > 1 ? 's' : '') + '\n' +
+                        '┃\n' +
+                        '┃  ⚠️ _One-time use only_\n' +
+                        '╰══════════════════⊷'
+                    )
+                    return
+                }
+
+                // ══ WHOIS LOOKUP ═══════════════════════════════════════════════
+                if (intent === 'whois_lookup') {
+                    const domainM = text.match(/([\w-]+\.[a-zA-Z]{2,})/i)
+                    if (!domainM) { await reply('❓ Include a domain.\nExample: *agent whois google.com*'); return }
+                    try {
+                        await react('🔍')
+                        const { exec } = require('child_process')
+                        const out = await new Promise((res, rej) => exec('whois ' + domainM[1] + ' 2>&1', { timeout: 10000 }, (e, o) => e && !o ? rej(e) : res(o || '')))
+                        const lines = out.split('\n').filter(l => /registrar|expir|creat|status|name\s*server/i.test(l)).slice(0, 12).join('\n')
+                        await reply('╭══〘 *🔍 WHOIS: ' + domainM[1] + '* 〙═⊷\n' + fmt(lines || 'No WHOIS data found') + '\n╰══════════════════⊷')
+                    } catch(e) { await react('❌'); await reply('❌ WHOIS failed: ' + e.message) }
+                    return
+                }
+
+                // ══ PING HOST ══════════════════════════════════════════════════
+                if (intent === 'ping_host') {
+                    const hostM = text.match(/([\w.-]+\.[a-zA-Z]{2,}|\d{1,3}(?:\.\d{1,3}){3})/i)
+                    if (!hostM) { await reply('❓ Include a host.\nExample: *agent ping google.com*'); return }
+                    try {
+                        await react('🏓')
+                        const { exec } = require('child_process')
+                        const out = await new Promise((res, rej) => exec('ping -c 4 ' + hostM[1] + ' 2>&1', { timeout: 15000 }, (e, o) => res(o || e?.message || 'No response')))
+                        const summary = out.split('\n').filter(l => /rtt|ping|ms|loss|transmitted/i.test(l)).join('\n') || out.split('\n').slice(-5).join('\n')
+                        await reply('╭══〘 *🏓 PING: ' + hostM[1] + '* 〙═⊷\n' + fmt(summary || out.slice(0, 300)) + '\n╰══════════════════⊷')
+                    } catch(e) { await react('❌'); await reply('❌ Ping failed: ' + e.message) }
+                    return
+                }
+
+                // ══ TRANSFER GROUP OWNERSHIP ═══════════════════════════════════
+                if (intent === 'transfer_owner') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    const toJids = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
+                    const toNum  = text.match(/\b(\d{7,15})\b/)
+                    const newOwner = toJids[0] || (toNum ? toNum[1] + '@s.whatsapp.net' : null) || (m.quoted && m.quoted.sender)
+                    if (!newOwner) { await reply('❓ Mention the user to make owner.\nExample: *agent make @user the group owner*'); return }
+                    try {
+                        await react('👑')
+                        await conn.groupParticipantsUpdate(chat, [newOwner], 'promote')
+                        await conn.groupParticipantsUpdate(chat, [newOwner], 'super_admin').catch(() => {})
+                        await react('✅')
+                        await reply('👑 *@' + newOwner.split('@')[0] + '* has been made group owner!', { mentions: [newOwner] })
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ PM ALL GROUP MEMBERS ═══════════════════════════════════════
+                if (intent === 'pm_all_members') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    let pmMsg = text.replace(/\b(pm|message|text|send)\b.{0,20}\b(all\s+)?(members?|participants?|everyone)\b/gi, '').replace(/^[:\-\s]+/, '').trim()
+                    pmMsg = pmMsg || (m.quoted ? (m.quoted.text || '') : '')
+                    if (!pmMsg || pmMsg.length < 2) { await reply('❓ What message should I send?\nExample: *agent pm all members: Group meeting at 5pm tonight!*'); return }
+                    try {
+                        await react('📨')
+                        const meta    = await conn.groupMetadata(chat)
+                        const botJid  = conn.user.id
+                        const members = meta.participants.filter(p => p.id !== botJid)
+                        await reply('📨 Sending to *' + members.length + '* members...')
+                        let success = 0
+                        for (const p of members) {
+                            await conn.sendMessage(p.id, { text: pmMsg }).catch(() => {})
+                            success++
+                            await new Promise(r => setTimeout(r, 800))
+                        }
+                        await react('✅')
+                        await reply('✅ Message delivered to *' + success + '* member(s)!')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ GROUP PROTECTION STATUS ════════════════════════════════════
+                if (intent === 'group_protection') {
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    const gSettings = global.db?.data?.settings?.[chat] || {}
+                    const checkOn   = (key) => gSettings[key] ? '🟢 ON' : '🔴 OFF'
+                    await reply(
+                        '╭══〘 *🛡️ GROUP PROTECTION* 〙═⊷\n' +
+                        '┃\n' +
+                        '┃ 🔗 Anti-Link:     ' + checkOn('antilink') + '\n' +
+                        '┃ 🚫 Anti-Spam:     ' + checkOn('antispam') + '\n' +
+                        '┃ 🗑️ Anti-Delete:   ' + checkOn('antidelete') + '\n' +
+                        '┃ 🤖 Anti-Bot:      ' + checkOn('antibot') + '\n' +
+                        '┃ 🔞 Anti-Nsfw:     ' + checkOn('antinsfw') + '\n' +
+                        '┃ 👋 Welcome Msg:   ' + checkOn('welcome') + '\n' +
+                        '┃ 👋 Goodbye Msg:   ' + checkOn('bye') + '\n' +
+                        '┃ 📝 Bad Words:     ' + checkOn('antibadwords') + '\n' +
+                        '┃\n' +
+                        '┃ Say *agent enable anti-link* to toggle any.\n' +
+                        '╰══════════════════⊷'
+                    )
+                    return
+                }
+
+                // ══ TOGGLE BAD WORD FILTER ════════════════════════════════════
+                if (intent === 'toggle_badwords') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    if (!global.db.data.settings) global.db.data.settings = {}
+                    if (!global.db.data.settings[chat]) global.db.data.settings[chat] = {}
+                    const isEnable = /enable|turn\s+on|on\b/i.test(text)
+                    global.db.data.settings[chat].antibadwords = isEnable
+                    await global.db.write()
+                    await react(isEnable ? '✅' : '❌')
+                    await reply((isEnable ? '✅ Bad word filter *ENABLED*' : '❌ Bad word filter *DISABLED*') + '\nMessages containing profanity will be auto-deleted.')
+                    return
+                }
+
+                // ══ TOGGLE ANTI-SPAM ═══════════════════════════════════════════
+                if (intent === 'toggle_antispam') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    if (!global.db.data.settings) global.db.data.settings = {}
+                    if (!global.db.data.settings[chat]) global.db.data.settings[chat] = {}
+                    const isEnable2 = /enable|turn\s+on|on\b/i.test(text)
+                    global.db.data.settings[chat].antispam = isEnable2
+                    await global.db.write()
+                    await react(isEnable2 ? '✅' : '❌')
+                    await reply((isEnable2 ? '✅ Anti-spam *ENABLED*' : '❌ Anti-spam *DISABLED*'))
+                    return
+                }
+
+                // ══ COUNTDOWN ═════════════════════════════════════════════════
+                if (intent === 'countdown') {
+                    const numCd  = text.match(/(\d+)\s*(sec(?:ond)?s?|min(?:ute)?s?|hour?s?)/i)
+                    if (!numCd) { await reply('❓ Format: *agent countdown 3 minutes*'); return }
+                    const amount = parseInt(numCd[1])
+                    const unit   = numCd[2].toLowerCase()
+                    const ms     = unit.startsWith('h') ? amount*3600000 : unit.startsWith('m') ? amount*60000 : amount*1000
+                    if (ms > 3600000) { await reply('❌ Countdown limit is 1 hour max.'); return }
+                    await react('⏳')
+                    await reply('⏳ *Countdown started:* ' + amount + ' ' + unit + '\nI\'ll ping here when it\'s done!')
+                    setTimeout(async () => {
+                        try {
+                            await conn.sendMessage(chat, { text: '🔔 *TIME\'S UP!*\nYour ' + amount + ' ' + unit + ' countdown has ended! ⏰' }, { quoted: m })
+                        } catch(e) {}
+                    }, ms)
                     return
                 }
 

@@ -632,6 +632,98 @@ const detectIntent = (text) => {
     // ── Delete message ────────────────────────────────────────────────────────
     if (/\b(delete|remove|unsend|retract)\s+(this|that|the\s+last|quoted)?\s*(message|msg)\b/i.test(t)) return 'delete_this'
 
+    // ── Create a poll ─────────────────────────────────────────────────────────
+    if (/\b(create|make|start|run)\b.{0,15}\b(a\s+)?poll\b/i.test(t) ||
+        /\bpoll\b.{0,20}\b(question|options?|choices?)\b/i.test(t)) return 'poll_create'
+
+    // ── Rename group ──────────────────────────────────────────────────────────
+    if (/\b(rename|change\s+(the\s+)?name\s+of|set\s+(the\s+)?name\s+of|name)\b.{0,20}\b(group|gc|chat)\b/i.test(t) ||
+        /\b(group|gc)\b.{0,20}\b(name|rename)\b.{0,20}(to\s+)?\w+/i.test(t)) return 'set_group_name'
+
+    // ── Set group description ─────────────────────────────────────────────────
+    if (/\b(set|change|update)\b.{0,20}\b(group\s+)?(description|desc|about|bio|info)\b/i.test(t) &&
+        /\bgroup\b/i.test(t)) return 'set_group_desc'
+
+    // ── Set group photo ───────────────────────────────────────────────────────
+    if (/\b(set|change|update)\b.{0,20}\b(this|quoted|image|photo|pic)\b.{0,20}\b(as\s+)?(group|gc)\s+(photo|pic|picture|icon|image|dp|avatar)\b/i.test(t) ||
+        /\b(group|gc)\s+(photo|pic|picture|icon|image|dp|avatar)\b.{0,20}\b(set|change|update|this|use)\b/i.test(t)) return 'set_group_photo'
+
+    // ── Promote all members to admin ──────────────────────────────────────────
+    if (/\b(promote|make)\s+(all|every(one|body))\b.{0,20}\b(admin|admins?)\b/i.test(t) ||
+        /\bpromote\s+all\s+(members?|participants?)\b/i.test(t)) return 'promote_all'
+
+    // ── Kick all non-admin members ────────────────────────────────────────────
+    if (/\b(kick|remove|boot)\s+(all|every(one|body))\b/i.test(t) ||
+        /\bclear\s+(the\s+)?(group|gc|members?)\b/i.test(t)) return 'kick_non_admins'
+
+    // ── Get all member numbers ────────────────────────────────────────────────
+    if (/\b(get|export|list|show)\s+(all\s+)?(member|participant|contact)\s+(number|phone|contact)s?\b/i.test(t) ||
+        /\b(member|group)\s+numbers?\b/i.test(t)) return 'get_all_numbers'
+
+    // ── Check if number is on WhatsApp ────────────────────────────────────────
+    if (/\b(check|is|verify)\b.{0,20}\b\d{7,15}\b.{0,20}\b(on\s+whatsapp|registered|active|valid)\b/i.test(t) ||
+        /\b(on\s+whatsapp|whatsapp\s+number)\b.{0,20}\d{7,15}\b/i.test(t)) return 'check_wa'
+
+    // ── Set bot profile picture ───────────────────────────────────────────────
+    if (/\b(set|change|update)\b.{0,20}\b(this|quoted|image|photo|pic)\b.{0,20}\b(as\s+)?(your|bot|my)\s+(photo|pic|picture|icon|image|dp|avatar|pp)\b/i.test(t) ||
+        /\b(your|bot)\s+(pp|photo|pic|picture|pfp|avatar|dp)\b.{0,20}\b(set|change|update|this|use)\b/i.test(t)) return 'set_bot_ppic'
+
+    // ── Save note ─────────────────────────────────────────────────────────────
+    if (/\b(save|store|remember|note\s+down|write\s+down)\b.{0,15}\b(note|this|reminder)\b/i.test(t) ||
+        /\bsave\s+(note|memo)\s*:/i.test(t)) return 'save_note'
+
+    // ── Get notes ─────────────────────────────────────────────────────────────
+    if (/\b(show|get|list|view|read)\s+(my\s+|all\s+)?(notes?|memos?|saved\s+notes?)\b/i.test(t)) return 'get_notes'
+
+    // ── Clear notes ───────────────────────────────────────────────────────────
+    if (/\b(clear|delete|remove|wipe)\s+(all\s+|my\s+)?(notes?|memos?)\b/i.test(t)) return 'clear_notes'
+
+    // ── Soft-mute a group member ──────────────────────────────────────────────
+    if (/\b(mute|silence|quiet)\s+(@\S+|\w+)\b/i.test(t) &&
+        !/\b(group|all|everyone)\b/i.test(t)) return 'mute_member'
+
+    // ── Unmute a group member ─────────────────────────────────────────────────
+    if (/\b(unmute|unsilence)\s+(@\S+|\w+)\b/i.test(t)) return 'unmute_member'
+
+    // ── Reveal bot's own number ───────────────────────────────────────────────
+    if (/\b(what|whats|show).{0,20}\b(your|bot).{0,15}\b(number|phone|id|contact)\b/i.test(t) ||
+        /\b(bot|your)\s+(number|phone|contact|id)\b/i.test(t)) return 'reveal_bot_number'
+
+    // ── Set who can edit group info ───────────────────────────────────────────
+    if (/\b(lock|restrict|set)\b.{0,20}\b(group\s+)?(info|settings?|edit)\b.{0,20}\b(admin|only)\b/i.test(t) ||
+        /\bonly\s+admins?\s+(can\s+)?(edit|change|modify)\s+(group|info)\b/i.test(t)) return 'lock_group_info'
+
+    // ── Generate OTP / random code ────────────────────────────────────────────
+    if (/\b(generate|create|make)\b.{0,15}\b(otp|one.?time.?pass|random\s+code|pin|passphrase)\b/i.test(t)) return 'generate_otp'
+
+    // ── WHOIS lookup ──────────────────────────────────────────────────────────
+    if (/\bwhois\b.{0,20}([\w.-]+\.\w+)/i.test(t) ||
+        /\b(lookup|look\s+up)\b.{0,20}\b(domain|whois)\b/i.test(t)) return 'whois_lookup'
+
+    // ── Ping a host / IP ──────────────────────────────────────────────────────
+    if (/\bping\b.{0,20}([\w.-]+\.\w+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i.test(t)) return 'ping_host'
+
+    // ── Transfer group ownership ──────────────────────────────────────────────
+    if (/\b(transfer|give|hand\s+over|make)\b.{0,20}\b(owner|group\s+owner|superadmin)\b/i.test(t) ||
+        /\bmake\s+(@\S+|\w+)\s+(the\s+)?(owner|superadmin)\b/i.test(t)) return 'transfer_owner'
+
+    // ── PM all group members ──────────────────────────────────────────────────
+    if (/\b(pm|message|text|send)\b.{0,20}\b(all\s+)?(members?|participants?|everyone\s+individually|everyone\s+one\s+by\s+one)\b/i.test(t)) return 'pm_all_members'
+
+    // ── Show group protection status ──────────────────────────────────────────
+    if (/\b(show|check|view|list)\b.{0,20}\b(group\s+)?(protection|security|shield|safety|filters?)\b/i.test(t) ||
+        /\bgroup\s+(protection|security|status)\b/i.test(t)) return 'group_protection'
+
+    // ── Toggle bad word filter ────────────────────────────────────────────────
+    if (/\b(enable|disable|turn\s+(on|off)|toggle)\b.{0,20}\b(bad\s*word|profanity|swear|curse)\s*(filter|block|detection)?\b/i.test(t)) return 'toggle_badwords'
+
+    // ── Anti-spam toggle ──────────────────────────────────────────────────────
+    if (/\b(enable|disable|turn\s+(on|off)|toggle)\b.{0,20}\b(anti.?spam|spam\s+filter|spam\s+protection)\b/i.test(t)) return 'toggle_antispam'
+
+    // ── Countdown ─────────────────────────────────────────────────────────────
+    if (/\bcountdown\b.{0,20}\d+\b/i.test(t) ||
+        /\b(start|run)\b.{0,15}\b(a\s+)?countdown\b/i.test(t)) return 'countdown'
+
     // ── Group management (natural language) ──────────────────────────────────
     if (/\b(kick|remove|boot|ban\s+from\s+group)\s+(@\S+|\d{7,}|\w+)\b/i.test(t) ||
         /\b(kick|remove|boot)\s+(him|her|them|this\s+person|that\s+person)\b/i.test(t)) return 'group_kick'
