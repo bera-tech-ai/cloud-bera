@@ -899,14 +899,20 @@ const handleMessage = async (conn, rawMsg) => {
             // DMs and groups. Never fires on random messages.
             // ═══════════════════════════════════════════════════════════════
             const _agentMentioned = (m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []).some(j => j === conn.user?.id)
-            // Toggle: settings.beraTrigger (default ON). When false, "bera <text>" without prefix is ignored.
+            // Toggle: settings.beraTrigger (default ON). When false, "bera/agent <text>" without prefix is ignored.
             const _beraTriggerOn   = global.db?.data?.settings?.beraTrigger !== false
-            const _agentBeraCall  = _beraTriggerOn && text && /\bbera\b/i.test(text)
+            // Fires when message contains "bera" OR "agent" as a trigger word (no dot required)
+            const _agentBeraCall  = _beraTriggerOn && text && /\b(bera|agent)\b/i.test(text)
             // _agentForceMode: set when user used .agent <task> and we intercepted it above
             const _agentAllowed   = _agentMentioned || _agentBeraCall || _agentForceMode
             if ((!m.fromMe || _agentForceMode) && text && _agentAllowed) {
                 const { detectIntent } = require('../Library/router')
-                const intent = detectIntent(text)
+                // Strip the trigger word ("bera" or "agent") from the start of the text
+                // so "agent kick @user" → detectIntent("kick @user") → 'kick_user' (not 'agent')
+                const _taskText = text.replace(/^\s*(bera|agent)\s+/i, '').trim() || text
+                const intent = detectIntent(_taskText)
+                // Use the stripped text inside all handlers for accurate parsing
+                text = _taskText
                 const agent  = require('../Library/actions/agent')
                 const react  = (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {})
                 const reply  = (t) => conn.sendMessage(chat, { text: String(t) }, { quoted: m })
@@ -2163,6 +2169,193 @@ const handleMessage = async (conn, rawMsg) => {
                         await react('✅')
                         await reply('✅ *Message sent* to *+' + num.replace(/\D/g,'') + '*\n📨 _' + msg + '_')
                     } catch(e) { await react('❌'); await reply('❌ Failed to send: ' + e.message) }
+                    return
+                }
+
+                // ══ FORWARD QUOTED MSG TO NUMBER ══════════════════════════════
+                if (intent === 'forward_msg') {
+                    if (!isOwner) { await reply('❌ Owner only — forwarding messages to numbers.'); return }
+                    const numM = text.match(/\b(\d{7,15})\b/)
+                    const num  = numM ? numM[1] : null
+                    if (!num) { await reply('❓ Include a phone number.\nExample: *agent forward this to 254712345678*'); return }
+                    const qMsg = m.quoted && m.quoted.message ? m.quoted.message : null
+                    if (!qMsg) { await reply('❓ Quote the message you want me to forward, then say:\n*agent forward this to 254712345678*'); return }
+                    try {
+                        await react('📤')
+                        const jid = num + '@s.whatsapp.net'
+                        await conn.copyNForward(jid, m.quoted, true).catch(async () => {
+                            await conn.sendMessage(jid, qMsg)
+                        })
+                        await react('✅')
+                        await reply('✅ Message forwarded to *+' + num + '*')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ PIN MESSAGE ════════════════════════════════════════════════
+                if (intent === 'pin_msg') {
+                    if (!m.isGroup) { await reply('❌ This only works in groups.'); return }
+                    const targetKey = m.quoted ? m.quoted.key : m.key
+                    try {
+                        await react('📌')
+                        await conn.sendMessage(chat, { pin: { type: 1, time: 604800, key: targetKey } })
+                        await react('✅')
+                        await reply('📌 Message pinned for 7 days.')
+                    } catch(e) { await react('❌'); await reply('❌ Failed to pin: ' + e.message) }
+                    return
+                }
+
+                // ══ JOIN GROUP VIA LINK ═══════════════════════════════════════
+                if (intent === 'group_join') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    const linkM = text.match(/chat\.whatsapp\.com\/([A-Za-z0-9]+)/)
+                    if (!linkM) { await reply('❓ Include the group invite link.\nExample: *agent join https://chat.whatsapp.com/AbCdEfGhIjK*'); return }
+                    try {
+                        await react('🔗')
+                        await conn.groupAcceptInvite(linkM[1])
+                        await react('✅')
+                        await reply('✅ Successfully joined the group!')
+                    } catch(e) { await react('❌'); await reply('❌ Failed to join: ' + e.message) }
+                    return
+                }
+
+                // ══ DEMOTE ALL NON-OWNER ADMINS ═══════════════════════════════
+                if (intent === 'demote_all') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
+                    try {
+                        await react('👇')
+                        const meta = await conn.groupMetadata(chat)
+                        const ownerJid = config.owner + '@s.whatsapp.net'
+                        const admins = meta.participants.filter(p => p.admin && p.id !== ownerJid && p.id !== conn.user.id)
+                        if (!admins.length) { await reply('ℹ️ No other admins to demote.'); return }
+                        await conn.groupParticipantsUpdate(chat, admins.map(p => p.id), 'demote')
+                        await react('✅')
+                        await reply('✅ Demoted *' + admins.length + '* admin(s).')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ BROADCAST TO ALL GROUPS ════════════════════════════════════
+                if (intent === 'broadcast_groups') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    // Extract the message to broadcast
+                    let bcMsg = text.replace(/\b(broadcast|send to all groups?|mass message|message all groups?)\b/gi, '').replace(/^[:\-\s]+/, '').trim()
+                    if (!bcMsg) { await reply('❓ What should I broadcast?\nExample: *agent broadcast: Server will restart tonight*'); return }
+                    try {
+                        await react('📡')
+                        const groups = Object.keys(conn.chats || {}).filter(j => j.endsWith('@g.us'))
+                        let sent = 0
+                        for (const g of groups) {
+                            await conn.sendMessage(g, { text: bcMsg }).catch(() => {})
+                            sent++
+                            await new Promise(r => setTimeout(r, 500))
+                        }
+                        await react('✅')
+                        await reply('✅ Broadcast sent to *' + sent + '* group(s):\n_' + bcMsg + '_')
+                    } catch(e) { await react('❌'); await reply('❌ Broadcast failed: ' + e.message) }
+                    return
+                }
+
+                // ══ RESTART BOT ════════════════════════════════════════════════
+                if (intent === 'bot_restart') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    await react('🔄')
+                    await reply('🔄 Restarting bot... I\'ll be back in a few seconds.')
+                    setTimeout(() => { process.exit(0) }, 2000)
+                    return
+                }
+
+                // ══ SET WHATSAPP STATUS/BIO ════════════════════════════════════
+                if (intent === 'set_bio') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    let bioText = text.replace(/\b(set|change|update)\b.{0,20}\b(my|your|bot)?\s*(status|bio|about|story|wa\s*status)\b/gi, '').replace(/\bto\b/i, '').trim()
+                    bioText = bioText.replace(/^["':\s]+|["'\s]+$/g, '').trim()
+                    if (!bioText) { await reply('❓ What should my status say?\nExample: *agent set status to: Powered by Bera AI 🤖*'); return }
+                    try {
+                        await react('✍️')
+                        await conn.updateProfileStatus(bioText)
+                        await react('✅')
+                        await reply('✅ Status updated to:\n_' + bioText + '_')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ GET PROFILE PICTURE OF A NUMBER ═══════════════════════════
+                if (intent === 'get_pp_number') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    const numMpp = text.match(/\b(\d{7,15})\b/)
+                    if (!numMpp) { await reply('❓ Include a phone number.\nExample: *agent get pp of 254712345678*'); return }
+                    const jidPp = numMpp[1] + '@s.whatsapp.net'
+                    try {
+                        await react('🖼️')
+                        const ppUrl = await conn.profilePictureUrl(jidPp, 'image').catch(() => null)
+                        if (!ppUrl) { await reply('❌ Couldn\'t fetch profile picture. The number may not have one or is not on WhatsApp.'); return }
+                        await conn.sendMessage(chat, { image: { url: ppUrl }, caption: '🖼️ Profile picture of *+' + numMpp[1] + '*' }, { quoted: m })
+                        await react('✅')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ SET BOT DISPLAY NAME ═══════════════════════════════════════
+                if (intent === 'set_bot_name') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    let newName = text.replace(/\b(set|change|update)\b.{0,20}\b(bot\s+)?(name|display\s+name|username)\b/gi, '').replace(/\bto\b/i, '').trim()
+                    newName = newName.replace(/^["':\s]+|["'\s]+$/g, '').trim()
+                    if (!newName || newName.length < 2) { await reply('❓ What should my new name be?\nExample: *agent set bot name to Bera Pro*'); return }
+                    try {
+                        await react('✏️')
+                        await conn.updateProfileName(newName)
+                        await react('✅')
+                        await reply('✅ My display name is now *' + newName + '*')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ LIST BANNED USERS ══════════════════════════════════════════
+                if (intent === 'list_bans') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    const bans = global.db?.data?.blacklist || []
+                    if (!bans.length) { await reply('✅ No users are currently banned.'); return }
+                    const lines = bans.map((j, i) => (i+1) + '. +' + j.split('@')[0]).join('\n')
+                    await reply('🚫 *Banned Users (' + bans.length + ')*\n\n' + lines)
+                    return
+                }
+
+                // ══ UNBAN ALL USERS ════════════════════════════════════════════
+                if (intent === 'unban_all') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    const prevCount = (global.db?.data?.blacklist || []).length
+                    if (!prevCount) { await reply('✅ No users are banned — nothing to clear.'); return }
+                    global.db.data.blacklist = []
+                    await global.db.write()
+                    await react('✅')
+                    await reply('✅ All *' + prevCount + '* banned user(s) have been unbanned.')
+                    return
+                }
+
+                // ══ SEND CONTACT CARD (vCard) ═══════════════════════════════════
+                if (intent === 'send_vcard') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    const numMvc = text.match(/\b(\d{7,15})\b/)
+                    if (!numMvc) { await reply('❓ Include a phone number.\nExample: *agent send contact 254712345678*'); return }
+                    const vcardNum = numMvc[1]
+                    try {
+                        await react('📇')
+                        const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:+${vcardNum}\nTEL;TYPE=CELL:+${vcardNum}\nEND:VCARD`
+                        await conn.sendMessage(chat, { contacts: { displayName: '+' + vcardNum, contacts: [{ vcard }] } }, { quoted: m })
+                        await react('✅')
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ DELETE QUOTED/THIS MESSAGE ═════════════════════════════════
+                if (intent === 'delete_this') {
+                    const delKey = m.quoted ? m.quoted.key : m.key
+                    try {
+                        await conn.sendMessage(chat, { delete: delKey })
+                        await react('🗑️')
+                    } catch(e) { await reply('❌ Couldn\'t delete: ' + e.message) }
                     return
                 }
 

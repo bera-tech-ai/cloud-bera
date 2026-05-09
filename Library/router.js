@@ -260,7 +260,9 @@ const detectIntent = (text) => {
         /^(pwd|cd |mkdir|rm |echo |npm |node |git |pip |python |chmod |touch |mv |cp )/.test(t)) return 'shell'
 
     // ── Agent ────────────────────────────────────────────────────────────────
-    if (/\b(agent|automate|do it all|handle everything|take care of|multi.?step|plan and execute)\b/.test(t)) return 'agent'
+    // NOTE: "agent" alone as a trigger word is stripped BEFORE detectIntent runs, so we only
+    // return 'agent' for explicit multi-step automation requests, NOT for "agent <task>" calls.
+    if (/\b(automate|do it all|handle everything|take care of|multi.?step|plan and execute)\b/.test(t)) return 'agent'
 
     // ── Web Search ───────────────────────────────────────────────────────────
     if (/\b(search|look up|find|google|what is|who is|latest|news|current|today)\b/.test(t) &&
@@ -583,6 +585,52 @@ const detectIntent = (text) => {
     if (/\b(calculate|math\s*(calculation|problem)|what\s*is\s*\d)\b/i.test(t)) return 'calc2'
     if (/\b(generate\s*(a\s*)?qr|create\s*(a\s*)?qr\s*code|qr\s*code\s*for)\b/i.test(t)) return 'qr2'
     if (/\b(search\s*(the\s*)?(web|google|internet)|find\s+info\s+about)\b/i.test(t)) return 'search2'
+
+    // ── Forward quoted message to a number ───────────────────────────────────
+    if (/\b(forward|relay|resend|send)\b.{0,30}\b(this|quoted|message|msg)\b.{0,30}\b(to\s+)?\+?\d{7,15}\b/i.test(t) ||
+        /\b(forward|relay)\b.{0,20}\b(to\s+)?\+?\d{7,15}\b/i.test(t)) return 'forward_msg'
+
+    // ── Pin a message ────────────────────────────────────────────────────────
+    if (/\b(pin|pin\s+this|pin\s+(this\s+)?(message|msg))\b/i.test(t)) return 'pin_msg'
+
+    // ── Join group via invite link ────────────────────────────────────────────
+    if (/\b(join|enter)\b.{0,20}\b(group|chat|gc)\b/i.test(t) ||
+        /chat\.whatsapp\.com\/[A-Za-z0-9]+/.test(t)) return 'group_join'
+
+    // ── Demote all non-owner admins ───────────────────────────────────────────
+    if (/\b(demote\s+all|remove\s+all\s+admins?|strip\s+all\s+admins?)\b/i.test(t)) return 'demote_all'
+
+    // ── Broadcast message to all groups ──────────────────────────────────────
+    if (/\b(broadcast|send\s+to\s+all\s+groups?|mass\s+message|message\s+all\s+groups?)\b/i.test(t)) return 'broadcast_groups'
+
+    // ── Restart the bot ───────────────────────────────────────────────────────
+    if (/\b(restart\s+(the\s+)?bot|reboot\s+(the\s+)?bot|bot\s+restart|reload\s+bot)\b/i.test(t)) return 'bot_restart'
+
+    // ── Set WhatsApp status / bio ─────────────────────────────────────────────
+    if (/\b(set\s+(my\s+|your\s+|bot\s+)?(status|bio|about|story|wa\s+status))\b/i.test(t) ||
+        /\b(change\s+(your\s+|bot\s+)?(status|bio|about))\b/i.test(t)) return 'set_bio'
+
+    // ── Get profile picture of a number ──────────────────────────────────────
+    if (/\b(get|fetch|show|display|send)\b.{0,20}\b(pp|profile\s*pic|profile\s*photo|profile\s*picture|pfp)\b.{0,20}\b(of\s+)?\+?\d{7,15}\b/i.test(t) ||
+        /\bpp\s+(?:of\s+)?\+?\d{7,15}\b/i.test(t)) return 'get_pp_number'
+
+    // ── Set bot display name ──────────────────────────────────────────────────
+    if (/\b(set|change|update)\b.{0,20}\b(bot\s+)?(name|display\s+name|username)\b.{0,30}(to\s+)?\w+/i.test(t) &&
+        !/group/i.test(t)) return 'set_bot_name'
+
+    // ── List banned users ─────────────────────────────────────────────────────
+    if (/\b(list|show|who\s+are|view)\b.{0,15}\b(banned|blacklisted)\b/i.test(t) ||
+        /\bban\s+list\b/i.test(t)) return 'list_bans'
+
+    // ── Unban all users ───────────────────────────────────────────────────────
+    if (/\b(unban|clear\s+ban|remove\s+all\s+bans?)\s+(all|everyone)\b/i.test(t) ||
+        /\bclear\s+all\s+bans?\b/i.test(t)) return 'unban_all'
+
+    // ── Send contact card (vCard) ─────────────────────────────────────────────
+    if (/\b(send|share)\b.{0,15}\b(contact|vcard|v-card|phone\s+contact)\b/i.test(t)) return 'send_vcard'
+
+    // ── Delete message ────────────────────────────────────────────────────────
+    if (/\b(delete|remove|unsend|retract)\s+(this|that|the\s+last|quoted)?\s*(message|msg)\b/i.test(t)) return 'delete_this'
 
     // ── Group management (natural language) ──────────────────────────────────
     if (/\b(kick|remove|boot|ban\s+from\s+group)\s+(@\S+|\d{7,}|\w+)\b/i.test(t) ||
