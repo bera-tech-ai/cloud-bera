@@ -166,6 +166,11 @@ const detectIntent = (text) => {
     if (/\b(analyze|analyse|check|read|scan)\b.{0,20}\b(logs?|log file|error log|crash log)\b/.test(t) ||
         /\b(what('s| is) (in|wrong with))\b.{0,15}\b(log|error log|crash)\b/.test(t)) return 'log_analyze'
 
+    // ── Send PM / private message to a phone number ──────────────────────────
+    if (/\b(send|message|msg|text|forward|tell)\b.{1,50}\b(to\s+)?\+?\d{7,15}\b/.test(t) ||
+        /\bpm\s+\+?\d{7,15}\b/.test(t) ||
+        /\b(send|message)\s+(him|her|them|this\s+number|that\s+number)\b/.test(t)) return 'send_pm'
+
     // ── Schedule message ─────────────────────────────────────────────────────
     if (/\b(schedule|send|remind|remind me|set reminder|remind (me|them)|send at|send in)\b.{0,30}\b(message|msg|text|reminder)\b/.test(t) ||
         /\b(in \d+ (minutes?|hours?|seconds?))\b.{0,20}\b(send|message|remind|notify)\b/.test(t)) return 'schedule_msg'

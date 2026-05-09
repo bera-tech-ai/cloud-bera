@@ -2112,6 +2112,35 @@ const handleMessage = async (conn, rawMsg) => {
                     return
                 }
 
+                // ══ SEND PM ═══════════════════════════════════════════════════
+                if (intent === 'send_pm') {
+                    if (!isOwner) { await reply('❌ Owner only — sending PMs to numbers.'); return }
+                    const numM = text.match(/\b(\+?(\d{7,15}))\b/)
+                    const num  = numM ? numM[2] : null
+                    if (!num) { await reply('❓ Include a phone number.\nExample: *Bera send hello to 254712345678*'); return }
+                    // Extract the message part — what comes between "send/message/text" and "to NUMBER" or after "pm NUMBER"
+                    let msg = ''
+                    const withTo = text.match(/(?:send|message|text|tell|forward)\s+(.+?)\s+to\s+\+?\d{7,15}/i)
+                    if (withTo) {
+                        msg = withTo[1].trim()
+                    } else {
+                        const afterNum = text.match(/\+?\d{7,15}\s+(.+)/i)
+                        if (afterNum) msg = afterNum[1].trim()
+                        else msg = text.replace(/\bbera\b/gi,'').replace(/\b(send|pm|message|text|to)\b/gi,'').replace(/\+?\d{7,15}/,'').trim()
+                    }
+                    // Strip surrounding quotes if present
+                    msg = msg.replace(/^["'](.+)["']$/, '$1').trim()
+                    if (!msg || msg.length < 1) { await reply('❓ What message should I send?\nExample: *Bera send "hello brother" to 254712345678*'); return }
+                    try {
+                        await react('📨')
+                        const jid = num.replace(/\D/g,'') + '@s.whatsapp.net'
+                        await conn.sendMessage(jid, { text: msg })
+                        await react('✅')
+                        await reply('✅ *Message sent* to *+' + num.replace(/\D/g,'') + '*\n📨 _' + msg + '_')
+                    } catch(e) { await react('❌'); await reply('❌ Failed to send: ' + e.message) }
+                    return
+                }
+
                 // ══ ADMIN VIA AGENT ═══════════════════════════════════════════
                 if (intent === 'admin_ban') {
                     if (!isOwner) { await reply('❌ Owner only.'); return }

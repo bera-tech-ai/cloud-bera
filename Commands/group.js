@@ -701,6 +701,90 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
             : '❌ *Anti-ViewOnce OFF* — View-once messages are protected.')
     }
 
+    // ── EXPORT MEMBERS ────────────────────────────────────────────────────
+    if (['exportmembers', 'exportmem', 'memberexport', 'membernumbers'].includes(command)) {
+        if (groupOnly()) return
+        if (await adminOnly()) return
+        await react('⏳')
+        try {
+            const meta = await getGroupMeta()
+            if (!meta) throw new Error('Could not get group info')
+            const members = meta.participants
+            const numbers = members.map(p => '+' + p.id.split('@')[0]).join('\n')
+            await react('✅')
+            return reply(
+                `╭══〘 *📋 MEMBER NUMBERS (${members.length})* 〙═⊷\n` +
+                numbers + '\n' +
+                `╰══════════════════⊷`
+            )
+        } catch(e) { await react('❌'); return reply(`❌ ${e.message}`) }
+    }
+
+    // ── KICK INACTIVE ─────────────────────────────────────────────────────
+    if (['kickinactive', 'kickinact', 'removeinactive'].includes(command)) {
+        if (groupOnly()) return
+        if (!isOwner) return reply(`⛔ Owner only.`)
+        if (await botAdminOnly()) return
+        await react('⏳')
+        try {
+            const meta = await getGroupMeta()
+            const myJids = getBotJids()
+            const ownerJid = `${config.owner}@s.whatsapp.net`
+            // Identify members with no display name (commonly inactive/ghost accounts)
+            const toKick = meta.participants.filter(p =>
+                !p.admin &&
+                !myJids.has(p.id) &&
+                !myJids.has(p.lid) &&
+                p.id !== ownerJid &&
+                !p.name && !p.pushName && !p.verifiedName
+            ).map(p => p.id)
+            if (!toKick.length) return reply(`✅ No clearly inactive members found (all members have display names).`)
+            for (let i = 0; i < toKick.length; i += 5) {
+                await conn.groupParticipantsUpdate(chat, toKick.slice(i, i + 5), 'remove').catch(() => {})
+                await new Promise(r => setTimeout(r, 1000))
+            }
+            await react('✅')
+            return reply(`✅ Removed *${toKick.length}* inactive member(s) (no display name).`)
+        } catch(e) { await react('❌'); return reply(`❌ ${e.message}`) }
+    }
+
+    // ── LOCK TOPIC (group info editing — admins only) ─────────────────────
+    if (['locktopic', 'lockinfo', 'restricttopic'].includes(command)) {
+        if (groupOnly()) return
+        if (await adminOnly()) return
+        if (await botAdminOnly()) return
+        try {
+            await conn.groupSettingUpdate(chat, 'locked')
+            return reply(`🔒 *Group info locked* — only admins can now edit the group name, icon & description.`)
+        } catch(e) { return reply(`❌ ${e.message}`) }
+    }
+
+    // ── UNLOCK TOPIC (allow all members to edit group info) ───────────────
+    if (['unlocktopic', 'unlockinfo', 'unrestricttopic'].includes(command)) {
+        if (groupOnly()) return
+        if (await adminOnly()) return
+        if (await botAdminOnly()) return
+        try {
+            await conn.groupSettingUpdate(chat, 'unlocked')
+            return reply(`🔓 *Group info unlocked* — all members can now edit the group name, icon & description.`)
+        } catch(e) { return reply(`❌ ${e.message}`) }
+    }
+
+    // ── MENTION (send a targeted mention to a specific user) ─────────────
+    if (['mention', 'tag', 'notify'].includes(command)) {
+        if (groupOnly()) return
+        if (await adminOnly()) return
+        const target = getTarget()
+        if (!target) return reply(`❌ Usage: ${prefix}mention @user <message>`)
+        const mentionText = text.replace(/@\d+/g, '').trim() || 'Hey!'
+        try {
+            await conn.sendMessage(chat, {
+                text: `@${target.split('@')[0]} ${mentionText}`,
+                mentions: [target]
+            }, { quoted: m })
+        } catch(e) { return reply(`❌ ${e.message}`) }
+    }
+
     // ── LEAVE GROUP ───────────────────────────────────────────────────────
     if (['leave', 'leavegroup', 'left', 'leftgroup'].includes(command)) {
         if (groupOnly()) return
@@ -851,6 +935,14 @@ handle.command = [
     'acceptall', 'rejectall',
     // Group events
     'setgroupevents', 'groupevents', 'gcevents',
+    // Export members / kick inactive
+    'exportmembers', 'exportmem', 'memberexport', 'membernumbers',
+    'kickinactive', 'kickinact', 'removeinactive',
+    // Lock/unlock topic (group info editing)
+    'locktopic', 'lockinfo', 'restricttopic',
+    'unlocktopic', 'unlockinfo', 'unrestricttopic',
+    // Mention / tag specific user
+    'mention', 'tag', 'notify',
     // Kick all / leave
     'kickall', 'cleargroup', 'removemembers',
     'leave', 'leavegroup', 'left', 'leftgroup',

@@ -190,6 +190,7 @@ const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, 
             '┃❍ ' + p + 'leave               — Bot leaves group',
             '┃❍ ' + p + 'hijack              — Take group admin',
             '┃❍ ' + p + 'accept / reject     — Join request actions',
+            '┃❍ ' + p + 'mention @u <msg>    — Tag & message a specific user',
             '┃',
             '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━',
             '┃ 🛡️ *GROUP PROTECTION (anti-*)*',
@@ -658,6 +659,21 @@ const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, 
         }
     }
 
+    // ── PM — send a private message to any number ─────────────────────────
+    if (command === 'pm') {
+        if (!isOwner) return reply(`⛔ Owner only.`)
+        if (!args[0]) return reply(`❌ Usage: ${prefix}pm <number> <message>\nExample: ${prefix}pm 254712345678 Hello there!`)
+        const rawNum = args[0].replace(/\D/g, '')
+        if (rawNum.length < 7 || rawNum.length > 15) return reply(`❌ Invalid number: ${args[0]}`)
+        const pmMsg = args.slice(1).join(' ').trim()
+        if (!pmMsg) return reply(`❌ Include a message after the number.\nExample: ${prefix}pm 254712345678 Hello!`)
+        try {
+            const jid = rawNum + '@s.whatsapp.net'
+            await conn.sendMessage(jid, { text: pmMsg })
+            return reply(`✅ Message sent to *+${rawNum}*\n📨 _${pmMsg}_`)
+        } catch(e) { return reply(`❌ Failed: ${e.message}`) }
+    }
+
     if (command === 'myprofile') {
         const user = global.db?.data?.users?.[sender] || {}
         return reply(
@@ -693,7 +709,7 @@ handle.command = [
     'berarmemory', 'beraforget', 'berareset',
     'setprefix', 'setendpoint', 'myprofile',
     'setbotpic', 'setbotimage', 'setbotname',
-    'uptime'
+    'uptime', 'pm',
 ]
 handle.tags = ['general']
 
