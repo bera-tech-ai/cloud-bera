@@ -840,6 +840,14 @@ const handleMessage = async (conn, rawMsg) => {
             // Anti-spam / anti-link / anti-badwords for group messages
             if (m.isGroup) {
                 cacheForAntiDelete(m, chat)
+                // ── Soft-mute: auto-delete messages from muted members ──────────
+                if (!isOwner && !m.fromMe) {
+                    const mutedList = global.db?.data?.mutedMembers?.[chat]
+                    if (Array.isArray(mutedList) && mutedList.includes(sender)) {
+                        await conn.sendMessage(chat, { delete: m.key }).catch(() => {})
+                        return
+                    }
+                }
                 const spammed = await checkAntiSpam(conn, m, isOwner)
                 if (spammed) return
                 await checkAntiLink(conn, m, text, isOwner)
@@ -3057,13 +3065,14 @@ const handleMessage = async (conn, rawMsg) => {
                 if (intent === 'check_wa') {
                     const numMchk = text.match(/\b(\d{7,15})\b/)
                     if (!numMchk) { await reply('❓ Include a phone number.\nExample: *agent check if 254712345678 is on WhatsApp*'); return }
-                    const chkJid = numMchk[1] + '@s.whatsapp.net'
                     try {
                         await react('🔍')
-                        const [result] = await conn.onWhatsApp(numMchk[1])
-                        if (result && result.exists) {
+                        // Baileys onWhatsApp accepts phone number + @s.whatsapp.net
+                        const results = await conn.onWhatsApp(numMchk[1] + '@s.whatsapp.net')
+                        const found   = Array.isArray(results) ? results[0] : results
+                        if (found && found.exists) {
                             await react('✅')
-                            await reply('✅ *+' + numMchk[1] + '* is on WhatsApp!\n📱 JID: ' + result.jid)
+                            await reply('✅ *+' + numMchk[1] + '* is on WhatsApp!\n📱 JID: ' + (found.jid || numMchk[1] + '@s.whatsapp.net'))
                         } else {
                             await react('❌')
                             await reply('❌ *+' + numMchk[1] + '* is NOT on WhatsApp or number is invalid.')
@@ -3182,10 +3191,11 @@ const handleMessage = async (conn, rawMsg) => {
                     if (!m.isGroup) { await reply('❌ Must be used in a group.'); return }
                     try {
                         await react('🔒')
-                        await conn.groupSettingUpdate(chat, 'not_announcement')
+                        // 'locked' = only admins can edit group info (name, icon, desc)
+                        // Do NOT call 'not_announcement' here — that changes who can send messages
                         await conn.groupSettingUpdate(chat, 'locked')
                         await react('✅')
-                        await reply('🔒 Group info is now *locked* — only admins can edit it.')
+                        await reply('🔒 Group info is now *locked* — only admins can edit the name, photo and description.')
                     } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
                     return
                 }
