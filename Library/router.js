@@ -803,6 +803,136 @@ const detectIntent = (text) => {
     if (/\b(explain|analyze|analyse|walk\s+(me\s+)?through)\b.{0,20}\b(this|the|my)\b.{0,10}\b(code|script|function|snippet|class|method)?\b/i.test(t) ||
         /\bwhat\s+does\s+(this|the)\s+(code|script|function|snippet)\s+(do|mean|say)\b/i.test(t)) return 'code_explain'
 
+
+      // ── WhatsApp Call ──────────────────────────────────────────────────────────
+      if (/\b(call|ring|phone|dial)\s+(@\S+|\+?\d{7,})\b/i.test(t) ||
+          /\b(make|start|initiate)\s+(a\s+)?call\b/i.test(t)) return 'call_user'
+      if (/\b(video\s*(call|chat)|facetime|start\s+video)\b/i.test(t)) return 'video_call'
+
+      // ── Leave group ────────────────────────────────────────────────────────────
+      if (/\b(leave|exit|quit|depart)\s+(this\s+|the\s+|all\s+)?groups?\b/i.test(t) ||
+          /\b(get|remove)\s+(me\s+)?out\s+of\s+(this\s+)?group\b/i.test(t) ||
+          /\bbot\s+(leave|exit)\b/i.test(t)) {
+          if (/\ball\b/i.test(t)) return 'leave_all_groups'
+          return 'leave_group'
+      }
+
+      // ── Create group ───────────────────────────────────────────────────────────
+      if (/\b(create|make|start|form|build)\s+(a\s+new\s+|new\s+)?group\b/i.test(t) ||
+          /\bnew\s+group\b.{0,20}(name|called|titled|:\s*)/i.test(t)) return 'create_group'
+
+      // ── List groups bot is in ──────────────────────────────────────────────────
+      if (/\b(list|show|what|how\s+many)\s+(all\s+)?groups?\b/i.test(t) ||
+          /\bgroups?\s+(bot\s+is\s+in|you(?:'re|\s+are)\s+in|list|joined)\b/i.test(t)) return 'list_groups'
+
+      // ── Revoke group invite link ───────────────────────────────────────────────
+      if (/\b(revoke|reset|regenerate|new)\s+(group\s+|invite\s+)?link\b/i.test(t) ||
+          /\b(reset|change|renew)\s+the\s+(invite|group)\s+link\b/i.test(t)) return 'revoke_link'
+
+      // ── Text to speech ────────────────────────────────────────────────────────
+      if (/\b(tts|text\s+to\s+speech|speak|say|read\s+aloud|voice\s+note)\s+/i.test(t) ||
+          /\b(convert|turn)\s+.{0,20}to\s+(voice|speech|audio)\b/i.test(t) ||
+          /\bsend\s+(a\s+)?voice\s+(note|message)\b/i.test(t)) return 'tts_msg'
+
+      // ── Auto reply ────────────────────────────────────────────────────────────
+      if (/\b(set|enable|turn\s+on)\s+(auto.?reply|automatic\s+reply|away\s+message)\b/i.test(t)) return 'auto_reply_set'
+      if (/\b(remove|disable|turn\s+off|stop|clear)\s+(auto.?reply|automatic\s+reply|away\s+message)\b/i.test(t)) return 'auto_reply_off'
+
+      // ── Summarize chat ────────────────────────────────────────────────────────
+      if (/\b(summarize|summary|recap|tldr)\s+(this\s+)?(chat|group|conversation|messages?)\b/i.test(t) ||
+          /\bwhat\s+(happened|was\s+discussed|did\s+people\s+say)\s+(here|in\s+this\s+group)\b/i.test(t)) return 'summarize_chat'
+
+      // ── Weather ───────────────────────────────────────────────────────────────
+      if (/\b(weather|temperature|forecast|climate|rain|humid)\b.{0,20}\b(in|at|for|of)\b.{0,30}\b\w+\b/i.test(t) ||
+          /\bweather\s+(today|now|current|report)\b/i.test(t) ||
+          /\bhow\s+(hot|cold|warm|cool)\s+is\s+it\s+in\b/i.test(t)) return 'weather_check'
+
+      // ── Crypto price ──────────────────────────────────────────────────────────
+      if (/\b(crypto|bitcoin|btc|ethereum|eth|bnb|solana|sol|doge|xrp|ada|price|coin)\b.{0,30}\b(price|value|rate|worth|cost)\b/i.test(t) ||
+          /\b(price|value|how\s+much)\s+(of|is|for)\s+(btc|eth|bnb|sol|xrp|ada|doge|crypto|bitcoin|ethereum)\b/i.test(t) ||
+          /\bhow\s+much\s+is\s+(a\s+)?(bitcoin|ethereum|solana|bnb|dogecoin|xrp)\b/i.test(t)) return 'crypto_check'
+
+      // ── Currency conversion ───────────────────────────────────────────────────
+      if (/\b(convert|exchange|change)\b.{0,20}\b(USD|KES|EUR|GBP|NGN|GHS|ZAR|TZS|UGX|INR|JPY|CAD|AUD|CNY|BRL|MXN|CHF|RUB|PKR|EGP)\b/i.test(t) ||
+          /\b\d+\s+(USD|KES|EUR|GBP|NGN|GHS|ZAR|INR|JPY|CAD|AUD|BRL|CNY)\s+(to|in|into)\s+(USD|KES|EUR|GBP|NGN|GHS|ZAR|INR|JPY|CAD|AUD|BRL|CNY)\b/i.test(t) ||
+          /\bcurrency\s+(convert|exchange|rate)\b/i.test(t)) return 'currency_convert'
+
+      // ── News search ───────────────────────────────────────────────────────────
+      if (/\b(latest|breaking|recent|top|today\'?s?)\s+news\b/i.test(t) ||
+          /\bnews\s+(about|on|for|regarding|latest)\b/i.test(t) ||
+          /\bwhat\'?s\s+(happening|going\s+on)\s+(with|in)\b/i.test(t)) return 'news_search'
+
+      // ── Movie info ────────────────────────────────────────────────────────────
+      if (/\b(movie|film|show|series|documentary)\s+(info|about|details?|rating|review|cast|plot|summary)\b/i.test(t) ||
+          /\btell\s+me\s+about\s+(the\s+(movie|film))\b/i.test(t) ||
+          /\b(what|who)\'?s\s+(in|the\s+cast\s+of|the\s+rating\s+of|the\s+plot\s+of)\b.{0,20}\b(movie|film)\b/i.test(t)) return 'movie_search'
+
+      // ── IP lookup ─────────────────────────────────────────────────────────────
+      if (/\b(ip\s+(info|lookup|check|locate|trace|location)|locate\s+ip|trace\s+ip)\b/i.test(t) ||
+          /\bwhere\s+is\s+(ip\s+)?(\d{1,3}\.\d{1,3})\b/i.test(t) ||
+          /\bip\s+(info|details?|data|address)\s+\d/i.test(t)) return 'ip_lookup'
+
+      // ── Speedtest ────────────────────────────────────────────────────────────
+      if (/\b(speed\s*test|internet\s+speed|bandwidth\s+test|download\s+speed|test\s+(my\s+)?internet)\b/i.test(t)) return 'speedtest'
+
+      // ── Encode text ───────────────────────────────────────────────────────────
+      if (/\b(encode|encrypt|convert)\b.{0,20}\b(to\s+)?(base64|hex|binary|url|morse|rot13|reverse)\b/i.test(t) ||
+          /\b(base64|hex|binary|morse)\s+(encode|this|of)\b/i.test(t)) return 'encode_text'
+
+      // ── Decode text ───────────────────────────────────────────────────────────
+      if (/\b(decode|decrypt|convert\s+back)\b.{0,20}\b(from\s+)?(base64|hex|binary|url|morse)\b/i.test(t) ||
+          /\b(base64|hex|binary|morse)\s+(decode|this|to\s+text)\b/i.test(t)) return 'decode_text'
+
+      // ── Hash generator ────────────────────────────────────────────────────────
+      if (/\b(hash|md5|sha(1|256|512)|checksum)\b.{0,30}(this|text|string|of|for)\b/i.test(t) ||
+          /\bgenerate\s+(a\s+)?(hash|md5|sha256|sha512)\b/i.test(t)) return 'hash_text'
+
+      // ── Truth or Dare ─────────────────────────────────────────────────────────
+      if (/\b(truth\s+or\s+dare|tod)\b/i.test(t)) return 'truth_or_dare'
+      if (/\b(give\s+me\s+a?|i\s+want\s+a?|spin)\s+(truth|dare)\b/i.test(t)) return 'truth_or_dare'
+
+      // ── Word of the day ───────────────────────────────────────────────────────
+      if (/\b(word\s+of\s+(the\s+)?day|wotd|vocab(ulary)?\s+word|new\s+word\s+today)\b/i.test(t)) return 'word_day'
+
+      // ── Horoscope ─────────────────────────────────────────────────────────────
+      if (/\b(horoscope|zodiac|star\s+sign|astrology|daily\s+reading)\b/i.test(t)) return 'horoscope_check'
+
+      // ── Riddle ────────────────────────────────────────────────────────────────
+      if (/\b(riddle|brain\s*teaser|puzzle)\b/i.test(t)) return 'riddle_check'
+
+      // ── Quote ─────────────────────────────────────────────────────────────────
+      if (/\b(motivational|inspirational|daily|give\s+me\s+a?)\s+(quote|saying|wisdom)\b/i.test(t) ||
+          /\bquote\s+(of\s+the\s+day|me|for\s+today)\b/i.test(t)) return 'quote_check'
+
+      // ── Group activity stats ──────────────────────────────────────────────────
+      if (/\b(group\s+activity|who\s+(is\s+)?(most|least)\s+active|chat\s+stats?|activity\s+stats?)\b/i.test(t) ||
+          /\b(top\s+chatters?|most\s+active\s+members?|least\s+active)\b/i.test(t)) return 'group_activity'
+
+      // ── Stalk user ────────────────────────────────────────────────────────────
+      if (/\bstalk\s+(@\S+|\+?\d{7,})\b/i.test(t) ||
+          /\b(track|monitor|watch|notify\s+me)\s+(when|if)\s+(@\S+|\+?\d{7,})\s+(comes?\s+online|is\s+online|is\s+active)\b/i.test(t)) return 'stalk_user'
+
+      // ── Check online status ───────────────────────────────────────────────────
+      if (/\b(check|is|see\s+if)\s+(@\S+|\+?\d{7,})\s+(online|active|last\s+seen|away)\b/i.test(t) ||
+          /\bwhen\s+was\s+(@\S+|\+?\d{7,})\s+last\s+(online|active|seen)\b/i.test(t)) return 'check_online'
+
+      // ── Broadcast to saved contacts ───────────────────────────────────────────
+      if (/\b(broadcast|blast|send)\s+(to\s+)?(all\s+)?(my\s+|saved\s+)?contacts\b/i.test(t) ||
+          /\bmass\s+message\s+(contacts?|everyone)\b/i.test(t)) return 'broadcast_contacts'
+
+      // ── Bot update ────────────────────────────────────────────────────────────
+      if (/\b(update|upgrade|pull\s+latest|git\s+pull)\s+(the\s+)?bot\b/i.test(t) ||
+          /\bbot\s+(update|upgrade)\b/i.test(t)) return 'bot_update'
+
+      // ── CPU / RAM / Disk ──────────────────────────────────────────────────────
+      if (/\b(cpu|processor)\s*(usage|load|stats?|info|status)\b/i.test(t) ||
+          /\bhow\s+(much|heavy)\s+(is\s+the\s+)?cpu\b/i.test(t)) return 'cpu_stats'
+      if (/\b(ram|memory)\s*(usage|free|used|available|stats?)\b/i.test(t) ||
+          /\bhow\s+much\s+(ram|memory)\b/i.test(t)) return 'ram_stats'
+      if (/\b(disk|storage|hdd|ssd|drive)\s*(usage|free|used|space|stats?)\b/i.test(t) ||
+          /\bhow\s+much\s+(disk|storage|space)\b/i.test(t)) return 'disk_stats'
+  
+
     return 'chat'
 }
 

@@ -3440,6 +3440,572 @@ const handleMessage = async (conn, rawMsg) => {
                     return
                 }
 
+                // ══════════════════════════════════════════════════════════════════
+                // ██████████   ADVANCED AGENT COMMANDS v3.0   ████████████████████
+                // ══════════════════════════════════════════════════════════════════
+                const adv = require('../Library/actions/advanced')
+
+                // ══ CALL USER ═════════════════════════════════════════════════════
+                if (intent === 'call_user' || intent === 'video_call') {
+                    if (!isOwner) { await reply('❌ Only the owner can initiate calls.'); return }
+                    const isVideo = intent === 'video_call' || /video/i.test(text)
+                    const mentions = m.mentionedJid || []
+                    const rawNum = text.match(/\+?(\d{7,15})/)
+                    const target = mentions[0] || (rawNum ? rawNum[1] + '@s.whatsapp.net' : null)
+                    if (!target) { await reply('❓ Tag the person to call.\nExample: *agent call @user*'); return }
+                    try {
+                        await react(isVideo ? '📹' : '📞')
+                        if (typeof conn.call === 'function') await conn.call([target], isVideo)
+                        else await conn.sendMessage(target, { text: '📞 *Incoming call from ' + (config.botName || 'Bera AI') + '* — pick up!' })
+                        await reply((isVideo ? '📹 Video' : '📞 Audio') + ' call initiated to @' + target.split('@')[0] + '!')
+                    } catch(e) { await react('❌'); await reply('❌ Call failed: ' + e.message) }
+                    return
+                }
+
+                // ══ LEAVE GROUP ═══════════════════════════════════════════════════
+                if (intent === 'leave_group') {
+                    if (!isOwner) { await reply('❌ Only the owner can make me leave.'); return }
+                    if (!m.isGroup) { await reply('❓ Use this inside a group.'); return }
+                    try {
+                        await react('👋')
+                        await reply('👋 Goodbye everyone! Bera AI is leaving this group now...')
+                        setTimeout(async () => { try { await conn.groupLeave(chat) } catch(_) {} }, 1500)
+                    } catch(e) { await react('❌'); await reply('❌ Failed to leave: ' + e.message) }
+                    return
+                }
+
+                // ══ LEAVE ALL GROUPS ══════════════════════════════════════════════
+                if (intent === 'leave_all_groups') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    try {
+                        await react('🚪')
+                        const allChats = Object.keys(conn.chats || {}).filter(j => j.endsWith('@g.us'))
+                        if (!allChats.length) { await reply('❓ Not currently in any groups.'); return }
+                        await reply('⏳ Leaving ' + allChats.length + ' groups...')
+                        let left = 0
+                        for (const g of allChats) {
+                            try { await conn.groupLeave(g); left++ } catch(_) {}
+                            await new Promise(r => setTimeout(r, 800))
+                        }
+                        await reply('✅ Left *' + left + '* groups!')
+                    } catch(e) { await reply('❌ ' + e.message) }
+                    return
+                }
+
+                // ══ CREATE GROUP ══════════════════════════════════════════════════
+                if (intent === 'create_group') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    const nameM = text.match(/(?:group|gc)\s+(?:named?|called|titled?)?\s*["'`]?([^@"'`\n]{2,40})["'`]?/i)
+                        || text.match(/(?:create|make|start|form)\s+(?:a\s+)?(?:new\s+)?group\s+(.+)/i)
+                    const gName = (nameM ? nameM[1].replace(/^(named?|called?)\s+/i,'').trim() : null) || 'Bera Group'
+                    const mentions = m.mentionedJid || []
+                    try {
+                        await react('👥')
+                        const participants = [sender, ...mentions].filter(Boolean)
+                        await conn.groupCreate(gName, participants)
+                        await reply('✅ Group *' + gName + '* created with ' + participants.length + ' member(s)!')
+                    } catch(e) { await react('❌'); await reply('❌ Failed to create group: ' + e.message) }
+                    return
+                }
+
+                // ══ LIST GROUPS ═══════════════════════════════════════════════════
+                if (intent === 'list_groups') {
+                    try {
+                        await react('📋')
+                        const groups = Object.entries(conn.chats || {}).filter(([j]) => j.endsWith('@g.us'))
+                        if (!groups.length) { await reply('❓ Not in any groups currently.'); return }
+                        const lines = groups.slice(0, 30).map(([, g], i) => (i+1) + '. ' + (g.name || g.subject || 'Unnamed group'))
+                        await reply(
+                            '╭══〘 *📋 MY GROUPS* 〙═⊷\n' +
+                            lines.map(l => '┃❍ ' + l).join('\n') + '\n' +
+                            '┃\n┃ Total: *' + groups.length + '* groups\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await reply('❌ ' + e.message) }
+                    return
+                }
+
+                // ══ REVOKE GROUP LINK ══════════════════════════════════════════════
+                if (intent === 'revoke_link') {
+                    if (!isAdmin) { await reply('❌ I need admin rights to revoke the link.'); return }
+                    if (!m.isGroup) { await reply('❓ Use this command in a group.'); return }
+                    try {
+                        await react('🔄')
+                        await conn.groupRevokeInvite(chat)
+                        const newCode = await conn.groupInviteCode(chat)
+                        await reply(
+                            '╭══〘 *🔄 LINK REVOKED* 〙═⊷\n' +
+                            '┃ ✅ Old link revoked!\n' +
+                            '┃ 🔗 New link:\n' +
+                            '┃ https://chat.whatsapp.com/' + newCode + '\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ Revoke failed: ' + e.message) }
+                    return
+                }
+
+                // ══ TEXT TO SPEECH ════════════════════════════════════════════════
+                if (intent === 'tts_msg') {
+                    const ttsText = text.replace(/^(tts|text\s+to\s+speech|speak|say|read\s+aloud|send\s+(a\s+)?voice\s+(note|message))\s*/i, '').trim()
+                    if (!ttsText) { await reply('❓ What should I say?\nExample: *agent tts Hello everyone!*'); return }
+                    try {
+                        await react('🔊')
+                        await reply('⏳ Generating voice note...')
+                        const r = await adv.tts(ttsText)
+                        if (!r.success) { await reply('❌ TTS failed: ' + r.error); return }
+                        await conn.sendMessage(chat, { audio: require('fs').readFileSync(r.file), mimetype: 'audio/mpeg', ptt: true }, { quoted: m })
+                        try { require('fs').unlinkSync(r.file) } catch(_) {}
+                    } catch(e) { await react('❌'); await reply('❌ TTS error: ' + e.message) }
+                    return
+                }
+
+                // ══ AUTO REPLY SET ════════════════════════════════════════════════
+                if (intent === 'auto_reply_set') {
+                    const msgM = text.match(/(?:auto.?reply|automatic\s+reply|away\s+message)\s+(?:to\s+|as\s+|:\s*)?(.+)/i)
+                    const msg = msgM ? msgM[1].trim().replace(/^["'`]|["'`]$/g, '') : null
+                    if (!msg) { await reply('❓ Format: *agent set auto reply "I am busy, will reply later"*'); return }
+                    if (!global.db.data.settings) global.db.data.settings = {}
+                    global.db.data.settings.autoReply = msg
+                    global.db.data.settings.autoReplyEnabled = true
+                    await global.db.write()
+                    await react('✅')
+                    await reply('✅ *Auto reply enabled!*\n📨 Message: _' + msg + '_\n\n_Every DM will get this auto-reply._')
+                    return
+                }
+
+                // ══ AUTO REPLY OFF ════════════════════════════════════════════════
+                if (intent === 'auto_reply_off') {
+                    if (!global.db.data.settings) global.db.data.settings = {}
+                    global.db.data.settings.autoReplyEnabled = false
+                    await global.db.write()
+                    await react('❌')
+                    await reply('❌ Auto reply *disabled*.')
+                    return
+                }
+
+                // ══ SUMMARIZE CHAT ════════════════════════════════════════════════
+                if (intent === 'summarize_chat') {
+                    if (!m.isGroup) { await reply('❓ This only works in a group chat.'); return }
+                    try {
+                        await react('📝')
+                        await reply('⏳ Analyzing recent group messages...')
+                        const { generateAdvancedReply } = require('../Library/actions/beraai')
+                        const prompt = 'Summarize the recent conversation in this WhatsApp group. Give a concise bullet-point list of the main topics that were discussed. Be brief and factual.'
+                        const r = await generateAdvancedReply(prompt, chat, conn, m, { agentMode: false, MAX_LOOPS: 1 })
+                        await reply(
+                            '╭══〘 *📝 CHAT SUMMARY* 〙═⊷\n' +
+                            (r?.reply || 'Unable to summarize — not enough message history.').split('\n').slice(0,20).map(l => '┃ ' + l).join('\n') + '\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ Summary failed: ' + e.message) }
+                    return
+                }
+
+                // ══ WEATHER ══════════════════════════════════════════════════════
+                if (intent === 'weather_check') {
+                    const cityM = text.match(/(?:weather|temperature|forecast|climate|hot|cold|warm|cool)\s+(?:in|at|for|of|today\s+in)?\s+([\w\s]+?)(?:\?|$|\.|,)/i)
+                        || text.match(/(?:in|at|for)\s+([\w\s]+?)(?:\?|$|\.|,)/i)
+                    const city = (cityM ? cityM[1].trim() : text.replace(/weather|temperature|forecast|in|at|for|of|today|now|current|report/gi, '').trim()) || 'Nairobi'
+                    if (!city || city.length < 2) { await reply('❓ Which city?\nExample: *agent weather Nairobi*'); return }
+                    try {
+                        await react('🌤️')
+                        const r = await adv.weather(city)
+                        if (!r.success) { await reply('❌ ' + r.error); return }
+                        await reply(
+                            '╭══〘 *' + r.emoji + ' WEATHER — ' + r.name.toUpperCase() + '* 〙═⊷\n' +
+                            '┃ 📍 ' + r.name + ', ' + r.country + '\n' +
+                            '┃ 🌡️ Temp: *' + r.temp_c + '°C* (' + r.temp_f + '°F)\n' +
+                            '┃ 🤔 Feels like: *' + r.feels + '°C*\n' +
+                            '┃ ' + r.emoji + ' Condition: *' + r.desc + '*\n' +
+                            '┃ 💧 Humidity: *' + r.humidity + '%*\n' +
+                            '┃ 💨 Wind: *' + r.wind + ' km/h*\n' +
+                            '┃ ☁️ Cloud cover: *' + r.cloud + '%*\n' +
+                            '┃ 🌅 Sunrise: *' + (r.sunrise || 'N/A') + '*   🌇 Sunset: *' + (r.sunset || 'N/A') + '*\n' +
+                            '┃ 🔆 UV Index: *' + r.uv + '*   👁️ Visibility: *' + r.visibility + 'km*\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ Weather failed: ' + e.message) }
+                    return
+                }
+
+                // ══ CRYPTO PRICE ══════════════════════════════════════════════════
+                if (intent === 'crypto_check') {
+                    const coinM = text.match(/\b(btc|eth|bnb|sol|xrp|ada|doge|dot|matic|ltc|link|avax|atom|trx|xlm|shib|uni|aave|near|ftm|usdt|usdc|bitcoin|ethereum|solana|dogecoin)\b/i)
+                    const coin = coinM ? coinM[1] : text.replace(/price|value|worth|how|much|is|of|check|crypto|coin/gi, '').trim().split(/\s+/)[0]
+                    if (!coin || coin.length < 2) { await reply('❓ Which coin?\nExample: *agent crypto btc*\nCoins: btc, eth, bnb, sol, xrp, ada, doge, shib, matic...'); return }
+                    try {
+                        await react('💰')
+                        const r = await adv.crypto_price(coin)
+                        if (!r.success) { await reply('❌ ' + r.error); return }
+                        const fn = n => n ? (n >= 1e9 ? (n/1e9).toFixed(2)+'B' : n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(2)+'K' : n.toFixed(4)) : 'N/A'
+                        await reply(
+                            '╭══〘 *💰 ' + r.name + ' (' + r.symbol + ')* 〙═⊷\n' +
+                            '┃ 💵 Price: *$' + (r.price_usd?.toLocaleString() || 'N/A') + '*\n' +
+                            '┃ ' + r.trend + ' 24h Change: *' + r.price_change_24h + '%*\n' +
+                            '┃ 📈 24h High: *$' + fn(r.high_24h) + '*   📉 Low: *$' + fn(r.low_24h) + '*\n' +
+                            '┃ 💹 Market Cap: *$' + fn(r.market_cap) + '*\n' +
+                            '┃ 🔄 24h Volume: *$' + fn(r.volume_24h) + '*\n' +
+                            '┃ 🏆 Rank: *#' + (r.rank || 'N/A') + '*\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ Crypto check failed: ' + e.message) }
+                    return
+                }
+
+                // ══ CURRENCY CONVERT ══════════════════════════════════════════════
+                if (intent === 'currency_convert') {
+                    const cM = text.match(/(\d+(?:\.\d+)?)\s*([A-Za-z]{3})\s+(?:to|in|into)\s+([A-Za-z]{3})/i)
+                        || text.match(/(?:convert|exchange)\s+(\d+(?:\.\d+)?)\s*([A-Za-z]{3})\s+(?:to|into)\s+([A-Za-z]{3})/i)
+                    if (!cM) { await reply('❓ Format: *agent convert 100 USD to KES*\nOr: *agent 500 KES to USD*'); return }
+                    try {
+                        await react('💱')
+                        const r = await adv.currency(cM[1] || '1', cM[2], cM[3])
+                        if (!r.success) { await reply('❌ ' + r.error); return }
+                        await reply(
+                            '╭══〘 *💱 CURRENCY CONVERSION* 〙═⊷\n' +
+                            '┃ 💰 *' + r.amount + ' ' + r.from + '* = *' + r.result + ' ' + r.to + '*\n' +
+                            '┃ 📊 Rate: 1 ' + r.from + ' = ' + r.rate + ' ' + r.to + '\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ Conversion failed: ' + e.message) }
+                    return
+                }
+
+                // ══ NEWS SEARCH ═══════════════════════════════════════════════════
+                if (intent === 'news_search') {
+                    const topicM = text.match(/(?:news|latest|breaking|top)\s+(?:news\s+)?(?:about|on|for|regarding)?\s*(.+)/i)
+                        || text.match(/what'?s\s+happening\s+(?:with|in)?\s*(.+)/i)
+                    const topic = (topicM ? topicM[1].trim() : 'world news') || 'world news'
+                    try {
+                        await react('📰')
+                        const r = await adv.news(topic)
+                        if (!r.success) { await reply('❌ Could not fetch news: ' + r.error); return }
+                        const lines = r.articles.map((a, i) => (i+1) + '. *' + a.title.slice(0, 70) + '*\n   📰 ' + a.source + (a.pubDate ? '  |  ' + a.pubDate : '')).join('\n\n')
+                        await reply('╭══〘 *📰 NEWS: ' + topic.toUpperCase().slice(0, 25) + '* 〙═⊷\n\n' + lines + '\n\n╰══════════════════⊷')
+                    } catch(e) { await react('❌'); await reply('❌ News failed: ' + e.message) }
+                    return
+                }
+
+                // ══ MOVIE INFO ════════════════════════════════════════════════════
+                if (intent === 'movie_search') {
+                    const mvM = text.match(/(?:movie|film|show|series)\s+(?:info|about|details?|rating|review|cast|plot|summary)?\s*(?:of\s+|for\s+)?(.+)/i)
+                        || text.match(/(?:tell\s+me\s+about)\s+(?:the\s+(?:movie|film)\s+)?(.+)/i)
+                    const title = (mvM ? mvM[1].trim().replace(/[?.]/g, '').trim() : text.replace(/movie|film|info|about|details|rating|review/gi, '').trim()) || null
+                    if (!title || title.length < 2) { await reply('❓ Which movie?\nExample: *agent movie Inception*'); return }
+                    try {
+                        await react('🎬')
+                        const r = await adv.movie_info(title)
+                        if (!r.success) { await reply('❌ ' + r.error); return }
+                        const plot = (r.Plot || 'N/A').match(/.{1,70}/g)?.slice(0, 3).map(l => '┃ ' + l).join('\n') || '┃ N/A'
+                        await reply(
+                            '╭══〘 *🎬 ' + r.Title + '* 〙═⊷\n' +
+                            '┃ 📅 Year: *' + r.Year + '*   ⏱️ Runtime: *' + r.Runtime + '*\n' +
+                            '┃ 🎭 Genre: *' + r.Genre + '*\n' +
+                            '┃ 🌟 IMDB: *' + r.imdbRating + '/10*   Votes: ' + r.imdbVotes + '\n' +
+                            '┃ 🏆 Awards: ' + (r.Awards || 'N/A').slice(0, 60) + '\n' +
+                            '┃ 🎬 Director: ' + (r.Director || 'N/A') + '\n' +
+                            '┃ 🎭 Cast: ' + (r.Actors || 'N/A').slice(0, 80) + '\n' +
+                            '┃ 🌍 Country: ' + r.Country + '   🗣️ ' + r.Language + '\n' +
+                            '┃\n┃ 📖 *Plot:*\n' + plot + '\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ Movie lookup failed: ' + e.message) }
+                    return
+                }
+
+                // ══ IP INFO ═══════════════════════════════════════════════════════
+                if (intent === 'ip_lookup') {
+                    const ipM = text.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)
+                        || text.match(/(?:ip\s+(?:info|lookup|check|locate|trace)?\s+)([\w.]+)/i)
+                    if (!ipM) { await reply('❓ Include an IP address.\nExample: *agent ip info 8.8.8.8*'); return }
+                    try {
+                        await react('🌍')
+                        const r = await adv.ip_info(ipM[1])
+                        if (!r.success) { await reply('❌ ' + r.error); return }
+                        await reply(
+                            '╭══〘 *🌍 IP INFO* 〙═⊷\n' +
+                            '┃ 📡 IP: *' + r.query + '*\n' +
+                            '┃ 🌍 Location: *' + r.city + ', ' + r.regionName + ', ' + r.country + '*\n' +
+                            '┃ 🗺️ Coordinates: ' + r.lat + ', ' + r.lon + '\n' +
+                            '┃ ⏰ Timezone: *' + r.timezone + '*\n' +
+                            '┃ 🏢 ISP: *' + r.isp + '*\n' +
+                            '┃ 🏗️ Org: ' + (r.org || 'N/A') + '\n' +
+                            '┃ 📱 Mobile: ' + (r.mobile ? '✅' : '❌') + '   🛡️ Proxy: ' + (r.proxy ? '⚠️ Yes' : '✅ No') + '   ☁️ Hosting: ' + (r.hosting ? 'Yes' : 'No') + '\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ IP lookup failed: ' + e.message) }
+                    return
+                }
+
+                // ══ SPEEDTEST ═════════════════════════════════════════════════════
+                if (intent === 'speedtest') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    try {
+                        await react('⚡')
+                        await reply('⏳ Running speed test... (takes ~15 seconds)')
+                        const r = await adv.speedtest()
+                        if (!r.success) { await reply('❌ ' + r.error); return }
+                        await reply('╭══〘 *⚡ SPEEDTEST* 〙═⊷\n' + fmt(r.output) + '\n╰══════════════════⊷')
+                    } catch(e) { await reply('❌ ' + e.message) }
+                    return
+                }
+
+                // ══ ENCODE TEXT ═══════════════════════════════════════════════════
+                if (intent === 'encode_text') {
+                    const typeM = text.match(/\b(base64|hex|binary|url|morse|rot13|reverse)\b/i)
+                    const encType = typeM ? typeM[1] : 'base64'
+                    const rawText = text.replace(/encode|encrypt|convert|to\s+(base64|hex|binary|url|morse|rot13|reverse)/gi, '').trim()
+                    if (!rawText) { await reply('❓ What to encode?\nExample: *agent encode base64 Hello World*\nTypes: base64, hex, binary, url, morse, rot13, reverse'); return }
+                    const r = adv.encode(rawText, encType)
+                    if (!r.success) { await reply('❌ ' + r.error); return }
+                    await reply(
+                        '╭══〘 *🔐 ENCODED* 〙═⊷\n' +
+                        '┃ Type: *' + encType.toUpperCase() + '*\n' +
+                        '┃ Input: _' + rawText.slice(0, 60) + '_\n' +
+                        '┃\n' +
+                        (r.result.match(/.{1,70}/g) || [r.result]).map(l => '┃ ' + l).join('\n') + '\n' +
+                        '╰══════════════════⊷'
+                    )
+                    return
+                }
+
+                // ══ DECODE TEXT ═══════════════════════════════════════════════════
+                if (intent === 'decode_text') {
+                    const typeM2 = text.match(/\b(base64|hex|binary|url|morse)\b/i)
+                    const decType = typeM2 ? typeM2[1] : 'base64'
+                    const rawText2 = text.replace(/decode|decrypt|convert\s+back|from\s+(base64|hex|binary|url|morse)/gi, '').trim()
+                    if (!rawText2) { await reply('❓ What to decode?\nExample: *agent decode base64 SGVsbG8gV29ybGQ=*'); return }
+                    const r2 = adv.decode(rawText2, decType)
+                    if (!r2.success) { await reply('❌ ' + r2.error); return }
+                    await reply('╭══〘 *🔓 DECODED* 〙═⊷\n┃ Type: *' + decType.toUpperCase() + '*\n┃ Result: *' + r2.result.slice(0, 300) + '*\n╰══════════════════⊷')
+                    return
+                }
+
+                // ══ HASH TEXT ═════════════════════════════════════════════════════
+                if (intent === 'hash_text') {
+                    const algoM = text.match(/\b(md5|sha1|sha256|sha512|sha3)\b/i)
+                    const algo = algoM ? algoM[1] : 'md5'
+                    const hashInput = text.replace(/hash|md5|sha1|sha256|sha512|sha3|generate|of|this|text|string|checksum/gi, '').trim()
+                    if (!hashInput) { await reply('❓ What to hash?\nExample: *agent hash sha256 mypassword*\nAlgos: md5, sha1, sha256, sha512'); return }
+                    const hr = adv.hash(hashInput, algo)
+                    if (!hr.success) { await reply('❌ ' + hr.error); return }
+                    await reply('╭══〘 *#️⃣ HASH* 〙═⊷\n┃ Algo: *' + hr.algo.toUpperCase() + '*\n┃ Input: _' + hashInput.slice(0, 60) + '_\n┃\n┃ ' + hr.result + '\n╰══════════════════⊷')
+                    return
+                }
+
+                // ══ TRUTH OR DARE ═════════════════════════════════════════════════
+                if (intent === 'truth_or_dare') {
+                    const isTruth = /\btruth\b/i.test(text) && !/\bdare\b/i.test(text)
+                    const isDare  = /\bdare\b/i.test(text) && !/\btruth\b/i.test(text)
+                    const pick    = isTruth ? adv.truth() : isDare ? adv.dare() : (Math.random() > 0.5 ? adv.truth() : adv.dare())
+                    const emoji   = pick.type === 'truth' ? '🤔' : '😈'
+                    await reply('╭══〘 *' + emoji + ' ' + pick.type.toUpperCase() + '* 〙═⊷\n┃\n┃ ' + pick.text + '\n┃\n╰══════════════════⊷')
+                    return
+                }
+
+                // ══ WORD OF THE DAY ═══════════════════════════════════════════════
+                if (intent === 'word_day') {
+                    const r = adv.word_of_day()
+                    await reply('╭══〘 *📚 WORD OF THE DAY* 〙═⊷\n┃ 📖 *' + r.word + '*\n┃\n' + (r.definitions || []).map(d => '┃ 💡 ' + d).join('\n') + '\n╰══════════════════⊷')
+                    return
+                }
+
+                // ══ HOROSCOPE ════════════════════════════════════════════════════
+                if (intent === 'horoscope_check') {
+                    const signs = ['aries','taurus','gemini','cancer','leo','virgo','libra','scorpio','sagittarius','capricorn','aquarius','pisces']
+                    const signM = text.match(new RegExp('\\b(' + signs.join('|') + ')\\b', 'i'))
+                    const sign = signM ? signM[1].toLowerCase() : 'aries'
+                    try {
+                        await react('⭐')
+                        const r = await adv.horoscope(sign)
+                        const EMOJI = {aries:'♈',taurus:'♉',gemini:'♊',cancer:'♋',leo:'♌',virgo:'♍',libra:'♎',scorpio:'♏',sagittarius:'♐',capricorn:'♑',aquarius:'♒',pisces:'♓'}
+                        await reply(
+                            '╭══〘 *' + (EMOJI[sign] || '⭐') + ' HOROSCOPE — ' + sign.toUpperCase() + '* 〙═⊷\n' +
+                            '┃ 📅 ' + (r.date || new Date().toDateString()) + '\n' +
+                            '┃\n' +
+                            (r.text || '').match(/.{1,75}/g)?.map(l => '┃ ' + l).join('\n') + '\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await reply('❌ ' + e.message) }
+                    return
+                }
+
+                // ══ RIDDLE ════════════════════════════════════════════════════════
+                if (intent === 'riddle_check') {
+                    const r = adv.get_riddle()
+                    await reply('╭══〘 *🧩 RIDDLE* 〙═⊷\n┃\n┃ ' + r.question + '\n┃\n┃ _Reply "answer" to reveal!_\n╰══════════════════⊷')
+                    if (!global.db.data.riddles) global.db.data.riddles = {}
+                    global.db.data.riddles[chat] = r.answer
+                    setTimeout(() => { try { if (global.db.data.riddles?.[chat]) delete global.db.data.riddles[chat] } catch(_) {} }, 120000)
+                    return
+                }
+
+                // ══ MOTIVATIONAL QUOTE ════════════════════════════════════════════
+                if (intent === 'quote_check') {
+                    try {
+                        const r = await adv.get_quote()
+                        await reply('╭══〘 *💬 QUOTE* 〙═⊷\n┃\n┃ _"' + r.quote + '"_\n┃\n┃ — *' + r.author + '*\n╰══════════════════⊷')
+                    } catch(e) { await reply('❌ ' + e.message) }
+                    return
+                }
+
+                // ══ GROUP ACTIVITY ════════════════════════════════════════════════
+                if (intent === 'group_activity') {
+                    if (!m.isGroup) { await reply('❓ Use this in a group.'); return }
+                    try {
+                        await react('📊')
+                        const meta   = await conn.groupMetadata(chat)
+                        const total  = meta.participants?.length || 0
+                        const admins = (meta.participants || []).filter(p => p.admin).length
+                        const created = meta.creation ? new Date(meta.creation * 1000).toLocaleDateString() : 'N/A'
+                        await reply(
+                            '╭══〘 *📊 GROUP STATS* 〙═⊷\n' +
+                            '┃ 📛 Name: *' + (meta.subject || 'N/A') + '*\n' +
+                            '┃ 👥 Total members: *' + total + '*\n' +
+                            '┃ 👑 Admins: *' + admins + '*\n' +
+                            '┃ 👤 Regular: *' + (total - admins) + '*\n' +
+                            '┃ 🗓️ Created: *' + created + '*\n' +
+                            '┃ 👤 Creator: @' + (meta.owner || meta.creator || '?').split('@')[0] + '\n' +
+                            '┃ 🔒 Restricted: *' + (meta.restrict ? 'Yes' : 'No') + '*\n' +
+                            '┃ ✏️ Messaging: *' + (meta.announce ? 'Admins only' : 'Everyone') + '*\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ ' + e.message) }
+                    return
+                }
+
+                // ══ STALK USER ════════════════════════════════════════════════════
+                if (intent === 'stalk_user') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    const mentions = m.mentionedJid || []
+                    const rawNumS = text.match(/\+?(\d{7,15})/)
+                    const targetS = mentions[0] || (rawNumS ? rawNumS[1] + '@s.whatsapp.net' : null)
+                    if (!targetS) { await reply('❓ Tag or provide the number.\nExample: *agent stalk @user*'); return }
+                    await react('👀')
+                    await reply('👀 Tracking *@' + targetS.split('@')[0] + '* — will notify when they come online!\n_Runs for 30 minutes._')
+                    let notified = 0
+                    const trackInterval = setInterval(async () => {
+                        try {
+                            const presence = conn.presences?.[targetS]?.[targetS]
+                            if (presence?.lastKnownPresence === 'available' && notified < 5) {
+                                notified++
+                                await conn.sendMessage(chat, { text: '🔔 *STALK ALERT!*\n👤 @' + targetS.split('@')[0] + ' just came *ONLINE!* 🟢\n⏰ ' + new Date().toLocaleTimeString() }, { quoted: m })
+                            }
+                        } catch(_) {}
+                    }, 15000)
+                    setTimeout(() => {
+                        clearInterval(trackInterval)
+                        conn.sendMessage(chat, { text: '⏰ Stalk tracking for @' + targetS.split('@')[0] + ' ended (30 min limit).' }).catch(() => {})
+                    }, 30 * 60 * 1000)
+                    return
+                }
+
+                // ══ CHECK ONLINE ══════════════════════════════════════════════════
+                if (intent === 'check_online') {
+                    const mentions = m.mentionedJid || []
+                    const rawNumO = text.match(/\+?(\d{7,15})/)
+                    const targetO = mentions[0] || (rawNumO ? rawNumO[1] + '@s.whatsapp.net' : null)
+                    if (!targetO) { await reply('❓ Tag or provide the number.\nExample: *agent check online @user*'); return }
+                    try {
+                        await react('🔍')
+                        const status = await conn.fetchStatus(targetO).catch(() => null)
+                        const presence = conn.presences?.[targetO]?.[targetO]
+                        const lastSeen = presence?.lastSeen ? new Date(presence.lastSeen * 1000).toLocaleString() : 'Unknown'
+                        const isOnline = presence?.lastKnownPresence === 'available'
+                        await reply(
+                            '╭══〘 *🔍 ONLINE STATUS* 〙═⊷\n' +
+                            '┃ 👤 @' + targetO.split('@')[0] + '\n' +
+                            '┃ 🟢 Status: *' + (isOnline ? 'ONLINE ✅' : 'Offline ❌') + '*\n' +
+                            '┃ 👁️ Last seen: *' + lastSeen + '*\n' +
+                            (status?.status ? '┃ 📝 Bio: _' + status.status.slice(0, 60) + '_\n' : '') +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ Could not check status: ' + e.message) }
+                    return
+                }
+
+                // ══ BROADCAST TO CONTACTS ═════════════════════════════════════════
+                if (intent === 'broadcast_contacts') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    const bcastM = text.match(/(?:broadcast|blast|send)\s+(?:to\s+all\s+(?:my\s+|saved\s+)?contacts?)?\s*:?\s*(.+)/i)
+                    const bcastMsg = bcastM ? bcastM[1].trim() : null
+                    if (!bcastMsg) { await reply('❓ What message to broadcast?\nExample: *agent broadcast: Hello everyone!*'); return }
+                    try {
+                        await react('📡')
+                        const contacts = Object.keys(conn.chats || {}).filter(j => j.endsWith('@s.whatsapp.net') && j !== conn.user?.id)
+                        if (!contacts.length) { await reply('❓ No contacts in chat list.'); return }
+                        await reply('⏳ Broadcasting to *' + contacts.length + '* contacts...')
+                        let sent = 0, failed = 0
+                        for (const jid of contacts.slice(0, 50)) {
+                            try { await conn.sendMessage(jid, { text: bcastMsg }); sent++ } catch(_) { failed++ }
+                            await new Promise(r => setTimeout(r, 500))
+                        }
+                        await reply('✅ Broadcast done!\n📨 Sent: *' + sent + '*   ❌ Failed: *' + failed + '*')
+                    } catch(e) { await reply('❌ Broadcast failed: ' + e.message) }
+                    return
+                }
+
+                // ══ BOT UPDATE ════════════════════════════════════════════════════
+                if (intent === 'bot_update') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    try {
+                        await react('⬆️')
+                        await reply('⏳ Pulling latest code from GitHub...')
+                        const { runShell } = require('../Library/actions/agent')
+                        const r = await runShell('git pull origin main 2>&1 | tail -10')
+                        await reply('╭══〘 *⬆️ BOT UPDATE* 〙═⊷\n' + fmt(r.output || r.error || 'No output') + '\n╰══════════════════⊷\n\n_Restart to apply: *agent pm2 restart bera*_')
+                    } catch(e) { await reply('❌ Update failed: ' + e.message) }
+                    return
+                }
+
+                // ══ CPU STATS ═════════════════════════════════════════════════════
+                if (intent === 'cpu_stats') {
+                    try {
+                        await react('💻')
+                        const os = require('os')
+                        const cpus = os.cpus()
+                        const load = os.loadavg()
+                        await reply(
+                            '╭══〘 *💻 CPU INFO* 〙═⊷\n' +
+                            '┃ 🖥️ Model: *' + (cpus[0]?.model || 'Unknown').trim() + '*\n' +
+                            '┃ ⚙️ Cores: *' + cpus.length + '*\n' +
+                            '┃ ⏱️ Load: *' + load.map(l => l.toFixed(2)).join(' | ') + '* (1m|5m|15m)\n' +
+                            '┃ 🔄 Speed: *' + (cpus[0]?.speed || 'N/A') + ' MHz*\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await reply('❌ ' + e.message) }
+                    return
+                }
+
+                // ══ RAM STATS ═════════════════════════════════════════════════════
+                if (intent === 'ram_stats') {
+                    try {
+                        await react('🧠')
+                        const os = require('os')
+                        const total = (os.totalmem() / 1073741824).toFixed(2)
+                        const free  = (os.freemem()  / 1073741824).toFixed(2)
+                        const used  = (os.totalmem() / 1073741824 - os.freemem() / 1073741824).toFixed(2)
+                        const pct   = ((os.totalmem() - os.freemem()) / os.totalmem() * 100).toFixed(1)
+                        const bar   = '█'.repeat(Math.round(pct/10)) + '░'.repeat(10 - Math.round(pct/10))
+                        await reply('╭══〘 *🧠 RAM USAGE* 〙═⊷\n┃ [' + bar + '] ' + pct + '%\n┃ Total: *' + total + ' GB*   Free: *' + free + ' GB*   Used: *' + used + ' GB*\n╰══════════════════⊷')
+                    } catch(e) { await reply('❌ ' + e.message) }
+                    return
+                }
+
+                // ══ DISK STATS ════════════════════════════════════════════════════
+                if (intent === 'disk_stats') {
+                    if (!isOwner) { await reply('❌ Owner only.'); return }
+                    try {
+                        await react('💽')
+                        const { runShell } = require('../Library/actions/agent')
+                        const r = await runShell('df -h / | tail -1')
+                        const parts = (r.output || '').trim().split(/\s+/)
+                        await reply('╭══〘 *💽 DISK USAGE* 〙═⊷\n┃ Total: *' + (parts[1]||'?') + '*   Used: *' + (parts[2]||'?') + '*   Free: *' + (parts[3]||'?') + '*   *' + (parts[4]||'?') + '*\n╰══════════════════⊷')
+                    } catch(e) { await reply('❌ ' + e.message) }
+                    return
+                }
+
+
                 // ── Fallback: delegate remaining intents to bera.js handleAction ─
                 // This handles: github_create_repo, github_list_repos, github_delete_repo,
                 // github_create_project, github_push_file, github_create_issue, github_fork,
