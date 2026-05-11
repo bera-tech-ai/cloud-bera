@@ -256,8 +256,13 @@ const detectIntent = (text) => {
         /\b(list|ls|show|what)\b.{0,15}\b(files?|directory|folder|workspace)\b/.test(t)) return 'file_list'
 
     // ── Shell ────────────────────────────────────────────────────────────────
+    // Covers: "run ls", "run: ls -la", "execute pwd", "bash: echo hello",
+    //         "run this command: ...", "shell command: ...", backtick commands,
+    //         and bare UNIX commands that start the message
     if (/\b(run|execute|exec|terminal|bash|shell|command)\b.{0,20}\b(this|command|script)\b/.test(t) ||
-        /^(pwd|cd |mkdir|rm |echo |npm |node |git |pip |python |chmod |touch |mv |cp )/.test(t)) return 'shell'
+        /\b(run|exec(?:ute)?|bash|shell)\s*:\s*\S/.test(t) ||
+        /\brun\s+(ls|pwd|whoami|df|du|top|ps|cat|echo|mkdir|chmod|kill|curl|wget|apt|npm|node|git|pip|python)\b/.test(t) ||
+        /^(pwd|ls\b|whoami|df\b|du\b|ps\b|top\b|cd |mkdir|rm |echo |npm |node |git |pip |python |chmod |touch |mv |cp |curl |wget |cat |grep |find |kill |apt )/.test(t)) return 'shell'
 
     // ── Agent ────────────────────────────────────────────────────────────────
     // NOTE: "agent" alone as a trigger word is stripped BEFORE detectIntent runs, so we only

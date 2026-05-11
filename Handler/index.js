@@ -926,6 +926,17 @@ const handleMessage = async (conn, rawMsg) => {
                 const reply  = (t) => conn.sendMessage(chat, { text: String(t) }, { quoted: m })
                 const fmt    = (lines) => lines.split('\n').slice(0, 30).map(l => '┃ ' + l.slice(0, 90)).join('\n')
 
+                // ── Compute isAdmin HERE — critical for all group commands ────────
+                // isAdmin from the command path (line 3547+) is NOT in scope here.
+                // Without this, every group command returns "❌ I need admin rights"
+                // even when the bot IS actually an admin.
+                let isAdmin = false
+                if (m.isGroup) {
+                    try {
+                        const _gm = await conn.groupMetadata(chat)
+                        isAdmin = (_gm.participants || []).some(p => p.id === conn.user?.id && p.admin)
+                    } catch (_e) {}
+                }
 
                 // ─────────────────────────────────────────────────────────────────
 
@@ -1622,6 +1633,70 @@ const handleMessage = async (conn, rawMsg) => {
                             await reply('╭══〘 *🌐 IP INFO* 〙═⊷\n┃ IP: *' + (d.ip||ip) + '*\n┃ Country: ' + (d.country_name||d.country||'?') + ' ' + (d.country_flag_emoji||'') + '\n┃ City: ' + (d.city||'?') + '\n┃ ISP: ' + (d.org||d.isp||'?') + '\n╰══════════════════⊷')
                         } else await reply('❌ ' + r.error)
                     } catch(e) { await reply('❌ ' + e.message) }
+                    return
+                }
+
+                // ══ WEB SCRAPE — extract text content from any URL ════════════
+                if (intent === 'web_scrape') {
+                    const urlM = text.match(/(https?:\/\/[^\s]+)/)
+                    if (!urlM) { await reply('❓ Include the URL to scrape.\nExample: *agent scrape https://example.com*'); return }
+                    try {
+                        await react('🌐')
+                        await reply('⏳ Fetching page content...')
+                        const r = await agent.webScrape(urlM[1])
+                        if (!r.success) { await reply('❌ Failed to fetch: ' + r.error); return }
+                        const preview = r.text.slice(0, 1500).replace(/\n{3,}/g, '\n\n')
+                        await reply(
+                            '╭══〘 *🌐 WEB SCRAPE* 〙═⊷\n' +
+                            '┃ 🔗 ' + r.url.slice(0, 70) + '\n' +
+                            '┃ 📛 ' + (r.title || 'No title') + '\n' +
+                            '┃ 📄 ' + r.length + ' chars extracted\n' +
+                            '┃\n' +
+                            fmt(preview) + '\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ Scrape failed: ' + e.message) }
+                    return
+                }
+
+                // ══ SCREENSHOT WEBSITE — fetch and summarise a webpage ════════
+                if (intent === 'ss_web') {
+                    const urlM2 = text.match(/(https?:\/\/[^\s]+)/)
+                    if (!urlM2) { await reply('❓ Include the URL.\nExample: *agent screenshot https://example.com*'); return }
+                    try {
+                        await react('📸')
+                        await reply('⏳ Fetching page...')
+                        const r = await agent.webScrape(urlM2[1])
+                        if (!r.success) { await reply('❌ Failed: ' + r.error); return }
+                        // Extract meaningful content sections
+                        const headings = (r.text.match(/[A-Z][^.!?\n]{20,80}/g) || []).slice(0, 8).join('\n')
+                        const preview  = headings || r.text.slice(0, 800)
+                        await reply(
+                            '╭══〘 *📸 PAGE CONTENT* 〙═⊷\n' +
+                            '┃ 🔗 ' + r.url.slice(0, 70) + '\n' +
+                            '┃ 📛 *' + (r.title || 'No title') + '*\n' +
+                            '┃\n' +
+                            fmt(preview) + '\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
+                    return
+                }
+
+                // ══ SSL CERTIFICATE CHECK ═════════════════════════════════════
+                if (intent === 'ssl_check') {
+                    const domainMssl = text.match(/(?:ssl|cert(?:ificate)?)\s+(?:check|info|expires?)?\s*(?:for\s+)?(\S+)/i)
+                        || text.match(/([\w-]+\.[a-zA-Z]{2,})/)
+                    if (!domainMssl) { await reply('❓ Include a domain.\nExample: *agent ssl check google.com*'); return }
+                    try {
+                        await react('🔒')
+                        const r = await agent.sslCheck(domainMssl[1])
+                        await reply(
+                            '╭══〘 *🔒 SSL CHECK* 〙═⊷\n' +
+                            fmt(r.output || r.error || 'No info') + '\n' +
+                            '╰══════════════════⊷'
+                        )
+                    } catch(e) { await react('❌'); await reply('❌ SSL check failed: ' + e.message) }
                     return
                 }
 
