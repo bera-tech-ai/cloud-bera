@@ -2109,8 +2109,113 @@ handle.before = async (m, { conn, reply, prefix }) => {
     }
 }
 
-handle.command = ['bera', 'agent', 'chatbot', 'beraclone', 'workspace', 'setghtoken', 'tagreply', 'transcribe', 'listen', 'beratrigger', 'beratrig', 'beralisten']
-handle.tags = ['ai']
+// ── .remember / .recall / .forget — AI memory management ─────────────────────
+const _handleMemoryCmd = async (command, text, sender, reply, prefix) => {
+    const { getMemory, setMemory, deleteMemory } = require('../Library/actions/beraai')
+    if (command === 'remember') {
+        if (!text) return reply(`❌ Usage: ${prefix}remember <fact>\nExample: ${prefix}remember My name is Bera and I love coding`)
+        setMemory(sender, text.slice(0, 300))
+        return reply(`✅ *Remembered!*\n\n_"${text.slice(0, 100)}${text.length > 100 ? '...' : ''}"_\n\nBera AI will use this context in future conversations.`)
+    }
+    if (command === 'recall' || command === 'memories') {
+        const mem = getMemory(sender)
+        if (!Object.keys(mem).length) return reply(`📭 No memories saved yet.\nUse ${prefix}remember <fact> to save context.`)
+        const lines = Object.entries(mem).map(([k, v], i) => `${i + 1}. *${k}:* ${v}`).join('\n')
+        return reply(`╭══〘 *🧠 BERA AI MEMORY* 〙═⊷\n${lines}\n╰══════════════════⊷\n_${Object.keys(mem).length} memory entries_`)
+    }
+    if (command === 'forget' || command === 'deletememory') {
+        if (!text) {
+            // Clear all memories
+            deleteMemory(sender)
+            return reply(`🗑️ All memories cleared. Bera AI starts fresh.`)
+        }
+        deleteMemory(sender, text.trim())
+        return reply(`✅ Memory entry cleared.`)
+    }
+}
+
+// Patch handle to include memory commands
+const _origHandle = handle
+const handleWrapper = async (m, ctx) => {
+    const { command, text, sender, reply, prefix } = ctx
+    if (['remember', 'recall', 'memories', 'forget', 'deletememory'].includes(command)) {
+        try {
+            const r = await _handleMemoryCmd(command, text, sender, reply, prefix)
+            return r
+        } catch (e) {
+            return reply(`❌ Memory error: ${e.message}`)
+        }
+    }
+    if (command === 'berahistory') {
+        try {
+            const hist = global.db?.data?.users?.[sender]?.nickHistory || []
+            if (!hist.length) return reply(`📭 No conversation history.\nStart chatting with ${prefix}bera <message>`)
+            const lines = hist.slice(-10).map((h, i) => `${h.role === 'user' ? '👤' : '🤖'} ${h.content.slice(0, 80)}${h.content.length > 80 ? '…' : ''}`)
+            return reply(
+                `╭══〘 *📜 BERA HISTORY* 〙═⊷\n` +
+                `_Last ${Math.min(hist.length, 10)} messages:_\n\n` +
+                lines.join('\n\n') + '\n' +
+                `╰══════════════════⊷`
+            )
+        } catch { return reply(`❌ Could not load history.`) }
+    }
+    if (command === 'apidocs') {
+        const apiName = text?.trim()
+        if (!apiName) return reply(`❌ Usage: ${prefix}apidocs <api-name>\nExamples:\n• ${prefix}apidocs OpenAI\n• ${prefix}apidocs Stripe\n• ${prefix}apidocs GitHub REST`)
+        const { generateAdvancedReply } = require('../Library/actions/beraai')
+        ctx.conn.sendMessage(m.chat, { react: { text: '📖', key: m.key } }).catch(() => {})
+        const prompt = `Generate comprehensive API documentation for: "${apiName}"\n\nInclude:\n1. Overview & what it does\n2. Authentication (how to get API key, token setup)\n3. Base URL and rate limits\n4. Top 5 most-used endpoints with:\n   - Method + path\n   - Request parameters (table format)\n   - Response format (JSON example)\n   - Code example in JavaScript/Node.js\n5. Error codes and handling\n6. Useful links (official docs, SDKs)\n\nBe specific, complete, and production-ready.`
+        const result = await generateAdvancedReply(prompt, sender, ctx.conn, m)
+        ctx.conn.sendMessage(m.chat, { react: { text: '✅', key: m.key } }).catch(() => {})
+        return reply(result.reply || '❌ Could not generate docs.')
+    }
+    if (command === 'cron') {
+        if (!ctx.isOwner) return reply(`⛔ Owner only.`)
+        const { addCronJob, cancelCronJob, listCronJobs } = require('../Library/actions/scheduler')
+        const parts = (text || '').trim().split(/\s+/)
+        const sub = parts[0]?.toLowerCase()
+
+        if (sub === 'list' || sub === 'ls') {
+            const jobs = listCronJobs()
+            if (!jobs.length) return reply(`📭 No active cron jobs.\nUse ${prefix}cron add <expr> <message> to create one.`)
+            return reply(`╭══〘 *📅 CRON JOBS* 〙═⊷\n${jobs.map(j => `┃ #${j.id} [${j.expression}]\n┃   ${j.description}`).join('\n')}\n╰══════════════════⊷`)
+        }
+        if (sub === 'cancel' || sub === 'rm' || sub === 'remove') {
+            const id = parseInt(parts[1])
+            if (!id) return reply(`❌ Usage: ${prefix}cron cancel <id>`)
+            const r = cancelCronJob(id)
+            return reply(r.success ? `✅ Cron job #${id} cancelled.` : `❌ ${r.error}`)
+        }
+        if (sub === 'add') {
+            // .cron add 0 9 * * * Good morning!
+            const expr = parts.slice(1, 6).join(' ')
+            const msg = parts.slice(6).join(' ') || 'Scheduled reminder'
+            const r = addCronJob(expr, msg, m.chat, async () => {
+                try { await ctx.conn.sendMessage(m.chat, { text: `⏰ *Cron:* ${msg}` }) } catch {}
+            })
+            return reply(r.success
+                ? `✅ Cron job #${r.id} created!\n📅 Expression: \`${expr}\`\n📝 Message: ${msg}`
+                : `❌ ${r.error}`)
+        }
+        return reply(
+            `❌ Usage:\n` +
+            `• ${prefix}cron add <expr> <message> — schedule a job\n` +
+            `• ${prefix}cron list — list all jobs\n` +
+            `• ${prefix}cron cancel <id> — cancel a job\n\n` +
+            `Cron expression format: min hour day month weekday\n` +
+            `Example: ${prefix}cron add 0 9 * * * Good morning!`
+        )
+    }
+    return _origHandle(m, ctx)
+}
+handleWrapper.before = handle.before
+handleWrapper.command = ['bera', 'agent', 'chatbot', 'beraclone', 'workspace', 'setghtoken', 'tagreply', 'transcribe', 'listen', 'beratrigger', 'beratrig', 'beralisten',
+    'remember', 'recall', 'memories', 'forget', 'deletememory',
+    'berahistory', 'apidocs', 'cron']
+handleWrapper.tags = ['ai']
+
+module.exports = handleWrapper
+module.exports.handleAction = handleAction
 
 module.exports = handle
 module.exports.handleAction = handleAction

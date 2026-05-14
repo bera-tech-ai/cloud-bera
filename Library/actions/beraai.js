@@ -416,7 +416,8 @@ const SYSTEM_PROMPT = `You are Bera AI — the most advanced AI agent ever built
 - Personality: Sharp, confident, professional. Never arrogant, always helpful and direct.
 - Languages: DEFAULT TO ENGLISH. Reply in English unless the user clearly writes their entire message in Swahili or Sheng. Do NOT randomly insert Swahili words like "Mkuu", "Kwa Heri", "Habari", "Bana", "Waazi", "Enyewe" into English replies. No mixed-language greetings. Pure English unless the user switches first.
 - You are NEVER "just an AI that can't do things" — you have live tools and you USE them immediately.
-- Powered by: Bera AI Engine (Keith API primary, Pollinations fallback)
+- Powered by: Bera AI Engine v2.0 — OpenAI primary, Keith API secondary, Pollinations fallback
+- Version: Bera Agent 2.0 — 30+ live tools, SSH access, code execution, HTTP requests, unit conversion, OCR, TTS, QR, JWT, cron scheduler, email, webhooks, regex, math, CSV/YAML parsing, and more
 
 ## REASONING PROTOCOL
 Before answering anything complex:
@@ -486,6 +487,33 @@ You have these tools. To call one, output ONLY a single line of JSON (no markdow
 {"tool":"pm2stop","name":"process-name"}
 {"tool":"cmd","command":"vv","args":""}
 {"tool":"sendfile","path":"workspace/relative/path.ext","caption":"optional caption"}
+{"tool":"screenshot","url":"https://example.com"}
+{"tool":"ocr","imageUrl":"https://...image.jpg"}
+{"tool":"tts","text":"Hello World","lang":"en"}
+{"tool":"sshexec","host":"1.2.3.4","port":22,"username":"root","password":"pass","cmd":"ls -la"}
+{"tool":"httpget","url":"https://api.example.com/data","headers":{}}
+{"tool":"httppost","url":"https://api.example.com","body":{"key":"value"},"headers":{}}
+{"tool":"matheval","expr":"sqrt(144) + 2^8"}
+{"tool":"unitconv","value":100,"from":"km","to":"miles"}
+{"tool":"currency","amount":100,"from":"USD","to":"KES"}
+{"tool":"qrgen","text":"https://github.com/bera-tech-ai"}
+{"tool":"cron","expression":"0 9 * * *","description":"Daily 9am reminder","message":"Good morning!"}
+{"tool":"uncron","id":1}
+{"tool":"listcron"}
+{"tool":"remind","text":"Pray","delay":"30 minutes"}
+{"tool":"hashtext","algo":"sha256","text":"hello world"}
+{"tool":"encode","type":"base64","text":"hello world"}
+{"tool":"decode","type":"base64","text":"aGVsbG8gd29ybGQ="}
+{"tool":"regextest","pattern":"^\\d+$","input":"12345"}
+{"tool":"netping","host":"google.com"}
+{"tool":"runcode","code":"console.log('hello')","lang":"js"}
+{"tool":"jwtgen","secret":"mySecret","payload":{"userId":1,"role":"admin"}}
+{"tool":"jwtverify","secret":"mySecret","token":"eyJ..."}
+{"tool":"webhook","url":"https://hooks.example.com/xyz","payload":{"event":"test"}}
+{"tool":"sendmail","to":"user@example.com","subject":"Hello","text":"Message body","smtpUser":"you@gmail.com","smtpPass":"apppass"}
+{"tool":"csvparse","text":"name,age\nAlice,30\nBob,25"}
+{"tool":"yamlparse","text":"name: Alice\nage: 30"}
+{"tool":"speedtest"}
 {"tool":"pdf","text":"the text body of the PDF","filename":"hello.pdf","title":"optional title"}
 {"tool":"zip","folder":"folder-to-zip","filename":"output.zip"}
 {"tool":"reply","text":"your final answer to the user"}
@@ -1174,6 +1202,332 @@ NEVER describe a command — CALL it via cmd tool.`
             } else if (toolCall.tool === 'pm2stop') {
                 const r = await pm2Stop(toolCall.name)
                 toolResult = r.output || 'Stop issued'
+
+            // ── 30 NEW TOOLS ─────────────────────────────────────────────────
+            } else if (toolCall.tool === 'screenshot') {
+                try {
+                    const { takeScreenshot } = require('./browser')
+                    const url = toolCall.url || ''
+                    if (!url) { toolResult = '❌ screenshot needs url'; }
+                    else {
+                        if (conn && m) { try { await conn.sendMessage(m.chat, { text: '📸 Taking screenshot...' }, { quoted: m }) } catch {} }
+                        const r = await takeScreenshot(url)
+                        if (r.success && conn && m) {
+                            await conn.sendMessage(m.chat, { image: r.buffer, caption: `📸 Screenshot of ${url}` }, { quoted: m })
+                            toolResult = `✅ Screenshot of ${url} sent.`
+                        } else {
+                            toolResult = `❌ Screenshot failed: ${r.error || 'unknown'}`
+                        }
+                    }
+                } catch (e) { toolResult = `❌ screenshot error: ${e.message}` }
+
+            } else if (toolCall.tool === 'tts') {
+                try {
+                    const ttsText = String(toolCall.text || '').slice(0, 200)
+                    const lang = toolCall.lang || 'en'
+                    if (!ttsText) { toolResult = '❌ tts needs text'; }
+                    else {
+                        if (conn && m) { try { await conn.sendMessage(m.chat, { text: '🔊 Generating voice...' }, { quoted: m }) } catch {} }
+                        let gTTS
+                        try { gTTS = require('google-tts-api') } catch {}
+                        let buf = null
+                        if (gTTS) {
+                            try {
+                                const ttsUrl = gTTS.getAudioUrl(ttsText, { lang, slow: false, host: 'https://translate.google.com' })
+                                const axios = require('axios')
+                                const res = await axios.get(ttsUrl, { responseType: 'arraybuffer', timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0' } })
+                                buf = Buffer.from(res.data)
+                            } catch {}
+                        }
+                        if (!buf) {
+                            const axios = require('axios')
+                            try {
+                                const fallback = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(ttsText)}`
+                                const res = await axios.get(fallback, { responseType: 'arraybuffer', timeout: 12000 })
+                                if (res.data && res.data.byteLength > 500) buf = Buffer.from(res.data)
+                            } catch {}
+                        }
+                        if (buf && conn && m) {
+                            await conn.sendMessage(m.chat, { audio: buf, mimetype: 'audio/mpeg', ptt: true }, { quoted: m })
+                            toolResult = `✅ Voice note sent for: "${ttsText.slice(0, 60)}"`
+                        } else {
+                            toolResult = '❌ TTS failed — voice providers unavailable.'
+                        }
+                    }
+                } catch (e) { toolResult = `❌ tts error: ${e.message}` }
+
+            } else if (toolCall.tool === 'sshexec') {
+                try {
+                    const { sshExec, formatSshResult } = require('./ssh')
+                    const cfg = { host: toolCall.host, port: toolCall.port || 22, username: toolCall.username || 'root', password: toolCall.password, privateKey: toolCall.privateKey }
+                    if (!cfg.host || !toolCall.cmd) { toolResult = '❌ sshexec needs: host, cmd (and password or privateKey)' }
+                    else {
+                        const r = await sshExec(cfg, toolCall.cmd, 15000)
+                        toolResult = formatSshResult(r)
+                    }
+                } catch (e) { toolResult = `❌ sshexec error: ${e.message}` }
+
+            } else if (toolCall.tool === 'httpget') {
+                try {
+                    const { httpRequest, formatHttpResult } = require('./httptools')
+                    const r = await httpRequest({ method: 'GET', url: toolCall.url, headers: toolCall.headers || {}, params: toolCall.params || {} })
+                    toolResult = formatHttpResult(r, 'GET', toolCall.url)
+                } catch (e) { toolResult = `❌ httpget error: ${e.message}` }
+
+            } else if (toolCall.tool === 'httppost') {
+                try {
+                    const { httpRequest, formatHttpResult } = require('./httptools')
+                    const r = await httpRequest({ method: 'POST', url: toolCall.url, body: toolCall.body, headers: toolCall.headers || {} })
+                    toolResult = formatHttpResult(r, 'POST', toolCall.url)
+                } catch (e) { toolResult = `❌ httppost error: ${e.message}` }
+
+            } else if (toolCall.tool === 'matheval') {
+                try {
+                    const { evalMath } = require('./devmath')
+                    const r = await evalMath(toolCall.expr || toolCall.expression || '')
+                    toolResult = r.success ? `✅ ${r.expression} = *${r.result}*` : `❌ Math error: ${r.error}`
+                } catch (e) { toolResult = `❌ matheval error: ${e.message}` }
+
+            } else if (toolCall.tool === 'unitconv') {
+                try {
+                    const { convertUnit } = require('./devmath')
+                    const r = convertUnit(toolCall.value || 0, toolCall.from || '', toolCall.to || '')
+                    toolResult = r.success ? `✅ ${r.formatted}` : `❌ ${r.error}`
+                } catch (e) { toolResult = `❌ unitconv error: ${e.message}` }
+
+            } else if (toolCall.tool === 'currency') {
+                try {
+                    const { convertCurrency } = require('./devmath')
+                    const r = await convertCurrency(toolCall.amount || 0, toolCall.from || 'USD', toolCall.to || 'KES')
+                    toolResult = r.success ? `✅ ${r.formatted}` : `❌ ${r.error}`
+                } catch (e) { toolResult = `❌ currency error: ${e.message}` }
+
+            } else if (toolCall.tool === 'qrgen') {
+                try {
+                    const QRCode = require('qrcode')
+                    const qrText = String(toolCall.text || toolCall.url || '').trim()
+                    if (!qrText) { toolResult = '❌ qrgen needs text or url' }
+                    else {
+                        const buffer = await QRCode.toBuffer(qrText, { width: 512, margin: 2 })
+                        if (conn && m) {
+                            await conn.sendMessage(m.chat, { image: buffer, caption: `🔳 QR code for: ${qrText.slice(0, 60)}` }, { quoted: m })
+                            toolResult = `✅ QR code for "${qrText.slice(0, 60)}" sent.`
+                        } else {
+                            toolResult = '✅ QR generated (no conversation context to send)'
+                        }
+                    }
+                } catch (e) { toolResult = `❌ qrgen error: ${e.message}` }
+
+            } else if (toolCall.tool === 'cron') {
+                try {
+                    const { addCronJob } = require('./scheduler')
+                    const expr = toolCall.expression || toolCall.cron || '0 9 * * *'
+                    const desc = toolCall.description || 'Cron job'
+                    const msg  = toolCall.message || desc
+                    if (!conn || !m) { toolResult = '❌ cron tool needs conversation context.' }
+                    else {
+                        const r = addCronJob(expr, desc, m.chat, async () => {
+                            try { await conn.sendMessage(m.chat, { text: `⏰ *Scheduled:* ${msg}` }) } catch {}
+                        })
+                        toolResult = r.success
+                            ? `✅ Cron job #${r.id} scheduled.\n📅 Expression: \`${expr}\`\n📝 Task: ${desc}`
+                            : `❌ Cron failed: ${r.error}`
+                    }
+                } catch (e) { toolResult = `❌ cron error: ${e.message}` }
+
+            } else if (toolCall.tool === 'uncron') {
+                try {
+                    const { cancelCronJob } = require('./scheduler')
+                    const r = cancelCronJob(Number(toolCall.id))
+                    toolResult = r.success ? `✅ Cron job #${toolCall.id} cancelled.` : `❌ ${r.error}`
+                } catch (e) { toolResult = `❌ uncron error: ${e.message}` }
+
+            } else if (toolCall.tool === 'listcron') {
+                try {
+                    const { listCronJobs } = require('./scheduler')
+                    const jobs = listCronJobs()
+                    if (!jobs.length) { toolResult = '📭 No active cron jobs.' }
+                    else {
+                        toolResult = `📅 *Active Cron Jobs (${jobs.length}):*\n` + jobs.map(j => `• #${j.id} [${j.expression}] — ${j.description}`).join('\n')
+                    }
+                } catch (e) { toolResult = `❌ listcron error: ${e.message}` }
+
+            } else if (toolCall.tool === 'remind') {
+                try {
+                    const { addReminder, parseTimeToMs } = require('./scheduler')
+                    const remText = String(toolCall.text || toolCall.message || 'Reminder')
+                    const delayInput = String(toolCall.delay || toolCall.in || '5 minutes')
+                    const delayMs = parseTimeToMs(delayInput)
+                    if (delayMs <= 0) { toolResult = `❌ Invalid time format: "${delayInput}". Use e.g. "30 minutes", "2 hours"` }
+                    else if (!conn || !m) { toolResult = '❌ remind tool needs conversation context.' }
+                    else {
+                        const r = addReminder(conn, m.chat, remText, delayMs, m)
+                        toolResult = `✅ Reminder set!\n⏰ Message: "${remText}"\n📅 In: ${delayInput}\n🕐 At: ${r.scheduledAt}`
+                    }
+                } catch (e) { toolResult = `❌ remind error: ${e.message}` }
+
+            } else if (toolCall.tool === 'hashtext') {
+                try {
+                    const crypto = require('crypto')
+                    const algo = (toolCall.algo || toolCall.algorithm || 'sha256').toLowerCase()
+                    const input = String(toolCall.text || toolCall.input || '')
+                    const supported = ['md5', 'sha1', 'sha256', 'sha512', 'sha384']
+                    if (!supported.includes(algo)) { toolResult = `❌ Unsupported algo. Use: ${supported.join(', ')}` }
+                    else if (!input) { toolResult = '❌ hashtext needs text' }
+                    else {
+                        const hash = crypto.createHash(algo).update(input).digest('hex')
+                        toolResult = `🔑 ${algo.toUpperCase()} hash of "${input.slice(0, 40)}...":\n\`${hash}\``
+                    }
+                } catch (e) { toolResult = `❌ hashtext error: ${e.message}` }
+
+            } else if (toolCall.tool === 'encode') {
+                try {
+                    const type = (toolCall.type || 'base64').toLowerCase()
+                    const input = String(toolCall.text || toolCall.input || '')
+                    if (!input) { toolResult = '❌ encode needs text'; }
+                    else {
+                        let result = ''
+                        if (type === 'base64') result = Buffer.from(input).toString('base64')
+                        else if (type === 'hex') result = Buffer.from(input).toString('hex')
+                        else if (type === 'rot13') result = input.replace(/[a-zA-Z]/g, c => String.fromCharCode(c.charCodeAt(0) + (c.toLowerCase() < 'n' ? 13 : -13)))
+                        else if (type === 'url') result = encodeURIComponent(input)
+                        else if (type === 'binary') result = input.split('').map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join(' ')
+                        else if (type === 'morse') {
+                            const M = { a:'.-',b:'-...',c:'-.-.',d:'-..',e:'.',f:'..-.',g:'--.',h:'....',i:'..',j:'.---',k:'-.-',l:'.-..',m:'--',n:'-.',o:'---',p:'.--.',q:'--.-',r:'.-.',s:'...',t:'-',u:'..-',v:'...-',w:'.--',x:'-..-',y:'-.--',z:'--..',0:'-----',1:'.----',2:'..---',3:'...--',4:'....-',5:'.....',6:'-....',7:'--...',8:'---..',9:'----.', ' ':'/' }
+                            result = input.toLowerCase().split('').map(c => M[c] || '?').join(' ')
+                        }
+                        else { toolResult = `❌ Unknown encode type. Supported: base64, hex, binary, rot13, url, morse`; goto_next = true }
+                        if (!goto_next) toolResult = `🔐 Encoded (${type}):\n\`${result.slice(0, 1000)}\``
+                    }
+                } catch (e) { toolResult = `❌ encode error: ${e.message}` }
+
+            } else if (toolCall.tool === 'decode') {
+                try {
+                    const type = (toolCall.type || 'base64').toLowerCase()
+                    const input = String(toolCall.text || toolCall.input || '')
+                    if (!input) { toolResult = '❌ decode needs text'; }
+                    else {
+                        let result = ''
+                        if (type === 'base64') result = Buffer.from(input, 'base64').toString('utf8')
+                        else if (type === 'hex') result = Buffer.from(input.replace(/\s+/g, ''), 'hex').toString('utf8')
+                        else if (type === 'url') result = decodeURIComponent(input)
+                        else if (type === 'binary') result = input.split(' ').filter(Boolean).map(b => String.fromCharCode(parseInt(b, 2))).join('')
+                        else { toolResult = `❌ Unknown decode type. Supported: base64, hex, binary, url`; }
+                        if (result) toolResult = `🔓 Decoded (${type}):\n\`${result.slice(0, 1000)}\``
+                    }
+                } catch (e) { toolResult = `❌ decode error: ${e.message}` }
+
+            } else if (toolCall.tool === 'regextest') {
+                try {
+                    const pattern = toolCall.pattern || ''
+                    const input = String(toolCall.input || toolCall.text || '')
+                    if (!pattern) { toolResult = '❌ regextest needs pattern'; }
+                    else {
+                        const rx = new RegExp(pattern, 'g')
+                        const matches = [...(input.matchAll(rx) || [])].map(mm => mm[0])
+                        const isMatch = matches.length > 0
+                        toolResult = `🔍 Regex: \`${pattern}\`\nInput: \`${input.slice(0, 80)}\`\nMatch: ${isMatch ? '✅ YES' : '❌ NO'}\nMatches: ${matches.slice(0, 10).join(', ') || 'none'}`
+                    }
+                } catch (e) { toolResult = `❌ regextest error: ${e.message}` }
+
+            } else if (toolCall.tool === 'netping') {
+                try {
+                    const host = (toolCall.host || '').replace(/[^a-zA-Z0-9.\-]/g, '')
+                    if (!host) { toolResult = '❌ netping needs host' }
+                    else {
+                        const { exec } = require('child_process')
+                        const out = await new Promise(res => exec(`ping -c 3 -W 3 ${host} 2>&1`, { timeout: 12000 }, (e, s) => res(s || e?.message || 'No output')))
+                        toolResult = `🏓 Ping ${host}:\n\`\`\`\n${String(out).slice(0, 600)}\n\`\`\``
+                    }
+                } catch (e) { toolResult = `❌ netping error: ${e.message}` }
+
+            } else if (toolCall.tool === 'runcode') {
+                try {
+                    const { runCode, formatRunResult } = require('./coderunner')
+                    const code = String(toolCall.code || toolCall.script || '')
+                    const lang = toolCall.lang || toolCall.language || 'js'
+                    if (!code.trim()) { toolResult = '❌ runcode needs code'; }
+                    else {
+                        if (conn && m) { try { await conn.sendMessage(m.chat, { text: `⚡ Running ${lang} code...` }, { quoted: m }) } catch {} }
+                        const r = await runCode(code, lang, 15000)
+                        toolResult = formatRunResult(r)
+                    }
+                } catch (e) { toolResult = `❌ runcode error: ${e.message}` }
+
+            } else if (toolCall.tool === 'jwtgen') {
+                try {
+                    const jwt = require('jsonwebtoken')
+                    const secret = String(toolCall.secret || 'bera-secret')
+                    const payload = toolCall.payload || { sub: 'bera', iat: Math.floor(Date.now() / 1000) }
+                    const options = { expiresIn: toolCall.expiresIn || '1h' }
+                    const token = jwt.sign({ ...payload, iat: Math.floor(Date.now() / 1000) }, secret, options)
+                    toolResult = `🔑 JWT Generated:\nPayload: \`${JSON.stringify(payload)}\`\nExpires: ${options.expiresIn}\n\nToken:\n\`${token}\``
+                } catch (e) { toolResult = `❌ jwtgen error: ${e.message}` }
+
+            } else if (toolCall.tool === 'jwtverify') {
+                try {
+                    const jwt = require('jsonwebtoken')
+                    const secret = String(toolCall.secret || '')
+                    const token = String(toolCall.token || '')
+                    if (!secret || !token) { toolResult = '❌ jwtverify needs secret and token'; }
+                    else {
+                        const decoded = jwt.verify(token, secret)
+                        toolResult = `✅ JWT Valid!\nPayload:\n\`${JSON.stringify(decoded, null, 2)}\``
+                    }
+                } catch (e) { toolResult = `❌ JWT invalid: ${e.message}` }
+
+            } else if (toolCall.tool === 'webhook') {
+                try {
+                    const { callWebhook } = require('./notifier')
+                    const r = await callWebhook(toolCall.url, toolCall.payload || toolCall.body || {}, toolCall.headers || {})
+                    toolResult = r.success
+                        ? `✅ Webhook delivered to ${toolCall.url}\nStatus: ${r.status}\nResponse: ${r.body.slice(0, 300)}`
+                        : `❌ Webhook failed: ${r.error} (status: ${r.status})`
+                } catch (e) { toolResult = `❌ webhook error: ${e.message}` }
+
+            } else if (toolCall.tool === 'sendmail') {
+                try {
+                    const { sendEmail } = require('./notifier')
+                    const r = await sendEmail({
+                        transport: { host: toolCall.smtpHost || 'smtp.gmail.com', port: toolCall.smtpPort || 587, user: toolCall.smtpUser || '', pass: toolCall.smtpPass || '' },
+                        from: toolCall.from || toolCall.smtpUser,
+                        to: toolCall.to,
+                        subject: toolCall.subject || '(No subject)',
+                        text: toolCall.text || '',
+                        html: toolCall.html || undefined
+                    })
+                    toolResult = r.success ? `✅ Email sent to ${toolCall.to} (ID: ${r.messageId})` : `❌ Email failed: ${r.error}`
+                } catch (e) { toolResult = `❌ sendmail error: ${e.message}` }
+
+            } else if (toolCall.tool === 'csvparse') {
+                try {
+                    const Papa = require('papaparse')
+                    const raw = String(toolCall.text || toolCall.csv || '')
+                    if (!raw.trim()) { toolResult = '❌ csvparse needs text'; }
+                    else {
+                        const result = Papa.parse(raw.trim(), { header: true, skipEmptyLines: true })
+                        const preview = result.data.slice(0, 5)
+                        toolResult = `📊 CSV Parsed: ${result.data.length} rows, ${Object.keys(preview[0] || {}).length} columns\nFields: ${Object.keys(preview[0] || {}).join(', ')}\n\nPreview:\n\`\`\`json\n${JSON.stringify(preview, null, 2).slice(0, 800)}\n\`\`\``
+                    }
+                } catch (e) { toolResult = `❌ csvparse error: ${e.message}` }
+
+            } else if (toolCall.tool === 'yamlparse') {
+                try {
+                    const yaml = require('js-yaml')
+                    const raw = String(toolCall.text || toolCall.yaml || '')
+                    if (!raw.trim()) { toolResult = '❌ yamlparse needs text'; }
+                    else {
+                        const parsed = yaml.load(raw.trim())
+                        toolResult = `📄 YAML Parsed:\n\`\`\`json\n${JSON.stringify(parsed, null, 2).slice(0, 1000)}\n\`\`\``
+                    }
+                } catch (e) { toolResult = `❌ yamlparse error: ${e.message}` }
+
+            } else if (toolCall.tool === 'speedtest') {
+                try {
+                    if (conn && m) { try { await conn.sendMessage(m.chat, { text: '🚀 Running internet speed test...' }, { quoted: m }) } catch {} }
+                    const r = await runBash("which speedtest-cli >/dev/null 2>&1 && speedtest-cli --simple 2>&1 || curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --simple 2>&1 | head -5")
+                    toolResult = r.output?.trim() ? `📶 *Speed Test Results:*\n\`\`\`\n${r.output.slice(0, 500)}\n\`\`\`` : '❌ Speedtest unavailable on this server.'
+                } catch (e) { toolResult = `❌ speedtest error: ${e.message}` }
             }
         } catch (e) {
             toolResult = 'Tool error: ' + e.message
@@ -1349,6 +1703,30 @@ const transcribeAudio = async (audioBuffer) => {
     return { success: false, error: 'Transcription service unavailable' }
 }
 
+// ── Extended memory helpers used by Commands/bera.js ─────────────────────────
+const setMemory = (chat, value, key) => {
+    if (!MEMORY[chat]) MEMORY[chat] = {}
+    // If key not provided, store under auto-numbered key
+    const k = key || `note_${Object.keys(MEMORY[chat]).length + 1}`
+    MEMORY[chat][k] = String(value).slice(0, 300)
+}
+
+const deleteMemory = (chat, key) => {
+    if (!MEMORY[chat]) return
+    if (key) {
+        // try to find by number or key name
+        const allKeys = Object.keys(MEMORY[chat])
+        const numIdx = parseInt(key) - 1
+        if (!isNaN(numIdx) && allKeys[numIdx]) {
+            delete MEMORY[chat][allKeys[numIdx]]
+        } else {
+            delete MEMORY[chat][key]
+        }
+    } else {
+        delete MEMORY[chat]
+    }
+}
+
 module.exports = {
     generateAdvancedReply,
     generateSimpleReply,
@@ -1356,6 +1734,8 @@ module.exports = {
     transcribeAudio,
     saveMemory,
     getMemory,
+    setMemory,
+    deleteMemory,
     clearHistory,
     clearMemory,
     webSearch,

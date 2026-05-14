@@ -397,6 +397,16 @@ const startBot = async () => {
             startReminderLoop(conn)
             startBioLoop(conn)
             applyBotImage(conn, botJid).catch(() => {})
+            // ── Restore persistent server monitor if it was enabled ────────
+            try {
+                const monitorEnabled = global.db?.data?.settings?.monitorEnabled
+                const monitorChat    = global.db?.data?.settings?.monitorChat
+                if (monitorEnabled && monitorChat) {
+                    const { startMonitor } = require('../Plugins/monitor')
+                    startMonitor(conn, monitorChat)
+                    console.log(chalk.green('[BOT] 📊 Server monitor restored'))
+                }
+            } catch (me) { console.log(chalk.yellow('[BOT] Monitor restore skipped:', me.message)) }
             // Send connection message to owner
             try {
                 const ownerJid = config.owner.replace(/[^0-9]/g, '') + '@s.whatsapp.net'
