@@ -760,11 +760,12 @@ const handleMessage = async (conn, rawMsg) => {
         const noPrefix = global.db?.data?.settings?.noPrefix || false
         const rawText = m.text?.trim() || ''
 
-        // fromMe guard
+        // fromMe guard — allow through if it's a "bera"/"agent" trigger
         if (m.fromMe) {
             const firstWord = rawText.split(/\s+/)[0].toLowerCase()
             const noPrefixHit = noPrefix && commandMap.has(firstWord)
-            if (!rawText.startsWith(prefix) && !noPrefixHit) return
+            const isOwnerTrigger = /^(bera|agent)\b/i.test(rawText.trim())
+            if (!rawText.startsWith(prefix) && !noPrefixHit && !isOwnerTrigger) return
         }
 
         if (!m.text?.trim() && !m.mimetype) return
@@ -913,7 +914,7 @@ const handleMessage = async (conn, rawMsg) => {
             const _agentBeraCall  = _beraTriggerOn && text && /\b(bera|agent)\b/i.test(text)
             // _agentForceMode: set when user used .agent <task> and we intercepted it above
             const _agentAllowed   = _agentMentioned || _agentBeraCall || _agentForceMode
-            if ((!m.fromMe || _agentForceMode) && text && _agentAllowed) {
+            if ((!m.fromMe || _agentForceMode || isOwner) && text && _agentAllowed) {
                 const { detectIntent } = require('../Library/router')
                 // Strip the trigger word ("bera" or "agent") from the start of the text
                 // so "agent kick @user" → detectIntent("kick @user") → 'kick_user' (not 'agent')
