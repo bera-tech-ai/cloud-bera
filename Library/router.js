@@ -427,8 +427,15 @@ const detectIntent = (text) => {
     if (/\bcountry\s+(?:info|details?|about|facts?)\b/i.test(t) || /\binfo\s+(?:about|on)\s+(?:the\s+)?country\b/i.test(t)) return 'tools_country'
     if (/\bcolor\s+(?:info|code|hex)\b/i.test(t) || /\b#[0-9a-f]{6}\b/i.test(t)) return 'tools_color'
 
-    // ── Notes ───────────────────────────────────────────────────────────
-    if (/\b(?:save|add|create|write)\s+(?:a\s+)?note\b/i.test(t) || /\bnote[:\s]+\w/i.test(t)) return 'notes_save'
+    // ── TTS / Voice note — must come BEFORE notes to avoid "voice note" mismatch ──
+    if (/\b(tts|text\s+to\s+speech|speak|say|read\s+aloud)\s+/i.test(t) ||
+        /\bsend\s+(a\s+)?voice\s+(note|message)\b/i.test(t) ||
+        /\b(convert|turn)\s+.{0,20}to\s+(voice|speech|audio)\b/i.test(t) ||
+        /\bvoice\s+(note|message)\s+(saying|with|that\s+says)\b/i.test(t)) return 'tts_msg'
+
+    // ── Notes — explicitly excluded when "voice note" is present ────────
+    if (!(/\bvoice\s+note\b/i.test(t)) &&
+        (/\b(?:save|add|create|write)\s+(?:a\s+)?note\b/i.test(t) || /\bnote[:\s]+\w/i.test(t))) return 'notes_save'
     if (/\b(?:show|list|get|view)\s+(?:my\s+)?notes?\b/i.test(t) || /\bmy\s+notes?\b/i.test(t)) return 'notes_list'
     if (/\b(?:delete|remove|clear)\s+(?:that\s+)?note\b/i.test(t)) return 'notes_delete'
 
