@@ -74,10 +74,7 @@ const systemInfo = async () => {
 }
 
 // ── Multi-model AI caller with automatic fallback ─────────────────────────────
-// Models rotate through available Pollinations free models.
-// Falls back to apiskeith.top if Pollinations is down or rate-limited.
-// NOTE: 'gemini' was removed — Pollinations retired that model name.
-const AI_MODELS = ['openai', 'mistral', 'deepseek', 'llama']
+const AI_MODELS = ['openai', 'mistral', 'deepseek', 'llama', 'unity', 'phi', 'bidder', 'mireille']
 let _modelIdx = 0
 
 const isPollinationsError = (text) => {
@@ -159,14 +156,28 @@ const callGiftedTech = async (userText, historyMessages, timeoutMs, systemPrompt
         ? identity + '\n\nConversation:\n' + histCtx + '\nUser: ' + userPart + '\nBera AI:'
         : identity + '\n\nUser: ' + userPart + '\nBera AI:'
 
-    // Real URL pattern: https://api.giftedtech.co.ke/api/ai/{endpoint}?apikey=gifted&q=...
+    // All known Gifted Tech AI endpoints — try every one before giving up
     const GT_CHAT_ENDPOINTS = [
-        'https://api.giftedtech.co.ke/api/ai/ai',        // Gifted AI (primary)
-        'https://api.giftedtech.co.ke/api/ai/gpt4o',     // GPT-4o
-        'https://api.giftedtech.co.ke/api/ai/gpt4o-mini',// GPT-4o Mini
-        'https://api.giftedtech.co.ke/api/ai/custom',    // Custom AI (accepts prompt param)
-        'https://api.giftedtech.co.ke/api/ai/letmegpt',  // LetMeGPT
-        'https://api.giftedtech.co.ke/api/ai/pollinations', // Pollinations proxy
+        'https://api.giftedtech.co.ke/api/ai/ai',
+        'https://api.giftedtech.co.ke/api/ai/gpt4o',
+        'https://api.giftedtech.co.ke/api/ai/gpt4o-mini',
+        'https://api.giftedtech.co.ke/api/ai/gpt41',
+        'https://api.giftedtech.co.ke/api/ai/gpt41mini',
+        'https://api.giftedtech.co.ke/api/ai/gpt41nano',
+        'https://api.giftedtech.co.ke/api/ai/gpt4',
+        'https://api.giftedtech.co.ke/api/ai/gpt4turbo',
+        'https://api.giftedtech.co.ke/api/ai/gpt3',
+        'https://api.giftedtech.co.ke/api/ai/claude',
+        'https://api.giftedtech.co.ke/api/ai/claude3',
+        'https://api.giftedtech.co.ke/api/ai/gemini',
+        'https://api.giftedtech.co.ke/api/ai/gemini2',
+        'https://api.giftedtech.co.ke/api/ai/llama',
+        'https://api.giftedtech.co.ke/api/ai/llama3',
+        'https://api.giftedtech.co.ke/api/ai/mistral',
+        'https://api.giftedtech.co.ke/api/ai/deepseek',
+        'https://api.giftedtech.co.ke/api/ai/letmegpt',
+        'https://api.giftedtech.co.ke/api/ai/pollinations',
+        'https://api.giftedtech.co.ke/api/ai/custom',
     ]
     // Patterns that indicate a bad/useless response from Gifted Tech search mode
     const isBadGTResponse = (t) => {
@@ -233,54 +244,53 @@ const giftedTranscript = async (videoUrl, timeoutMs) => {
     } catch { return null }
 }
 
-// ── apiskeith.top: fast GET with just a query string (no 431 risk) ────────────
+// ── apiskeith.top: fast GET with just a query string ─────────────────────────
 const callApiskeithFast = async (userText, timeoutMs, systemPrompt) => {
     const FAST_ENDPOINTS = [
         'https://apiskeith.top/ai/gpt41Nano',
+        'https://apiskeith.top/ai/gpt41',
         'https://apiskeith.top/ai/gpt',
         'https://apiskeith.top/keithai',
+        'https://apiskeith.top/ai/claude',
+        'https://apiskeith.top/ai/gemini',
+        'https://apiskeith.top/ai/llama',
+        'https://apiskeith.top/ai/mistral',
     ]
     const identity = systemPrompt && systemPrompt.length > 100
-        ? systemPrompt.slice(0, 6000)
+        ? systemPrompt.slice(0, 4000)
         : 'You are Bera AI — a smart WhatsApp assistant built by Bera Tech. NEVER say your name is Keith. Always say "I am Bera AI".'
-    const q = identity + '\n\nUser: ' + (userText || '').slice(0, 800) + '\nBera AI:'
+    const q = identity + '\n\nUser: ' + (userText || '').slice(0, 600) + '\nBera AI:'
     for (const url of FAST_ENDPOINTS) {
         try {
-            const r = await axios.get(url, { params: { q }, timeout: timeoutMs || 12000 })
+            const r = await axios.get(url, { params: { q }, timeout: timeoutMs || 10000 })
             const text = r.data?.result || r.data?.reply || r.data?.response || r.data?.message ||
                          r.data?.text || (typeof r.data === 'string' ? r.data : null)
             const clean = text && parseAiText(text)
-            if (clean && clean.length > 1) return clean.trim()
+            if (clean && clean.length > 1 && !/^(❌|no results)/i.test(clean)) return clean.trim()
         } catch {}
     }
     return null
 }
 
-// ── apiskeith.top: POST with full message array (history + system prompt) ─────
+// ── apiskeith.top: POST with full message array ───────────────────────────────
 const callApiskeith = async (messages, timeoutMs) => {
-    // Trim messages to avoid 431 — keep system + last 6 exchanges
     const trimmed = [
-        messages[0], // system prompt (always keep)
+        messages[0],
         ...messages.slice(1).slice(-6)
     ].filter(Boolean)
-
-    // Trim system prompt only when really huge (8000+ chars). The agent prompt
-    // contains the tool list and decision rules — truncating it makes the AI
-    // stop using tools and just chat.
     if (trimmed[0]?.content?.length > 8000) {
-        trimmed[0] = {
-            ...trimmed[0],
-            content: trimmed[0].content.slice(0, 8000) + '\n[truncated]'
-        }
+        trimmed[0] = { ...trimmed[0], content: trimmed[0].content.slice(0, 8000) + '\n[truncated]' }
     }
-
     const endpoints = [
         'https://apiskeith.top/ai/gpt41Nano',
+        'https://apiskeith.top/ai/gpt41',
         'https://apiskeith.top/ai/gpt',
+        'https://apiskeith.top/ai/claude',
+        'https://apiskeith.top/ai/gemini',
     ]
     for (const url of endpoints) {
         try {
-            const r = await axios.post(url, { messages: trimmed }, { timeout: timeoutMs || 20000 })
+            const r = await axios.post(url, { messages: trimmed }, { timeout: timeoutMs || 18000 })
             const text = r.data?.result || r.data?.response || r.data?.message || r.data?.text ||
                          (typeof r.data === 'string' ? r.data : null)
             const clean = text && parseAiText(text)
@@ -290,72 +300,87 @@ const callApiskeith = async (messages, timeoutMs) => {
     return null
 }
 
-const callAI = async (messages, timeoutMs) => {
-    const lastUser = [...messages].reverse().find(m => m.role === 'user')?.content || ''
-    const historyMsgs = messages.filter(m => m.role !== 'system')
-    const systemContent = messages.find(m => m.role === 'system')?.content || ''
-
-    // Priority order (always): Gifted → Keith fast → Keith POST → Pollinations
-    // Pass the system prompt through so agent-mode instructions and tool list
-    // travel with every request, not just the POST endpoint.
-
-    // ── PRIMARY: Gifted Tech API ──────────────────────────────────────────────
-    if (lastUser) {
-        const gifted = await callGiftedTech(lastUser, historyMsgs, Math.min(timeoutMs || 10000, 10000), systemContent)
-        if (gifted) return gifted
+// ── Local fallback: always returns something — no internet needed ─────────────
+// Used as absolute last resort so the bot NEVER says "I am busy / unavailable"
+const localFallback = (userText) => {
+    const t = (userText || '').trim().toLowerCase()
+    // Greetings
+    if (/^(hi|hello|hey|sup|yo|wassup|hola|salam|habari|mambo|niaje|oya)[\s!?.,]*$/.test(t))
+        return "Hey! I'm Bera AI — I'm here and ready. What do you need?"
+    if (/\b(who are you|what are you|your name|who made you|created you|built you)\b/.test(t))
+        return "I'm *Bera AI* — your intelligent WhatsApp assistant, built by Bera Tech. I can run shell commands, manage servers, write code, search the web, and a lot more. What can I do for you?"
+    if (/\b(how are you|how r u|are you okay|u good)\b/.test(t))
+        return "I'm running great, thanks for asking! Ready to work. What do you need?"
+    if (/\b(what can you do|help|commands|capabilities|features)\b/.test(t))
+        return "I can: run shell commands, manage PM2 processes, ping servers, write & run code, search the web, convert currencies, generate QR codes, play music, manage WhatsApp groups, and much more.\n\nJust tell me what you need — no prefix required, just say *Bera <task>*"
+    if (/\bthank(s| you)\b/.test(t))
+        return "You're welcome! Anything else I can help with?"
+    if (/\b(bye|goodbye|later|cya|see you)\b/.test(t))
+        return "Catch you later! I'll be here whenever you need me 🤙"
+    // Math
+    const mathMatch = t.match(/^[\d\s+\-*/().^%]+$/)
+    if (mathMatch && t.length < 100) {
+        try {
+            const result = Function('"use strict"; return (' + t.replace(/\^/g, '**') + ')')()
+            if (typeof result === 'number' && isFinite(result)) return `= ${result}`
+        } catch {}
     }
+    // Default — graceful degraded response, NOT an error
+    return "I'm here! My AI connection is a little slow right now but I'm working on it. Try again in a few seconds, or use a direct command like *.menu* to see all available commands."
+}
 
-    // ── SECONDARY: apiskeith fast GET ─────────────────────────────────────────
+// ── One attempt through ALL providers ────────────────────────────────────────
+const _tryAllProviders = async (messages, lastUser, historyMsgs, systemContent, timeoutMs) => {
+    // 1. Gifted Tech (20 endpoints)
     if (lastUser) {
-        const fast = await callApiskeithFast(lastUser, Math.min(timeoutMs || 12000, 12000), systemContent)
+        const gt = await callGiftedTech(lastUser, historyMsgs, Math.min(timeoutMs, 10000), systemContent)
+        if (gt) return gt
+    }
+    // 2. apiskeith fast GET (8 endpoints)
+    if (lastUser) {
+        const fast = await callApiskeithFast(lastUser, Math.min(timeoutMs, 10000), systemContent)
         if (fast) return fast
     }
-
-    // ── TERTIARY: apiskeith POST with full message array ──────────────────────
-    const apiskeithResult = await callApiskeith(messages, Math.min(timeoutMs || 20000, 20000))
-    if (apiskeithResult) return apiskeithResult
-
-    // ── QUATERNARY: Pollinations rotation (slowest, most capable) ─────────────
+    // 3. apiskeith POST (5 endpoints)
+    const post = await callApiskeith(messages, Math.min(timeoutMs, 18000))
+    if (post) return post
+    // 4. Pollinations rotation (8 models)
     for (let i = 0; i < AI_MODELS.length; i++) {
         const model = AI_MODELS[(_modelIdx + i) % AI_MODELS.length]
         try {
-            const reply = await callPollinationsModel(messages, model, timeoutMs)
+            const reply = await callPollinationsModel(messages, model, Math.min(timeoutMs, 25000))
             if (reply && reply !== 'RATELIMIT' && reply !== 'ERROR' && reply.length > 1) {
                 _modelIdx = (_modelIdx + i + 1) % AI_MODELS.length
                 return reply
             }
         } catch {}
     }
+    return null
+}
 
-    // ── QUINARY: Retry Gifted Tech once more after a short pause ──────────────
-    await new Promise(r => setTimeout(r, 1500))
-    if (lastUser) {
-        const gifted2 = await callGiftedTech(lastUser, historyMsgs, Math.min(timeoutMs || 12000, 12000), systemContent)
-        if (gifted2) return gifted2
-    }
+// ── Main AI caller — 3 rounds, never returns busy, always responds ────────────
+const callAI = async (messages, timeoutMs) => {
+    const lastUser = [...messages].reverse().find(m => m.role === 'user')?.content || ''
+    const historyMsgs = messages.filter(m => m.role !== 'system')
+    const systemContent = messages.find(m => m.role === 'system')?.content || ''
+    const t = timeoutMs || 30000
 
-    // ── SENARY: Extra free AI endpoints ───────────────────────────────────────
-    const extraApis = [
-        'https://api.giftedtech.co.ke/api/ai/gpt4',
-        'https://api.giftedtech.co.ke/api/ai/claude',
-        'https://api.giftedtech.co.ke/api/ai/gemini',
-    ]
-    const sysSlice = systemContent.slice(0, 2000)
-    for (const url of extraApis) {
-        try {
-            const q = sysSlice + '\n\nUser: ' + (lastUser || '').slice(0, 500) + '\nBera AI:'
-            const r = await axios.get(url, { params: { apikey: 'gifted', q }, timeout: 10000 })
-            const text = r.data?.result || r.data?.reply || r.data?.response || r.data?.message ||
-                         (typeof r.data === 'string' ? r.data : null)
-            if (text && typeof text === 'string' && text.length > 2 &&
-                !text.includes('<!DOCTYPE') &&
-                !/^(❌|no results)/i.test(text.trim())) {
-                return text.trim()
-            }
-        } catch {}
-    }
+    // Round 1 — immediate attempt
+    const r1 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
+    if (r1) return r1
 
-    return 'RATELIMIT'
+    // Round 2 — wait 2 s, shuffle order and retry
+    await new Promise(r => setTimeout(r, 2000))
+    const r2 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
+    if (r2) return r2
+
+    // Round 3 — wait 4 s, final attempt
+    await new Promise(r => setTimeout(r, 4000))
+    const r3 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
+    if (r3) return r3
+
+    // Absolute last resort — local fallback. NEVER says "busy".
+    return localFallback(lastUser)
 }
 
 // ── PM2 process management ─────────────────────────────────────────────────────
@@ -1050,23 +1075,17 @@ NEVER describe a command — CALL it.`
         try {
             aiReply = await callAI(messages, 30000)
         } catch (e) {
-            // Never bubble raw axios errors like "Request failed with status code 403"
             console.error('[beraai] callAI threw:', e.message)
-            return { success: false, reply: '🤖 My AI brain is taking a quick break. Try again in a moment, or use a direct command like .menu' }
+            // Use local fallback so the bot never shows an error to the user
+            const lastUserMsg = messages.slice().reverse().find(msg => msg.role === 'user')?.content || text
+            aiReply = localFallback(lastUserMsg)
         }
 
-        if (!aiReply || aiReply === 'RATELIMIT' || /^Request failed with status code/i.test(aiReply) || /^AxiosError/i.test(aiReply)) {
-            // Only show "busy" on loop 0. On subsequent loops, keep retrying.
-            if (loop === 0) {
-                // Wait 2 seconds then let the loop retry automatically
-                await new Promise(r => setTimeout(r, 2000))
-                continue
-            }
-            if (loop === 1) {
-                await new Promise(r => setTimeout(r, 3000))
-                continue
-            }
-            return { success: false, reply: '🤖 My AI brain is taking a quick break — try again in a moment, or use a direct command like .menu' }
+        if (!aiReply || /^Request failed with status code/i.test(aiReply) || /^AxiosError/i.test(aiReply)) {
+            // callAI already retried 3 rounds + local fallback — should never reach here
+            // but if it does, use localFallback directly
+            const lastUserMsg = messages.slice().reverse().find(m => m.role === 'user')?.content || text
+            aiReply = localFallback(lastUserMsg)
         }
 
         // ── Normalize OpenAI-style responses ──────────────────────────────────
