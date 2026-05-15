@@ -223,10 +223,10 @@
       } catch(_) {
           const jokes = [
               { setup:'Why do programmers hate nature?', punchline:"It has too many bugs!" },
-              { setup:'Why do Java developers wear glasses?', punchline:"They can't C#!" },
+              { setup:"Why do Java developers wear glasses?", punchline:"They can\'t C#!" },
               { setup:"Why did the developer go broke?", punchline:"They used up all their cache!" },
               { setup:'What do you call a sleeping dinosaur?', punchline:"A dino-snore!" },
-              { setup:'Why don't scientists trust atoms?', punchline:"Because they make up everything!" },
+              { setup:"Why don\'t scientists trust atoms?", punchline:"Because they make up everything!" },
               { setup:'What do you call a fish without eyes?', punchline:"A fsh!" },
               { setup:'Why did the scarecrow win an award?', punchline:"Because he was outstanding in his field!" },
           ]
