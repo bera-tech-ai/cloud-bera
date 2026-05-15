@@ -168,6 +168,19 @@ const callGiftedTech = async (userText, historyMessages, timeoutMs, systemPrompt
         'https://api.giftedtech.co.ke/api/ai/letmegpt',  // LetMeGPT
         'https://api.giftedtech.co.ke/api/ai/pollinations', // Pollinations proxy
     ]
+    // Patterns that indicate a bad/useless response from Gifted Tech search mode
+    const isBadGTResponse = (t) => {
+        if (!t) return true
+        const lc = t.trim().toLowerCase()
+        if (lc.includes('<!doctype')) return true
+        if (/^(❌|✗|×)\s*(no results found|no result|nothing found)/i.test(t.trim())) return true
+        if (/^no results found/i.test(t.trim())) return true
+        if (/^i (could|couldn't|can't|cannot) find (any|results|information)/i.test(lc)) return true
+        if (lc.startsWith('i found no results') || lc.startsWith('there are no results')) return true
+        if (t.trim().length < 3) return true
+        return false
+    }
+
     for (const url of GT_CHAT_ENDPOINTS) {
         try {
             const params = { apikey: 'gifted', q }
@@ -180,7 +193,7 @@ const callGiftedTech = async (userText, historyMessages, timeoutMs, systemPrompt
             const text = r.data?.result || r.data?.reply || r.data?.response || r.data?.message ||
                          r.data?.text || (typeof r.data === 'string' ? r.data : null)
             const clean = text && parseAiText(text)
-            if (clean && clean.length > 1 && !clean.includes('<!DOCTYPE')) return clean.trim()
+            if (clean && !isBadGTResponse(clean)) return clean.trim()
         } catch {}
     }
     return null
@@ -310,6 +323,34 @@ const callAI = async (messages, timeoutMs) => {
             if (reply && reply !== 'RATELIMIT' && reply !== 'ERROR' && reply.length > 1) {
                 _modelIdx = (_modelIdx + i + 1) % AI_MODELS.length
                 return reply
+            }
+        } catch {}
+    }
+
+    // ── QUINARY: Retry Gifted Tech once more after a short pause ──────────────
+    await new Promise(r => setTimeout(r, 1500))
+    if (lastUser) {
+        const gifted2 = await callGiftedTech(lastUser, historyMsgs, Math.min(timeoutMs || 12000, 12000), systemContent)
+        if (gifted2) return gifted2
+    }
+
+    // ── SENARY: Extra free AI endpoints ───────────────────────────────────────
+    const extraApis = [
+        'https://api.giftedtech.co.ke/api/ai/gpt4',
+        'https://api.giftedtech.co.ke/api/ai/claude',
+        'https://api.giftedtech.co.ke/api/ai/gemini',
+    ]
+    const sysSlice = systemContent.slice(0, 2000)
+    for (const url of extraApis) {
+        try {
+            const q = sysSlice + '\n\nUser: ' + (lastUser || '').slice(0, 500) + '\nBera AI:'
+            const r = await axios.get(url, { params: { apikey: 'gifted', q }, timeout: 10000 })
+            const text = r.data?.result || r.data?.reply || r.data?.response || r.data?.message ||
+                         (typeof r.data === 'string' ? r.data : null)
+            if (text && typeof text === 'string' && text.length > 2 &&
+                !text.includes('<!DOCTYPE') &&
+                !/^(❌|no results)/i.test(text.trim())) {
+                return text.trim()
             }
         } catch {}
     }
@@ -846,8 +887,93 @@ const fsNode = require('fs')
 const pathNode = require('path')
 const { createRepo: ghCreateRepo } = (() => { try { return require('./github') } catch { return {} } })()
 
+// ── Pre-dispatch: intercept obvious tool intents before hitting the AI ──────────
+// This makes commands like "ping google.com", "run df -h", "pm2 list" work
+// even when the AI model misroutes them (e.g. to web search).
+const preDispatch = async (text) => {
+    const t = text.trim()
+    const lc = t.toLowerCase()
+
+    // ── PING <host> (one or two hosts) ────────────────────────────────────────
+    // Matches: "ping google.com", "ping google.com and cloudflare.com and compare",
+    //          "ping 8.8.8.8 then ping 1.1.1.1", "ping 8.8.8.8 and compare to 1.1.1.1"
+    const PING_BOTH = /^ping\s+([\w.\-]+)\s+(?:and\s+(?:then\s+)?)?(?:ping\s+)?([\w.\-]+)/i
+    const PING_ONE  = /^ping\s+([\w.\-]+)$/i
+    const execPing = (host) => new Promise(res => {
+        const safe = host.replace(/[^a-zA-Z0-9.\-]/g, '')
+        if (!safe) return res({ host, output: 'Invalid host', success: false })
+        require('child_process').exec(`ping -c 4 -W 3 ${safe} 2>&1`, { timeout: 14000 }, (e, stdout) => {
+            const out = (stdout || e?.message || 'No output').slice(0, 500)
+            // Parse avg latency from "rtt min/avg/max/mdev = 1.2/3.4/5.6/7.8 ms"
+            const rtt = out.match(/min\/avg\/max[^ ]*\s*=\s*[\d.]+\/([\d.]+)/)
+            const loss = out.match(/(\d+)%\s+packet\s+loss/)
+            res({ host: safe, output: out, avg: rtt ? rtt[1] + 'ms' : null, loss: loss ? loss[1] + '%' : null, success: !e })
+        })
+    })
+
+    const mBoth = t.match(PING_BOTH)
+    if (mBoth) {
+        const [h1, h2] = [mBoth[1], mBoth[2]]
+        const [r1, r2] = await Promise.all([execPing(h1), execPing(h2)])
+        const fmt = (r) => r.avg
+            ? `📡 *${r.host}* — avg ${r.avg}, loss ${r.loss || '0%'}`
+            : `📡 *${r.host}* — ${r.success ? 'reachable' : '❌ unreachable'}`
+        let reply = `🏓 *Ping Comparison*\n\n${fmt(r1)}\n${fmt(r2)}`
+        if (r1.avg && r2.avg) {
+            const f = parseFloat(r1.avg), s = parseFloat(r2.avg)
+            reply += f < s
+                ? `\n\n✅ *${h1}* is faster by ${(s - f).toFixed(1)}ms`
+                : f > s
+                    ? `\n\n✅ *${h2}* is faster by ${(f - s).toFixed(1)}ms`
+                    : '\n\n🤝 Both have equal latency'
+        }
+        return { success: true, reply }
+    }
+
+    const mOne = t.match(PING_ONE)
+    if (mOne) {
+        const r = await execPing(mOne[1])
+        const detail = r.avg
+            ? `avg latency *${r.avg}*, packet loss *${r.loss || '0%'}*`
+            : r.success ? 'reachable' : '❌ unreachable / timed out'
+        return { success: true, reply: `🏓 *Ping ${r.host}*\n${detail}\n\n\`\`\`${r.output.slice(0, 400)}\`\`\`` }
+    }
+
+    // ── SHELL / RUN ───────────────────────────────────────────────────────────
+    const RUN_RX = /^(?:run|execute|exec|bash|shell|terminal)\s+(.+)/i
+    const mRun = t.match(RUN_RX)
+    if (mRun) {
+        const cmd = mRun[1].trim()
+        const SECRET_RX = /\b(printenv\b|cat\s+\.env|echo\s+\$[A-Z_]+(TOKEN|KEY|SECRET|PAT|GH_))/i
+        if (SECRET_RX.test(cmd)) return { success: false, reply: '🔒 That command could expose secrets — blocked.' }
+        const r = await runBash(cmd, 15000)
+        return { success: true, reply: `\`\`\`\n${(r.output || 'done').slice(0, 1500)}\n\`\`\`` }
+    }
+
+    // ── PM2 shortcuts ─────────────────────────────────────────────────────────
+    const PM2_RX = /^pm2\s+(.+)/i
+    const mPm2 = t.match(PM2_RX)
+    if (mPm2) {
+        const safe = mPm2[1].replace(/[;&|`$<>]/g, '').slice(0, 100)
+        const r = await runBash(`pm2 ${safe} --no-color 2>&1`, 15000)
+        return { success: true, reply: `\`\`\`\n${(r.output || 'done').slice(0, 1500)}\n\`\`\`` }
+    }
+
+    return null  // not handled by pre-dispatch
+}
+
 // ── Main: generate advanced reply with tool loop ──────────────────────────────
 const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
+    // ── Pre-dispatch: handle obvious tool patterns without calling the AI ──────
+    try {
+        const pd = await preDispatch(text)
+        if (pd) {
+            pushHistory(chat, 'user', text)
+            pushHistory(chat, 'assistant', pd.reply)
+            return pd
+        }
+    } catch {}
+
     pushHistory(chat, 'user', text)
 
     const mem = getMemory(chat)
@@ -857,27 +983,58 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 The user gave you a DIRECTIVE. Your FIRST output MUST be a tool call, never plain text/code.
 
 Decision rules (in order):
-1. Did the user ask you to DO a bot action? (kick, mute, open, close, ping, play, weather, vv, sticker, qr, lyrics, menu, status, mode, broadcast, grouplink, tagall, antilink, welcome, etc.)
-   → Call {"tool":"cmd","command":"<name>","args":"<the rest>"}.
+
+1. Did they ask to PING a specific hostname/IP (e.g. "ping google.com", "ping 8.8.8.8", "ping cloudflare.com and compare")?
+   → Use the NETPING tool (NOT cmd ping). Netping actually does ICMP pings and returns real latency.
+   CORRECT: {"tool":"netping","host":"google.com"}
+   WRONG:   {"tool":"cmd","command":"ping"}  ← this is the bot status ping, NOT a network ping
+   WRONG:   {"tool":"search","query":"ping google.com"}  ← DO NOT search for pings
+   For multiple hosts: call netping for each host, then reply with combined results.
    Examples:
-     "ping"               → {"tool":"cmd","command":"ping"}
-     "what's the time"    → {"tool":"cmd","command":"time"} or {"tool":"cmd","command":"date"} (try one)
-     "open the group"     → {"tool":"cmd","command":"open"}
-     "kick @x"            → {"tool":"cmd","command":"kick","args":"@x"}
-     "play despacito"     → {"tool":"cmd","command":"play","args":"despacito"}
+     "ping google.com"                          → {"tool":"netping","host":"google.com"}
+     "ping google.com and then cloudflare.com"  → {"tool":"netping","host":"google.com"} then {"tool":"netping","host":"cloudflare.com"}
+     "ping 8.8.8.8"                             → {"tool":"netping","host":"8.8.8.8"}
 
-2. Did they ask you to BUILD/WRITE/CREATE a file or project (html, app, calculator, stopwatch, script, etc.)?
-   → Use writefile/mkdir tools. NEVER paste the code in a reply tool — write it to disk first, then reply with the file path.
-   Wrong: {"tool":"reply","text":"Here is the code: <html>..."}
-   Right: {"tool":"writefile","path":"hello/index.html","content":"<html>...</html>"} → then reply with location.
+2. Did they ask to run a shell command / bash / terminal command?
+   → Use the bash tool: {"tool":"bash","cmd":"<command>"}
+   Examples:
+     "run ls -la"                → {"tool":"bash","cmd":"ls -la"}
+     "run df -h"                 → {"tool":"bash","cmd":"df -h"}
+     "pm2 list"                  → {"tool":"bash","cmd":"pm2 list --no-color"}
+     "pm2 restart bera"          → {"tool":"bash","cmd":"pm2 restart bera"}
+     "pm2 logs"                  → {"tool":"bash","cmd":"pm2 logs --lines 20 --nostream"}
+     "check server memory"       → {"tool":"bash","cmd":"free -m"}
+     "check disk space"          → {"tool":"bash","cmd":"df -h"}
+     "check CPU usage"           → {"tool":"bash","cmd":"top -bn1 | head -20"}
+     "what processes are running"→ {"tool":"bash","cmd":"ps aux | head -30"}
+     "git pull"                  → {"tool":"bash","cmd":"git pull"}
+     "server uptime"             → {"tool":"bash","cmd":"uptime"}
 
-3. Only use {"tool":"reply","text":"..."} when:
-   - The task is finished and you're reporting the result.
-   - It's a pure factual/conversational question with no action needed (e.g. "who made you").
+3. Did the user ask to DO a WhatsApp bot action? (kick, mute, open, close, play, weather, vv, sticker, qr, lyrics, menu, status, mode, broadcast, grouplink, tagall, antilink, welcome, demote, promote, etc.)
+   → Call {"tool":"cmd","command":"<name>","args":"<the rest>"}.
+   IMPORTANT: "ping" alone (no hostname) = bot latency check → {"tool":"cmd","command":"ping"}
+   Examples:
+     "ping" (alone, no host)     → {"tool":"cmd","command":"ping"}
+     "open the group"            → {"tool":"cmd","command":"open"}
+     "kick @x"                   → {"tool":"cmd","command":"kick","args":"@x"}
+     "play despacito"            → {"tool":"cmd","command":"play","args":"despacito"}
+     "what's the time"           → {"tool":"cmd","command":"time"}
 
-NEVER say "I cannot do X" or "I don't have access to that" — you have tools for everything.
-NEVER paste code as text when writefile exists.
-NEVER describe a command — CALL it via cmd tool.`
+4. Did they ask to BUILD/WRITE/CREATE a file or project (html, app, calculator, stopwatch, script, etc.)?
+   → Use writefile/mkdir tools. NEVER paste code in a reply — write it to disk first, then reply with the path.
+   Right: {"tool":"writefile","path":"hello/index.html","content":"<html>...</html>"}
+
+5. Did they ask for a HTTP request (GET/POST/fetch/call API)?
+   → Use {"tool":"httpget","url":"..."} or {"tool":"httppost","url":"...","body":{...}}
+
+6. Did they ask to SEARCH the web for information (news, facts, weather, etc.)?
+   → Use {"tool":"search","query":"..."} ONLY for actual web searches, NEVER for ping/bash/tools.
+
+7. Only use {"tool":"reply","text":"..."} when the task is done or it is a pure chat question.
+
+NEVER say "I cannot do X" — you have tools for everything.
+NEVER search for something you should execute (do not search for "ping google.com").
+NEVER describe a command — CALL it.`
         : ''
 
     const messages = [
@@ -899,7 +1056,17 @@ NEVER describe a command — CALL it via cmd tool.`
         }
 
         if (!aiReply || aiReply === 'RATELIMIT' || /^Request failed with status code/i.test(aiReply) || /^AxiosError/i.test(aiReply)) {
-            return { success: false, reply: '🤖 All AI providers are busy right now. Give it a few seconds and try again.' }
+            // Only show "busy" on loop 0. On subsequent loops, keep retrying.
+            if (loop === 0) {
+                // Wait 2 seconds then let the loop retry automatically
+                await new Promise(r => setTimeout(r, 2000))
+                continue
+            }
+            if (loop === 1) {
+                await new Promise(r => setTimeout(r, 3000))
+                continue
+            }
+            return { success: false, reply: '🤖 My AI brain is taking a quick break — try again in a moment, or use a direct command like .menu' }
         }
 
         // ── Normalize OpenAI-style responses ──────────────────────────────────
