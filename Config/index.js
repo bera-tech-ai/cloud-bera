@@ -1,8 +1,8 @@
 const config = {
     botName: 'Bera',
     prefix: '.',
-    owner: process.env.OWNER_NUMBER || '254717459770',
-    ownerNumber: process.env.OWNER_NUMBER || '254717459770',
+    owner: process.env.OWNER_NUMBER || '254787527753',
+    ownerNumber: process.env.OWNER_NUMBER || '254787527753',
     nickApiEndpoint: process.env.NICK_API || 'https://apiskeith.top/ai/gpt41Nano',
     nickApiEndpointFallback: 'https://apiskeith.top/ai/gpt',
     nickApiKey: process.env.NICK_API_KEY || '',
