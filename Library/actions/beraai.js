@@ -563,13 +563,24 @@ const preDispatch = async (text) => {
 }
 
 // ── SYSTEM PROMPT ────────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are Bera AI — a smart WhatsApp assistant. You have access to tools for bash commands, file operations, GitHub, PM2, and more.
+const SYSTEM_PROMPT = `You are Bera AI — a smart WhatsApp assistant. You have access to the following tools. When you need to use a tool, output ONLY a single JSON line. Never explain before calling a tool — just output the JSON.
 
-When you need to use a tool, output ONLY a single line of JSON:
-{"tool":"bash","cmd":"command here"}
-{"tool":"reply","text":"your answer"}
+Available tools:
+{"tool":"bash","cmd":"shell command here"}
+{"tool":"install","manager":"npm","packages":["pkg1","pkg2"],"folder":"","dev":false}
+{"tool":"install","manager":"pip","packages":["requests"],"folder":""}
+{"tool":"install","manager":"yarn","packages":["pkg1"],"folder":""}
+{"tool":"search","query":"search terms here"}
+{"tool":"scrape","url":"https://example.com"}
+{"tool":"system"}
+{"tool":"reply","text":"your answer here"}
 
-Keep responses concise. Use English by default. Never say you are an AI assistant — just be helpful.`
+Rules:
+- To install or update any npm/pip/yarn package, ALWAYS use the install tool. Never use bash for package installs.
+- To answer a question without a tool, use reply.
+- To run a shell command, use bash.
+- To look something up on the web, use search.
+- Keep responses short and helpful. Use English by default.`
 
 // ── Generate advanced reply with tool loop ───────────────────────────────────
 const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
@@ -613,19 +624,64 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
             return { success: true, reply: aiReply }
         }
 
-        // Execute tool (simplified for common tools)
+        // Execute tool
         let toolResult = ''
         try {
             const toolCall = JSON.parse(aiReply.match(/\{[\s\S]*\}/)[0])
+
             if (toolCall.tool === 'reply') {
                 pushHistory(chat, 'assistant', toolCall.text || aiReply)
                 return { success: true, reply: toolCall.text || aiReply }
             }
+
             if (toolCall.tool === 'bash') {
                 const r = await runBash(toolCall.cmd, 30000)
                 toolResult = r.output || 'Command completed.'
+
+            } else if (toolCall.tool === 'install') {
+                const manager = (toolCall.manager || 'npm').toLowerCase()
+                const pkgs = Array.isArray(toolCall.packages)
+                    ? toolCall.packages.map(p => String(p).replace(/[;&|`$<>]/g, '').trim()).filter(Boolean)
+                    : []
+                if (!pkgs.length) {
+                    toolResult = 'Error: no packages specified.'
+                } else {
+                    const folder = toolCall.folder ? String(toolCall.folder).replace(/[^a-zA-Z0-9_.\-\/]/g, '') : ''
+                    const cwd = folder ? `cd workspace/${folder} && ` : ''
+                    let cmd
+                    if (manager === 'npm') {
+                        const flag = toolCall.dev ? ' --save-dev' : ''
+                        cmd = `${cwd}npm install${flag} ${pkgs.join(' ')} 2>&1 || npm install --legacy-peer-deps${flag} ${pkgs.join(' ')} 2>&1`
+                    } else if (manager === 'yarn') {
+                        const flag = toolCall.dev ? ' --dev' : ''
+                        cmd = `${cwd}yarn add${flag} ${pkgs.join(' ')} 2>&1`
+                    } else if (manager === 'pip' || manager === 'pip3') {
+                        cmd = `${cwd}pip3 install ${pkgs.join(' ')} 2>&1`
+                    } else {
+                        cmd = `${cwd}${manager} install ${pkgs.join(' ')} 2>&1`
+                    }
+                    const r = await runBash(cmd, 90000)
+                    toolResult = r.output || 'Install completed.'
+                }
+
+            } else if (toolCall.tool === 'search') {
+                const sr = await webSearch(String(toolCall.query || ''))
+                if (sr.success && sr.results.length) {
+                    toolResult = sr.results.map((r, i) => `${i + 1}. ${r.title}\n${r.snippet}\n${r.url}`).join('\n\n')
+                } else {
+                    toolResult = 'No results found.'
+                }
+
+            } else if (toolCall.tool === 'scrape') {
+                const sc = await scrapeUrl(String(toolCall.url || ''))
+                toolResult = sc.success ? sc.text : ('Scrape failed: ' + sc.error)
+
+            } else if (toolCall.tool === 'system') {
+                const info = await systemInfo()
+                toolResult = `RAM: ${info.ram} | Disk: ${info.disk} | CPU: ${info.cpu} | Uptime: ${info.uptime} | Node: ${info.node}`
+
             } else {
-                toolResult = `Tool ${toolCall.tool} executed.`
+                toolResult = `Tool "${toolCall.tool}" is not supported.`
             }
         } catch (e) {
             toolResult = `Error: ${e.message}`
