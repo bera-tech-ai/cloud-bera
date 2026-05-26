@@ -16,7 +16,7 @@ const getMediaBuffer = async (conn, msg) => {
     } catch { return null }
 }
 
-const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, chat }) => {
+const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, chat, args }) => {
 
     if (command === 'ping') {
         const start = Date.now()
@@ -279,7 +279,7 @@ const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, 
             '┃❍ *' + p + 'setgittoken* <tok> — Set GitHub token',
             '┃❍ *' + p + 'setverceltoken* <tok> — Set Vercel token',
             '┃❍ *' + p + 'noprefix* on/off — Toggle prefix requirement',
-            '┃❍ *' + p + ' <bash cmd> — Run bash on server',
+            '┃❍ *$* <bash cmd> — Run bash on server',
             '┃',
             '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
             '┃ 🔑 *ACCESS KEYS*',
@@ -298,8 +298,7 @@ const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, 
             '┃',
             '╰══〘 *🚀 Bera AI v4.0 — Created by Bera Tech* 〙═⊷',
         ]
-        return reply(lines.join('
-'))
+        return reply(lines.join('\n'))
     }
 
     if (command === 'info') {
@@ -438,7 +437,6 @@ const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, 
         }
     }
 
-    // ── PM — send a private message to any number ─────────────────────────
     if (command === 'pm') {
         if (!isOwner) return reply(`⛔ Owner only.`)
         if (!args[0]) return reply(`❌ Usage: ${prefix}pm <number> <message>\nExample: ${prefix}pm 254712345678 Hello there!`)
