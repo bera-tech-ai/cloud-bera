@@ -1,14 +1,34 @@
 const axios = require('axios')
 const config = require('../Config')
 
-const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) => {
+// CORRECTED: matches index.js signature: async (m, ctx) where ctx contains all properties
+const handle = async (m, ctx) => {
+    // Destructure from ctx
+    const { 
+        conn, 
+        command = '', 
+        args = [], 
+        text = '', 
+        reply = (msg) => console.log('Reply:', msg),
+        prefix = '.', 
+        isOwner = false,
+        chat = '',
+        sender = ''
+    } = ctx;
+    
+    // Early return if no message or conn
+    if (!m || !conn) {
+        console.log('berahost.js: Missing m or conn');
+        return;
+    }
+    
     // ─── helpers ─────────────────────────────────────────────────────────────
     const db = global.db?.data
     const getBase = () => {
         const raw = db?.settings?.bhApiUrl || process.env.BH_API_URL || 'https://bera-host-bot--berahost15.replit.app'
         return raw.replace(/\/api\/?$/, '').replace(/\/$/, '') + '/api'
     }
-    const getKey = () => db?.settings?.bhApiKey || process.env.BH_API_KEY || ''
+    const getKey = () => db?.settings?.bhApiKey || process.env.BH_API_KEY || 'bh_7dd8d50719f51cc1fc2e6232f169b6f75de7de26fddb3927'
     const bh = async (method, path, body) => {
         const key = getKey()
         if (!key) throw new Error('No BeraHost API key set. Use: ' + prefix + 'bh setkey <key>')
@@ -41,7 +61,6 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
             `Use \`${prefix}bh bots\` to see available bots.`
         )
 
-        // parse args: deploy <botname> <ownerNum> [sessionId_if_Gifted~] [url]
         let [botName, ownerNum, ...rest] = args
         let sessionId = null
         let apiUrlArg = null
@@ -68,12 +87,10 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
             return reply(`❌ Bot *${botName}* not found.\n\nAvailable bots:\n${names}`)
         }
 
-        // build envVars
         const envVars = {}
         if (ownerNum) envVars['OWNER_NUMBER'] = ownerNum
         if (sessionId) envVars['SESSION_ID'] = sessionId
 
-        // check if required vars are missing
         const required = Object.keys(bot.requiredVars || {})
         const missing = required.filter(k => !envVars[k])
         if (missing.length) {
@@ -90,7 +107,6 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
             return reply('❌ Deploy failed: ' + msg)
         }
 
-        // poll status
         const depId = dep.id
         let status = dep.status
         let attempts = 0
@@ -110,7 +126,7 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
             `${statusEmoji(status)} *${bot.name}* deployed!\n\n` +
             `🆔 Deployment ID: *${depId}*\n` +
             `📊 Status: *${status}*\n` +
-            `${coins ? `💰 Coins remaining: *${coins.coins.toLocaleString()}*\n` : ''}` +
+            `${coins ? `💰 Coins remaining: *${coins.coins?.toLocaleString() || coins.balance?.toLocaleString() || '?'}*\n` : ''}` +
             `\n*Useful commands:*\n` +
             `  \`${prefix}bh logs ${depId}\` — view logs\n` +
             `  \`${prefix}bh metrics ${depId}\` — CPU/RAM\n` +
@@ -149,8 +165,8 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
             try { c = await bh('get', '/coins/balance') } catch (e) { return reply('❌ ' + e.message) }
             return reply(
                 `💰 *BeraHost Coins*\n\n` +
-                `Balance: *${c.coins.toLocaleString()} coins*\n` +
-                `Streak: *${c.streak} days*\n` +
+                `Balance: *${(c.coins || c.balance || 0).toLocaleString()} coins*\n` +
+                `Streak: *${c.streak || 0} days*\n` +
                 `Daily claim: ${c.canClaimToday ? `✅ Available — use \`${prefix}bh claim\`` : '⏳ Already claimed today'}`
             )
         }
@@ -159,7 +175,7 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
         if (sub === 'claim') {
             let r
             try { r = await bh('post', '/coins/daily-claim') } catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
-            return reply(`🎁 *Daily coins claimed!*\n\n+${r.earned || r.coins || ''} coins\nNew balance: *${r.balance?.toLocaleString?.() || r.newBalance?.toLocaleString?.() || '?'} coins*\nStreak: ${r.streak || '?'} days 🔥`)
+            return reply(`🎁 *Daily coins claimed!*\n\n+${r.earned || r.coins || r.amount || ''} coins\nNew balance: *${(r.balance || r.newBalance || '?').toLocaleString?.() || '?'} coins*\nStreak: ${r.streak || '?'} days 🔥`)
         }
 
         // ── txns / transactions ──
@@ -167,7 +183,8 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
             let txns
             try { txns = await bh('get', '/coins/transactions') } catch (e) { return reply('❌ ' + e.message) }
             const rows = (Array.isArray(txns) ? txns : txns.transactions || []).slice(0, 10)
-            const lines = rows.map(t => `${t.amount > 0 ? '📈' : '📉'} *${t.amount > 0 ? '+' : ''}${t.amount}* — ${t.reference} _(${fmtDate(t.createdAt)})_`)
+            if (!rows.length) return reply('📭 No transactions found.')
+            const lines = rows.map(t => `${t.amount > 0 ? '📈' : '📉'} *${t.amount > 0 ? '+' : ''}${t.amount}* — ${t.reference || t.type || 'transaction'} _(${fmtDate(t.createdAt)})_`)
             return reply(`📊 *Recent Transactions*\n\n${lines.join('\n')}`)
         }
 
@@ -175,13 +192,13 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
         if (sub === 'plans') {
             let p
             try { p = await bh('get', '/payments/plans') } catch (e) { return reply('❌ ' + e.message) }
-            const coins = (p.coinPackages || []).map(pkg =>
+            const coinsList = (p.coinPackages || []).map(pkg =>
                 `  ${pkg.popular ? '⭐' : pkg.best ? '🏆' : '•'} *${pkg.name}* — Ksh ${pkg.kes} → ${pkg.totalCoins} coins${pkg.bonus ? ` (+${pkg.bonus} bonus)` : ''}`
             ).join('\n')
             const subs = (p.subscriptionPlans || []).map(s =>
-                `  • *${s.name}* — ${s.priceKes === 0 ? 'Free' : `Ksh ${s.priceKes}/mo`} · ${s.botLimit} bots · ${s.features.slice(0,2).join(', ')}`
+                `  • *${s.name}* — ${s.priceKes === 0 ? 'Free' : `Ksh ${s.priceKes}/mo`} · ${s.botLimit} bots · ${(s.features || []).slice(0,2).join(', ')}`
             ).join('\n')
-            return reply(`💳 *BeraHost Plans*\n\n*🪙 Coin Packages:*\n${coins}\n\n*📦 Subscriptions:*\n${subs}\n\n_Top up: \`${prefix}bh pay <amount> <phone>\`_`)
+            return reply(`💳 *BeraHost Plans*\n\n*🪙 Coin Packages:*\n${coinsList || '  None available'}\n\n*📦 Subscriptions:*\n${subs || '  None available'}\n\n_Top up: \`${prefix}bh pay <amount> <phone>\`_`)
         }
 
         // ── pay ──
@@ -213,10 +230,11 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
         if (sub === 'bots') {
             let bots
             try { bots = await bh('get', '/bots') } catch (e) { return reply('❌ ' + e.message) }
+            if (!bots.length) return reply('📭 No bots available.')
             const lines = bots.map(b => {
                 const req = Object.keys(b.requiredVars || {}).join(', ')
                 const cost = b.deployCost ? `💰 ${b.deployCost} coins` : '💰 free'
-                return `*[${b.id}] ${b.name}* ${b.isFeatured ? '⭐' : ''}\n  ${cost} · Needs: \`${req}\`\n  _${b.description?.slice(0, 80)}..._`
+                return `*[${b.id}] ${b.name}* ${b.isFeatured ? '⭐' : ''}\n  ${cost} · Needs: \`${req || 'none'}\`\n  _${(b.description || '').slice(0, 80)}..._`
             })
             return reply(
                 `🤖 *Available Bots on BeraHost*\n\n${lines.join('\n\n')}\n\n` +
@@ -224,25 +242,25 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
             )
         }
 
-        // ── list (my deployments) ──
-        if (!sub || sub === 'list') {
+        // ── list / dashboard (my deployments) ──
+        if (!sub || sub === 'list' || sub === 'dashboard') {
             let [deps, coins] = [null, null]
             try { [deps, coins] = await Promise.all([bh('get', '/deployments'), bh('get', '/coins/balance')]) }
             catch (e) { return reply('❌ ' + e.message) }
 
-            if (!deps.length) return reply(
+            if (!deps || !deps.length) return reply(
                 `📭 *No deployments yet.*\n\nDeploy your first bot:\n\`${prefix}deploy beraai 254712345678\``
             )
 
             const lines = deps.map(d =>
                 `${statusEmoji(d.status)} *${d.bot?.name || 'Bot #' + d.botId}* — ID: \`${d.id}\`\n` +
                 `  Status: *${d.status}* · Last active: ${fmtDate(d.lastActive)}\n` +
-                `  Storage: ${d.storageUsedMb}/${d.storageLimitMb} MB`
+                `  Storage: ${d.storageUsedMb || 0}/${d.storageLimitMb || 100} MB`
             )
 
             return reply(
                 `🖥️ *BeraHost Dashboard*\n\n` +
-                `💰 Coins: *${coins?.coins?.toLocaleString() || '?'}* ${coins?.canClaimToday ? '· 🎁 claim available' : ''}\n` +
+                `💰 Coins: *${(coins?.coins || coins?.balance || 0).toLocaleString()}* ${coins?.canClaimToday ? '· 🎁 claim available' : ''}\n` +
                 `🤖 Bots: *${deps.length}*\n\n` +
                 lines.join('\n\n') +
                 `\n\n_\`${prefix}bh status <id>\` · \`${prefix}bh logs <id>\` · \`${prefix}bh coins\`_`
@@ -270,8 +288,8 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
                 `📊 Status: *${dep.status}*\n` +
                 `📅 Created: ${fmtDate(dep.createdAt)}\n` +
                 `⏰ Last active: ${fmtDate(dep.lastActive)}\n` +
-                `💾 Storage: ${dep.storageUsedMb}/${dep.storageLimitMb} MB\n` +
-                (met ? `\n📈 *Metrics:*\n  CPU: ${met.cpu}% · RAM: ${met.memMb} MB\n  Threads: ${met.threads} · Uptime: ${fmtUptime(met.uptime)}\n  Logs/hr: ${met.logsLastHour}` : '') +
+                `💾 Storage: ${dep.storageUsedMb || 0}/${dep.storageLimitMb || 100} MB\n` +
+                (met ? `\n📈 *Metrics:*\n  CPU: ${met.cpu || 0}% · RAM: ${met.memMb || met.memory || 0} MB\n  Threads: ${met.threads || 1} · Uptime: ${fmtUptime(met.uptime)}\n  Logs/hr: ${met.logsLastHour || 0}` : '') +
                 `\n\n🔧 *Env Vars:*\n${env}\n\n` +
                 `_\`${prefix}bh logs ${dep.id}\` · \`${prefix}bh stop ${dep.id}\` · \`${prefix}bh env ${dep.id} KEY=VAL\`_`
             )
@@ -285,11 +303,11 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
             return reply(
                 `📈 *Metrics — Deployment #${args[1]}*\n\n` +
                 `🟢 Status: *${met.status}*\n` +
-                `🖥️ CPU: *${met.cpu}%*\n` +
-                `🧠 RAM: *${met.memMb} MB*\n` +
-                `🔀 Threads: *${met.threads}*\n` +
+                `🖥️ CPU: *${met.cpu || 0}%*\n` +
+                `🧠 RAM: *${met.memMb || met.memory || 0} MB*\n` +
+                `🔀 Threads: *${met.threads || 1}*\n` +
                 `⏱️ Uptime: *${fmtUptime(met.uptime)}*\n` +
-                `📋 Logs/hr: *${met.logsLastHour}*`
+                `📋 Logs/hr: *${met.logsLastHour || 0}*`
             )
         }
 
@@ -301,7 +319,7 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) 
             const n = parseInt(args[2]) || 20
             const lines = (Array.isArray(logs) ? logs : logs.logs || []).slice(-n)
             if (!lines.length) return reply('📭 No logs found.')
-            const out = lines.map(l => `[${l.logType === 'stderr' ? '⚠️' : ''}${new Date(l.createdAt).toLocaleTimeString('en-KE')}] ${l.logLine}`).join('\n')
+            const out = lines.map(l => `[${l.logType === 'stderr' ? '⚠️' : '📝'} ${new Date(l.createdAt || Date.now()).toLocaleTimeString('en-KE')}] ${(l.logLine || l.message || l).slice(0, 200)}`).join('\n')
             return reply(`📋 *Logs — Deployment #${args[1]}* (last ${lines.length})\n\n\`\`\`\n${out.slice(0, 3000)}\n\`\`\``)
         }
 
