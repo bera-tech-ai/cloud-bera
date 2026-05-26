@@ -1,0 +1,242 @@
+[2026-04-15T10:14:40.321Z] [INFO  ] [BERAHOST] Deploying bot...
+[2026-04-15T10:14:40.367Z] [INFO  ] [BERAHOST] Cloning repository (shallow)...
+[2026-04-15T10:14:41.636Z] [INFO  ] [BERAHOST] Starting bot (npm start)...
+[2026-04-15T10:14:41.776Z] [STDOUT] [BERAHOST] Restoring node_modules from cache (bot_2)...
+[2026-04-15T10:14:41.818Z] [INFO  ] [BERAHOST] Bot started with PID 457
+[2026-04-15T10:14:43.227Z] [STDOUT] up to date, audited 264 packages in 1s
+[2026-04-15T10:14:43.227Z] [STDOUT] 48 packages are looking for funding
+[2026-04-15T10:14:43.235Z] [STDOUT] 3 vulnerabilities (1 moderate, 2 high)
+[2026-04-15T10:14:43.271Z] [STDOUT] run `npm fund` for details
+[2026-04-15T10:14:43.279Z] [STDOUT] Some issues need review, and may require choosing
+[2026-04-15T10:14:43.323Z] [STDOUT] a different dependency.
+[2026-04-15T10:14:43.368Z] [STDOUT] Run `npm audit` for details.
+[2026-04-15T10:14:43.420Z] [STDOUT] [BERAHOST] Updating node_modules cache...
+[2026-04-15T10:14:43.424Z] [STDOUT] [BERAHOST] Copying node_modules to cache (this may take a moment)...
+[2026-04-15T10:14:43.726Z] [STDOUT] [BERAHOST] Cache copy done, swapping...
+[2026-04-15T10:14:43.821Z] [STDOUT] [BERAHOST] Cache updated.
+[2026-04-15T10:14:43.825Z] [STDOUT] [BERAHOST] Patching setenv.js to respect platform env vars...
+[2026-04-15T10:14:43.828Z] [STDOUT] [BERAHOST] setenv.js patched.
+[2026-04-15T10:14:43.829Z] [STDOUT] [BERAHOST] Applying library patches...
+[2026-04-15T10:14:43.883Z] [STDOUT] [BERAHOST] ./node_modules/gifted-baileys/lib/Socket/socket.js already patched â€” skipping
+[2026-04-15T10:14:43.883Z] [STDOUT] [BERAHOST] ./node_modules/@whiskeysockets/baileys/lib/Socket/socket.js already patched â€” skipping
+[2026-04-15T10:14:43.889Z] [STDOUT] [BERAHOST] Running pre-start settings injection...
+[2026-04-15T10:14:43.940Z] [STDOUT] [BERAHOST] Launching bot...
+[2026-04-15T10:14:44.128Z] [STDOUT] > bera-ai@1.0.0 start
+[2026-04-15T10:14:44.172Z] [STDOUT] > node ./Connection/start.js
+[2026-04-15T10:14:44.824Z] [STDOUT] [PLUGIN] Loaded: aitools.js
+[2026-04-15T10:14:44.824Z] [STDOUT] [PLUGIN] Loaded: buttons.js
+[2026-04-15T10:14:44.825Z] [STDOUT] [PLUGIN] Loaded: chatbera.js
+[2026-04-15T10:14:44.826Z] [STDOUT] [PLUGIN] Loaded: converters.js
+[2026-04-15T10:14:44.828Z] [STDOUT] [PLUGIN] Loaded: copybtns.js
+[2026-04-15T10:14:44.828Z] [STDOUT] [PLUGIN] Loaded: extras.js
+[2026-04-15T10:14:44.834Z] [STDOUT] [PLUGIN] Loaded: fun.js
+[2026-04-15T10:14:44.867Z] [STDOUT] [PLUGIN] Loaded: github.js
+[2026-04-15T10:14:44.868Z] [STDOUT] [PLUGIN] Loaded: newpanels.js
+[2026-04-15T10:14:44.868Z] [STDOUT] [PLUGIN] Loaded: mediabtns.js
+[2026-04-15T10:14:44.869Z] [STDOUT] [PLUGIN] Loaded: notes.js
+[2026-04-15T10:14:44.871Z] [STDOUT] [PLUGIN] Loaded: status.js
+[2026-04-15T10:14:44.872Z] [STDOUT] [PLUGIN] Loaded: texttools.js
+[2026-04-15T10:14:44.877Z] [STDOUT] [PLUGIN] Loaded: tools.js
+[2026-04-15T10:14:44.911Z] [STDOUT] [PLUGIN] Skipped (bad export): tools_extra.js
+[2026-04-15T10:14:44.911Z] [STDOUT] [PLUGIN] Loaded: updater.js
+[2026-04-15T10:14:44.911Z] [STDOUT] â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•—â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—
+[2026-04-15T10:14:44.912Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_8/Database/db.json
+[2026-04-15T10:14:44.915Z] [STDOUT] [BOT] Health server listening on port 3108
+[2026-04-15T10:14:44.915Z] [STDOUT] [PLUGIN] Loaded: groupplus.js
+[2026-04-15T10:14:44.955Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-15T10:14:44.958Z] [STDOUT] [PLUGIN] Loaded: grouptools.js
+[2026-04-15T10:14:44.991Z] [STDOUT] [BOT] Using owner number from config: 254787527753
+[2026-04-15T10:14:44.991Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-15T10:14:44.998Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-15T10:14:45.035Z] [STDOUT] [BOT] No session â€” pairing code mode
+[2026-04-15T10:14:45.042Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-15T10:14:45.085Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-15T10:14:45.108Z] [STDOUT] [PLUGIN] Loaded: funplus.js
+[2026-04-15T10:14:45.108Z] [STDOUT] [PLUGIN] Loaded: gcstatus.js
+[2026-04-15T10:14:45.112Z] [STDOUT] [PLUGIN] Loaded: games.js
+[2026-04-15T10:14:45.129Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-15T10:14:45.172Z] [STDOUT] ðŸ¤– Bera Bot | @whiskeysockets/baileys
+[2026-04-15T10:14:45.217Z] [STDOUT] Prefix: . | Owner: 254787527753
+[2026-04-15T10:14:45.260Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-15T10:14:45.838Z] [STDOUT] [BOT] Requesting pairing code...
+[2026-04-15T10:14:45.874Z] [STDOUT] â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+[2026-04-15T10:14:45.874Z] [STDOUT] â”‚   PAIRING CODE: 9PPT-GRHN               â”‚
+[2026-04-15T10:14:45.918Z] [STDOUT] â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+[2026-04-15T10:14:45.963Z] [STDOUT] â”‚  Open WhatsApp â†’ Settings                â”‚
+[2026-04-15T10:14:46.007Z] [STDOUT] â”‚  â†’ Linked Devices â†’ Link a Device        â”‚
+[2026-04-15T10:14:46.055Z] [STDOUT] â”‚  â†’ Link with phone number instead        â”‚
+[2026-04-15T10:14:46.099Z] [STDOUT] â”‚  â†’ Enter the code above                  â”‚
+[2026-04-15T10:14:46.143Z] [STDOUT] â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+[2026-04-15T10:15:20.575Z] [STDOUT] [BOT] Disconnected â€” code: 515
+[2026-04-15T10:15:20.619Z] [STDOUT] [BOT] Reconnecting in 5s...
+[2026-04-15T10:15:25.310Z] [STDOUT] â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•—â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—
+[2026-04-15T10:15:26.276Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-15T10:15:26.777Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-15T10:15:27.177Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-15T10:15:27.677Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-15T10:15:30.178Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-15T10:15:30.777Z] [STDOUT] ðŸ¤– Bera Bot | @whiskeysockets/baileys
+[2026-04-15T10:15:35.659Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-15T10:15:35.709Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_8/Database/db.json
+[2026-04-15T10:15:35.960Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-15T10:16:09.777Z] [STDOUT] [BOT] Disconnected â€” code: 408
+[2026-04-15T10:16:09.878Z] [STDOUT] [BOT] Connection timed out â€” reconnecting in 5s...
+[2026-04-15T10:16:50.577Z] [STDOUT] â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•—â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—
+[2026-04-15T10:16:51.578Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-15T10:16:51.877Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-15T10:16:52.078Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-15T10:16:52.477Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-15T10:16:52.577Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-15T10:16:52.777Z] [STDOUT] ðŸ¤– Bera Bot | @whiskeysockets/baileys
+[2026-04-15T10:16:52.977Z] [STDOUT] Prefix: . | Owner: 254787527753
+[2026-04-15T10:16:54.278Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-15T10:16:55.477Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_8/Database/db.json
+[2026-04-15T10:17:08.625Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-15T10:17:28.877Z] [STDERR] node:internal/crypto/cipher:170
+[2026-04-15T10:17:28.977Z] [STDERR] const ret = this[kHandle].final();
+[2026-04-15T10:17:29.277Z] [STDERR] ^
+[2026-04-15T10:17:29.477Z] [STDERR] Error: Unsupported state or unable to authenticate data
+[2026-04-15T10:17:30.277Z] [WARN  ] [BERAHOST] â†» WhatsApp reconnection error detected â€” restarting cleanly (no crash count)...
+[2026-04-15T10:17:30.977Z] [STDERR] at Decipheriv.final (node:internal/crypto/cipher:170:29)
+[2026-04-15T10:17:31.379Z] [STDERR] at aesDecryptGCM (file:///tmp/berahost_dep_8/node_modules/@whiskeysockets/baileys/lib/Utils/crypto.js:60:58)
+[2026-04-15T10:17:32.277Z] [STDERR] at decrypt (file:///tmp/berahost_dep_8/node_modules/@whiskeysockets/baileys/lib/Utils/noise-handler.js:28:24)
+[2026-04-15T10:17:32.577Z] [STDERR] at Object.decodeFrame (file:///tmp/berahost_dep_8/node_modules/@whiskeysockets/baileys/lib/Utils/noise-handler.js:137:36)
+[2026-04-15T10:17:33.078Z] [STDERR] at noise.decodeFrame (file:///tmp/berahost_dep_8/node_modules/@whiskeysockets/baileys/lib/Socket/socket.js:668:95)
+[2026-04-15T10:17:33.477Z] [STDERR] at WebSocketClient.onMessageReceived (file:///tmp/berahost_dep_8/node_modules/@whiskeysockets/baileys/lib/Socket/socket.js:441:21)
+[2026-04-15T10:17:34.277Z] [STDERR] at WebSocketClient.emit (node:events:508:28)
+[2026-04-15T10:17:34.777Z] [STDERR] at WebSocket.<anonymous> (file:///tmp/berahost_dep_8/node_modules/@whiskeysockets/baileys/lib/Socket/Client/websocket.js:35:54)
+[2026-04-15T10:17:34.978Z] [STDERR] at WebSocket.emit (node:events:508:28)
+[2026-04-15T10:17:35.677Z] [STDERR] at Receiver.receiverOnMessage (/tmp/berahost_dep_8/node_modules/ws/lib/websocket.js:1225:20)
+[2026-04-15T10:17:35.877Z] [STDERR] Node.js v24.13.0
+[2026-04-15T10:18:38.077Z] [INFO  ] [BERAHOST] Deploying bot...
+[2026-04-15T10:18:38.577Z] [INFO  ] [BERAHOST] Updating existing code...
+[2026-04-15T10:19:14.665Z] [INFO  ] [BERAHOST] Full session restored (creds + pre-keys + sender-keys).
+[2026-04-15T10:19:14.719Z] [INFO  ] [BERAHOST] Starting bot (npm start)...
+[2026-04-15T10:19:14.951Z] [STDOUT] [BERAHOST] Restoring node_modules from cache (bot_2)...
+[2026-04-15T10:19:14.993Z] [INFO  ] [BERAHOST] Bot started with PID 542
+[2026-04-15T10:19:16.478Z] [STDOUT] removed 1 package, and audited 264 packages in 1s
+[2026-04-15T10:19:16.479Z] [STDOUT] 48 packages are looking for funding
+[2026-04-15T10:19:16.485Z] [STDOUT] 3 vulnerabilities (1 moderate, 2 high)
+[2026-04-15T10:19:16.524Z] [STDOUT] run `npm fund` for details
+[2026-04-15T10:19:16.528Z] [STDOUT] Some issues need review, and may require choosing
+[2026-04-15T10:19:16.571Z] [STDOUT] a different dependency.
+[2026-04-15T10:19:16.614Z] [STDOUT] Run `npm audit` for details.
+[2026-04-15T10:19:16.658Z] [STDOUT] [BERAHOST] Updating node_modules cache...
+[2026-04-15T10:19:16.663Z] [STDOUT] [BERAHOST] Copying node_modules to cache (this may take a moment)...
+[2026-04-15T10:19:16.930Z] [STDOUT] [BERAHOST] Cache copy done, swapping...
+[2026-04-15T10:19:17.026Z] [STDOUT] [BERAHOST] Cache updated.
+[2026-04-15T10:19:17.030Z] [STDOUT] [BERAHOST] Patching setenv.js to respect platform env vars...
+[2026-04-15T10:19:17.036Z] [STDOUT] [BERAHOST] setenv.js patched.
+[2026-04-15T10:19:17.037Z] [STDOUT] [BERAHOST] Applying library patches...
+[2026-04-15T10:19:17.087Z] [STDOUT] [BERAHOST] ./node_modules/gifted-baileys/lib/Socket/socket.js already patched â€” skipping
+[2026-04-15T10:19:17.087Z] [STDOUT] [BERAHOST] ./node_modules/@whiskeysockets/baileys/lib/Socket/socket.js already patched â€” skipping
+[2026-04-15T10:19:17.092Z] [STDOUT] [BERAHOST] Running pre-start settings injection...
+[2026-04-15T10:19:17.147Z] [STDOUT] [BERAHOST] Launching bot...
+[2026-04-15T10:19:17.311Z] [STDOUT] > bera-ai@1.0.0 start
+[2026-04-15T10:19:17.354Z] [STDOUT] > node ./Connection/start.js
+[2026-04-15T10:19:17.962Z] [STDOUT] [PLUGIN] Loaded: aitools.js
+[2026-04-15T10:19:17.963Z] [STDOUT] [PLUGIN] Loaded: buttons.js
+[2026-04-15T10:19:17.964Z] [STDOUT] [PLUGIN] Loaded: chatbera.js
+[2026-04-15T10:19:17.965Z] [STDOUT] [PLUGIN] Loaded: converters.js
+[2026-04-15T10:19:18.005Z] [STDOUT] [PLUGIN] Loaded: github.js
+[2026-04-15T10:19:18.006Z] [STDOUT] [PLUGIN] Loaded: groupplus.js
+[2026-04-15T10:19:18.007Z] [STDOUT] [PLUGIN] Loaded: grouptools.js
+[2026-04-15T10:19:18.008Z] [STDOUT] [PLUGIN] Loaded: mediabtns.js
+[2026-04-15T10:19:18.047Z] [STDOUT] [PLUGIN] Loaded: newpanels.js
+[2026-04-15T10:19:18.048Z] [STDOUT] [PLUGIN] Loaded: notes.js
+[2026-04-15T10:19:18.051Z] [STDOUT] [PLUGIN] Loaded: status.js
+[2026-04-15T10:19:18.052Z] [STDOUT] [PLUGIN] Loaded: texttools.js
+[2026-04-15T10:19:18.090Z] [STDOUT] [PLUGIN] Loaded: tools.js
+[2026-04-15T10:19:18.091Z] [STDOUT] [PLUGIN] Skipped (bad export): tools_extra.js
+[2026-04-15T10:19:18.094Z] [STDOUT] [PLUGIN] Loaded: updater.js
+[2026-04-15T10:19:18.095Z] [STDOUT] â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•—â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—
+[2026-04-15T10:19:18.132Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_8/Database/db.json
+[2026-04-15T10:19:18.133Z] [STDOUT] [BOT] Health server listening on port 3108
+[2026-04-15T10:19:18.137Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-15T10:19:18.138Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-15T10:19:18.182Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-15T10:19:18.223Z] [STDOUT] [PLUGIN] Loaded: copybtns.js
+[2026-04-15T10:19:18.227Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-15T10:19:18.231Z] [STDOUT] [PLUGIN] Loaded: fun.js
+[2026-04-15T10:19:18.232Z] [STDOUT] [PLUGIN] Loaded: funplus.js
+[2026-04-15T10:19:18.242Z] [STDOUT] [PLUGIN] Loaded: games.js
+[2026-04-15T10:19:18.242Z] [STDOUT] [PLUGIN] Loaded: gcstatus.js
+[2026-04-15T10:19:18.244Z] [STDOUT] [PLUGIN] Loaded: extras.js
+[2026-04-15T10:19:18.271Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-15T10:19:18.315Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-15T10:19:18.359Z] [STDOUT] ðŸ¤– Bera Bot | @whiskeysockets/baileys
+[2026-04-15T10:19:18.403Z] [STDOUT] Prefix: . | Owner: 254787527753
+[2026-04-15T10:19:18.447Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-15T10:19:19.516Z] [STDOUT] [BOT] âœ… Connected as Bera AI (254787527753@s.whatsapp.net)
+[2026-04-15T10:19:19.517Z] [STDOUT] [BOT] Reminder loop started
+[2026-04-15T10:19:19.566Z] [STDOUT] [BOT] ðŸ¤– Bera is online and ready!
+[2026-04-15T10:19:19.567Z] [STDOUT] [BOT] Auto-bio loop started
+[2026-04-15T10:19:19.769Z] [STDOUT] Closing session: SessionEntry {
+[2026-04-15T10:19:19.815Z] [STDOUT] _chains: {
+[2026-04-15T10:19:19.861Z] [STDOUT] BVHsMae1QDn22pm6xn4WkEHAhEV6Q4S0Wurlq3v9eVtp: { chainKey: [Object], chainType: 2, messageKeys: {} },
+[2026-04-15T10:19:19.889Z] [STDOUT] [BOT] âœ… Bot profile picture updated
+[2026-04-15T10:19:19.907Z] [STDOUT] Be0yH3OsI1hIu9y6Dmg4wKJuziUN0xX20a64EB7r9od1: { chainKey: [Object], chainType: 1, messageKeys: {} }
+[2026-04-15T10:19:19.953Z] [STDOUT] },
+[2026-04-15T10:19:19.999Z] [STDOUT] registrationId: 2091740860,
+[2026-04-15T10:19:20.046Z] [STDOUT] currentRatchet: {
+[2026-04-15T10:19:20.092Z] [STDOUT] ephemeralKeyPair: {
+[2026-04-15T10:19:20.138Z] [STDOUT] pubKey: <Buffer 05 ed 32 1f 73 ac 23 58 48 bb dc ba 0e 68 38 c0 a2 6e ce 25 0d d3 15 f6 d1 ae b8 10 1e eb f6 87 75>,
+[2026-04-15T10:19:20.184Z] [STDOUT] privKey: <Buffer 28 62 bc 87 4f 59 52 c3 d5 45 c4 43 46 84 0f a5 df 1c 16 c7 17 7c a7 a5 e3 58 d6 71 24 60 6c 64>
+[2026-04-15T10:19:20.230Z] [STDOUT] },
+[2026-04-15T10:19:20.277Z] [STDOUT] lastRemoteEphemeralKey: <Buffer 05 51 ec 31 a7 b5 40 39 f6 da 99 ba c6 7e 16 90 41 c0 84 45 7a 43 84 b4 5a ea e5 ab 7b fd 79 5b 69>,
+[2026-04-15T10:19:20.324Z] [STDOUT] previousCounter: 0,
+[2026-04-15T10:19:20.370Z] [STDOUT] rootKey: <Buffer 50 fe f5 5e 4e 0e 74 86 02 a5 63 2a 82 1e c4 76 84 74 d0 e4 43 0d dc 44 8c 87 8a 8f e0 fb 80 21>
+[2026-04-15T10:19:20.416Z] [STDOUT] },
+[2026-04-15T10:19:20.462Z] [STDOUT] indexInfo: {
+[2026-04-15T10:19:20.508Z] [STDOUT] baseKey: <Buffer 05 3a c4 9c de 0b 4b 4e 46 a3 f3 41 68 01 20 a1 e3 53 59 e2 c3 e8 ea 3d 7d d4 57 bf a0 f3 f4 15 40>,
+[2026-04-15T10:19:20.554Z] [STDOUT] baseKeyType: 2,
+[2026-04-15T10:19:20.600Z] [STDOUT] closed: -1,
+[2026-04-15T10:19:20.647Z] [STDOUT] used: 1776248359470,
+[2026-04-15T10:19:20.694Z] [STDOUT] created: 1776248359470,
+[2026-04-15T10:19:20.740Z] [STDOUT] remoteIdentityKey: <Buffer 05 f6 02 43 25 dd 12 b6 68 d5 1a 10 d4 04 5b 60 0c 3e 1f 95 23 95 9a c6 4c 28 99 b2 bd ab f1 64 69>
+[2026-04-15T10:19:20.786Z] [STDOUT] }
+[2026-04-15T10:19:20.833Z] [STDOUT] }
+[2026-04-15T10:20:13.891Z] [STDOUT] [BOT] Disconnected â€” code: 408
+[2026-04-15T10:20:13.940Z] [STDOUT] [BOT] Connection timed out â€” reconnecting in 5s...
+[2026-04-15T10:20:16.451Z] [STDOUT] â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•—â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—  â–ˆâ–ˆâ•—
+[2026-04-15T10:20:16.452Z] [STDOUT] Prefix: . | Owner: 254787527753
+[2026-04-15T10:20:16.457Z] [STDOUT] [DB] Database initialized at /tmp/berahost_dep_8/Database/db.json
+[2026-04-15T10:20:16.496Z] [STDOUT] AI Endpoint: https://apiskeith.top/ai/gpt41Nano
+[2026-04-15T10:20:16.497Z] [STDOUT] â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘ â–ˆâ–ˆâ•”â•
+[2026-04-15T10:20:16.501Z] [STDOUT] [BOT] Using WA version 2.3000.1035194821
+[2026-04-15T10:20:16.542Z] [STDOUT] â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•
+[2026-04-15T10:20:16.588Z] [STDOUT] â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•—
+[2026-04-15T10:20:16.634Z] [STDOUT] â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•—
+[2026-04-15T10:20:16.679Z] [STDOUT] â•šâ•â•  â•šâ•â•â•â•â•šâ•â• â•šâ•â•â•â•â•â•â•šâ•â•  â•šâ•â•
+[2026-04-15T10:20:16.725Z] [STDOUT] ðŸ¤– Bera Bot | @whiskeysockets/baileys
+[2026-04-15T10:20:17.308Z] [STDOUT] [BOT] âœ… Connected as Developer Bera (254787527753@s.whatsapp.net)
+[2026-04-15T10:20:17.354Z] [STDOUT] [BOT] ðŸ¤– Bera is online and ready!
+[2026-04-15T10:20:17.547Z] [STDOUT] Closing session: SessionEntry {
+[2026-04-15T10:20:17.593Z] [STDOUT] _chains: {
+[2026-04-15T10:20:17.639Z] [STDOUT] 'BSvsQmCe1/WmlwcA+gmM3YtN49PeHf0grn09zHh37Bgd': { chainKey: [Object], chainType: 1, messageKeys: {} }
+[2026-04-15T10:20:17.685Z] [STDOUT] },
+[2026-04-15T10:20:17.727Z] [STDOUT] [BOT] âœ… Bot profile picture updated
+[2026-04-15T10:20:17.730Z] [STDOUT] registrationId: 2091740860,
+[2026-04-15T10:20:17.775Z] [STDOUT] currentRatchet: {
+[2026-04-15T10:20:17.821Z] [STDOUT] ephemeralKeyPair: {
+[2026-04-15T10:20:17.867Z] [STDOUT] pubKey: <Buffer 05 2b ec 42 60 9e d7 f5 a6 97 07 00 fa 09 8c dd 8b 4d e3 d3 de 1d fd 20 ae 7d 3d cc 78 77 ec 18 1d>,
+[2026-04-15T10:20:17.913Z] [STDOUT] privKey: <Buffer 00 7b ef a3 94 06 a1 93 9a e1 f1 94 be 01 ff 03 ab 7f e3 79 62 a8 a0 21 94 61 7c 7e 62 f0 fd 7b>
+[2026-04-15T10:20:17.959Z] [STDOUT] },
+[2026-04-15T10:20:18.005Z] [STDOUT] lastRemoteEphemeralKey: <Buffer 05 75 31 fe 3f 3e f5 2e 5e 9e b9 57 a1 db 31 9f b7 42 99 d1 61 e0 d5 4e b1 34 d3 30 2c c7 66 09 7b>,
+[2026-04-15T10:20:18.051Z] [STDOUT] previousCounter: 0,
+[2026-04-15T10:20:18.098Z] [STDOUT] rootKey: <Buffer 46 93 ae bb 2b a8 ac c1 4a 43 a6 09 b1 17 01 a3 b3 ac 35 ba de 28 42 b9 26 c1 99 71 32 c3 5d fd>
+[2026-04-15T10:20:18.144Z] [STDOUT] },
+[2026-04-15T10:20:18.190Z] [STDOUT] indexInfo: {
+[2026-04-15T10:20:18.235Z] [STDOUT] baseKey: <Buffer 05 92 1c 02 05 68 19 b5 29 45 3d 85 ae e3 e1 16 23 af f4 17 f5 45 20 24 44 bf c3 c0 65 38 bc 14 62>,
+[2026-04-15T10:20:18.281Z] [STDOUT] baseKeyType: 1,
+[2026-04-15T10:20:18.326Z] [STDOUT] closed: -1,
+[2026-04-15T10:20:18.372Z] [STDOUT] used: 1776248359750,
+[2026-04-15T10:20:18.418Z] [STDOUT] created: 1776248359750,
+[2026-04-15T10:20:18.465Z] [STDOUT] remoteIdentityKey: <Buffer 05 f6 02 43 25 dd 12 b6 68 d5 1a 10 d4 04 5b 60 0c 3e 1f 95 23 95 9a c6 4c 28 99 b2 bd ab f1 64 69>
+[2026-04-15T10:20:18.512Z] [STDOUT] },
+[2026-04-15T10:20:18.563Z] [STDOUT] pendingPreKey: {
+[2026-04-15T10:20:18.608Z] [STDOUT] signedKeyId: 7833378,
+[2026-04-15T10:20:18.654Z] [STDOUT] baseKey: <Buffer 05 92 1c 02 05 68 19 b5 29 45 3d 85 ae e3 e1 16 23 af f4 17 f5 45 20 24 44 bf c3 c0 65 38 bc 14 62>,
+[2026-04-15T10:20:18.700Z] [STDOUT] preKeyId: 5812355
+[2026-04-15T10:20:18.745Z] [STDOUT] }
+[2026-04-15T10:20:18.791Z] [STDOUT] }

@@ -1,0 +1,5617 @@
+[
+  {
+    "time": "2026-04-15T13:07:08.632Z",
+    "type": "info",
+    "line": "[BERAHOST] Deploying bot..."
+  },
+  {
+    "time": "2026-04-15T13:07:08.678Z",
+    "type": "info",
+    "line": "[BERAHOST] Cloning repository (shallow)..."
+  },
+  {
+    "time": "2026-04-15T13:07:09.767Z",
+    "type": "info",
+    "line": "[BERAHOST] Starting bot (npm start)..."
+  },
+  {
+    "time": "2026-04-15T13:07:09.905Z",
+    "type": "stdout",
+    "line": "[BERAHOST] Restoring node_modules from cache (bot_2)..."
+  },
+  {
+    "time": "2026-04-15T13:07:09.946Z",
+    "type": "info",
+    "line": "[BERAHOST] Bot started with PID 1195"
+  },
+  {
+    "time": "2026-04-15T13:07:11.268Z",
+    "type": "stdout",
+    "line": "up to date, audited 264 packages in 961ms"
+  },
+  {
+    "time": "2026-04-15T13:07:11.268Z",
+    "type": "stdout",
+    "line": "48 packages are looking for funding"
+  },
+  {
+    "time": "2026-04-15T13:07:11.276Z",
+    "type": "stdout",
+    "line": "3 vulnerabilities (1 moderate, 2 high)"
+  },
+  {
+    "time": "2026-04-15T13:07:11.313Z",
+    "type": "stdout",
+    "line": "run `npm fund` for details"
+  },
+  {
+    "time": "2026-04-15T13:07:11.321Z",
+    "type": "stdout",
+    "line": "Some issues need review, and may require choosing"
+  },
+  {
+    "time": "2026-04-15T13:07:11.367Z",
+    "type": "stdout",
+    "line": "a different dependency."
+  },
+  {
+    "time": "2026-04-15T13:07:11.412Z",
+    "type": "stdout",
+    "line": "Run `npm audit` for details."
+  },
+  {
+    "time": "2026-04-15T13:07:11.448Z",
+    "type": "stdout",
+    "line": "[BERAHOST] Updating node_modules cache..."
+  },
+  {
+    "time": "2026-04-15T13:07:11.451Z",
+    "type": "stdout",
+    "line": "[BERAHOST] Copying node_modules to cache (this may take a moment)..."
+  },
+  {
+    "time": "2026-04-15T13:07:11.734Z",
+    "type": "stdout",
+    "line": "[BERAHOST] Cache copy done, swapping..."
+  },
+  {
+    "time": "2026-04-15T13:07:11.830Z",
+    "type": "stdout",
+    "line": "[BERAHOST] Cache updated."
+  },
+  {
+    "time": "2026-04-15T13:07:11.834Z",
+    "type": "stdout",
+    "line": "[BERAHOST] Patching setenv.js to respect platform env vars..."
+  },
+  {
+    "time": "2026-04-15T13:07:11.840Z",
+    "type": "stdout",
+    "line": "[BERAHOST] setenv.js patched."
+  },
+  {
+    "time": "2026-04-15T13:07:11.885Z",
+    "type": "stdout",
+    "line": "[BERAHOST] Applying library patches..."
+  },
+  {
+    "time": "2026-04-15T13:07:11.886Z",
+    "type": "stdout",
+    "line": "[BERAHOST] ./node_modules/gifted-baileys/lib/Socket/socket.js already patched — skipping"
+  },
+  {
+    "time": "2026-04-15T13:07:11.886Z",
+    "type": "stdout",
+    "line": "[BERAHOST] ./node_modules/@whiskeysockets/baileys/lib/Socket/socket.js already patched — skipping"
+  },
+  {
+    "time": "2026-04-15T13:07:11.891Z",
+    "type": "stdout",
+    "line": "[BERAHOST] Running pre-start settings injection..."
+  },
+  {
+    "time": "2026-04-15T13:07:11.940Z",
+    "type": "stdout",
+    "line": "[BERAHOST] Launching bot..."
+  },
+  {
+    "time": "2026-04-15T13:07:12.108Z",
+    "type": "stdout",
+    "line": "\u003E bera-ai@1.0.0 start"
+  },
+  {
+    "time": "2026-04-15T13:07:12.151Z",
+    "type": "stdout",
+    "line": "\u003E node ./Connection/start.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.858Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: aitools.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.860Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: buttons.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.860Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: chatbera.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.861Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: converters.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.862Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: copybtns.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.863Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: extras.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.868Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: fun.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.870Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: funplus.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.871Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: games.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.873Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: gcstatus.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.901Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: github.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.903Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: groupplus.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.904Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: grouptools.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.904Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: mediabtns.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.905Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: newpanels.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.905Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: notes.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.910Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: status.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.912Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: texttools.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.914Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: tools.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.916Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Skipped (bad export): tools_extra.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.944Z",
+    "type": "stdout",
+    "line": "[PLUGIN] Loaded: updater.js"
+  },
+  {
+    "time": "2026-04-15T13:07:12.946Z",
+    "type": "stdout",
+    "line": "███╗   ██╗██╗ ██████╗██╗  ██╗"
+  },
+  {
+    "time": "2026-04-15T13:07:12.947Z",
+    "type": "stdout",
+    "line": "[DB] Database initialized at /tmp/berahost_dep_13/Database/db.json"
+  },
+  {
+    "time": "2026-04-15T13:07:12.947Z",
+    "type": "stdout",
+    "line": "🤖 Bera Bot | @whiskeysockets/baileys"
+  },
+  {
+    "time": "2026-04-15T13:07:12.948Z",
+    "type": "stdout",
+    "line": "[BOT] Health server listening on port 3113"
+  },
+  {
+    "time": "2026-04-15T13:07:12.989Z",
+    "type": "stdout",
+    "line": "████╗  ██║██║██╔════╝██║ ██╔╝"
+  },
+  {
+    "time": "2026-04-15T13:07:12.990Z",
+    "type": "stdout",
+    "line": "Prefix: . | Owner: 254116763755"
+  },
+  {
+    "time": "2026-04-15T13:07:13.033Z",
+    "type": "stdout",
+    "line": "██╔██╗ ██║██║██║     █████╔╝"
+  },
+  {
+    "time": "2026-04-15T13:07:13.034Z",
+    "type": "stdout",
+    "line": "AI Endpoint: https://apiskeith.top/ai/gpt41Nano"
+  },
+  {
+    "time": "2026-04-15T13:07:13.040Z",
+    "type": "stdout",
+    "line": "[BOT] Using WA version 2.3000.1035194821"
+  },
+  {
+    "time": "2026-04-15T13:07:13.040Z",
+    "type": "stdout",
+    "line": "[BOT] No session — pairing code mode"
+  },
+  {
+    "time": "2026-04-15T13:07:13.077Z",
+    "type": "stdout",
+    "line": "██║╚██╗██║██║██║     ██╔═██╗"
+  },
+  {
+    "time": "2026-04-15T13:07:13.083Z",
+    "type": "stdout",
+    "line": "[BOT] Using owner number from config: 254116763755"
+  },
+  {
+    "time": "2026-04-15T13:07:13.120Z",
+    "type": "stdout",
+    "line": "██║ ╚████║██║╚██████╗██║  ██╗"
+  },
+  {
+    "time": "2026-04-15T13:07:13.164Z",
+    "type": "stdout",
+    "line": "╚═╝  ╚═══╝╚═╝ ╚═════╝╚═╝  ╚═╝"
+  },
+  {
+    "time": "2026-04-15T13:07:13.369Z",
+    "type": "stdout",
+    "line": "[BOT] Requesting pairing code..."
+  },
+  {
+    "time": "2026-04-15T13:07:13.406Z",
+    "type": "stdout",
+    "line": "┌──────────────────────────────────────────┐"
+  },
+  {
+    "time": "2026-04-15T13:07:13.406Z",
+    "type": "stdout",
+    "line": "│   PAIRING CODE: E7CQ-BLAB               │"
+  },
+  {
+    "time": "2026-04-15T13:07:13.449Z",
+    "type": "stdout",
+    "line": "├──────────────────────────────────────────┤"
+  },
+  {
+    "time": "2026-04-15T13:07:13.492Z",
+    "type": "stdout",
+    "line": "│  Open WhatsApp → Settings                │"
+  },
+  {
+    "time": "2026-04-15T13:07:13.534Z",
+    "type": "stdout",
+    "line": "│  → Linked Devices → Link a Device        │"
+  },
+  {
+    "time": "2026-04-15T13:07:13.577Z",
+    "type": "stdout",
+    "line": "│  → Link with phone number instead        │"
+  },
+  {
+    "time": "2026-04-15T13:07:13.619Z",
+    "type": "stdout",
+    "line": "│  → Enter the code above                  │"
+  },
+  {
+    "time": "2026-04-15T13:07:13.662Z",
+    "type": "stdout",
+    "line": "└──────────────────────────────────────────┘"
+  },
+  {
+    "time": "2026-04-15T13:08:03.277Z",
+    "type": "stdout",
+    "line": "[BOT] Disconnected — code: 515"
+  },
+  {
+    "time": "2026-04-15T13:08:03.577Z",
+    "type": "stdout",
+    "line": "[BOT] Restart required by WhatsApp — reconnecting in 8s..."
+  },
+  {
+    "time": "2026-04-15T13:08:13.477Z",
+    "type": "stdout",
+    "line": "[DB] Database initialized at /tmp/berahost_dep_13/Database/db.json"
+  },
+  {
+    "time": "2026-04-15T13:08:28.776Z",
+    "type": "stdout",
+    "line": "[BOT] Using WA version 2.3000.1035194821"
+  },
+  {
+    "time": "2026-04-15T13:08:57.377Z",
+    "type": "stdout",
+    "line": "[BOT] Unhandled crypto rejection — reconnecting in 6s..."
+  },
+  {
+    "time": "2026-04-15T13:09:06.677Z",
+    "type": "stdout",
+    "line": "[DB] Database initialized at /tmp/berahost_dep_13/Database/db.json"
+  },
+  {
+    "time": "2026-04-15T13:09:07.795Z",
+    "type": "stdout",
+    "line": "[BOT] Using WA version 2.3000.1035194821"
+  },
+  {
+    "time": "2026-04-15T13:09:17.776Z",
+    "type": "stdout",
+    "line": "[BOT] Unhandled crypto rejection — reconnecting in 6s..."
+  },
+  {
+    "time": "2026-04-15T13:09:18.177Z",
+    "type": "stdout",
+    "line": "[BOT] Unhandled crypto rejection — reconnecting in 6s..."
+  },
+  {
+    "time": "2026-04-15T13:09:27.276Z",
+    "type": "stdout",
+    "line": "[DB] Database initialized at /tmp/berahost_dep_13/Database/db.json"
+  },
+  {
+    "time": "2026-04-15T13:09:30.877Z",
+    "type": "stdout",
+    "line": "[BOT] Using WA version 2.3000.1035194821"
+  },
+  {
+    "time": "2026-04-15T13:09:40.192Z",
+    "type": "stdout",
+    "line": "[BOT] Reminder loop started"
+  },
+  {
+    "time": "2026-04-15T13:09:40.192Z",
+    "type": "stdout",
+    "line": "[BOT] ✅ Connected as Developer Bera (254116763755@s.whatsapp.net)"
+  },
+  {
+    "time": "2026-04-15T13:09:40.235Z",
+    "type": "stdout",
+    "line": "[BOT] 🤖 Bera is online and ready!"
+  },
+  {
+    "time": "2026-04-15T13:09:40.236Z",
+    "type": "stdout",
+    "line": "[BOT] Auto-bio loop started"
+  },
+  {
+    "time": "2026-04-15T13:09:40.490Z",
+    "type": "stdout",
+    "line": "[BOT] ✅ Bot profile picture updated"
+  },
+  {
+    "time": "2026-04-15T13:09:41.311Z",
+    "type": "stderr",
+    "line": "Closing open session in favor of incoming prekey bundle"
+  },
+  {
+    "time": "2026-04-15T13:09:41.312Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:09:41.354Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:09:41.397Z",
+    "type": "stdout",
+    "line": "'BUR7kzUdGhzR/nXON4vRTAUeHGOjGs4EGKs6gOVSIwwH': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:09:41.440Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:09:41.484Z",
+    "type": "stdout",
+    "line": "registrationId: 1870990541,"
+  },
+  {
+    "time": "2026-04-15T13:09:41.527Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:09:41.570Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:09:41.613Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 44 7b 93 35 1d 1a 1c d1 fe 75 ce 37 8b d1 4c 05 1e 1c 63 a3 1a ce 04 18 ab 3a 80 e5 52 23 0c 07\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:09:41.656Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 48 1b 8c 98 3a f4 19 7d 90 8c 44 a3 48 9d e7 96 30 83 bf 5d 92 e8 1e 67 8d ef 56 d2 00 01 18 51\u003E"
+  },
+  {
+    "time": "2026-04-15T13:09:41.699Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:09:41.743Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 ed 38 80 6c 66 db ad d3 65 16 06 d3 79 ad 24 b7 10 39 8c 6e 34 2d 05 9d 2a a4 da 6b b1 10 d7 2b\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:09:41.786Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:09:41.829Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer e9 bd 94 be 03 65 83 28 b6 13 bc ec 68 4f 11 52 6b 0d 1c f6 4e d1 02 e0 9e cc 50 32 2a 3c 45 ee\u003E"
+  },
+  {
+    "time": "2026-04-15T13:09:41.872Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:09:41.915Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:09:41.958Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 72 20 f8 d4 6a c6 8d f8 42 1d 60 b0 52 f0 45 bc b2 a9 a7 ff cd b1 7a 8e 6b 00 8b 17 c5 09 7b 7c\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:09:42.001Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:09:42.044Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:09:42.087Z",
+    "type": "stdout",
+    "line": "used: 1776258580585,"
+  },
+  {
+    "time": "2026-04-15T13:09:42.130Z",
+    "type": "stdout",
+    "line": "created: 1776258580585,"
+  },
+  {
+    "time": "2026-04-15T13:09:42.174Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 df ca f4 5b 4c c6 90 ec 71 78 9f dc 71 71 14 d1 e9 f4 02 c0 53 bf f3 f2 4e d4 38 14 86 9e 43 5e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:09:42.217Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:09:42.260Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:09:42.303Z",
+    "type": "stdout",
+    "line": "signedKeyId: 13888199,"
+  },
+  {
+    "time": "2026-04-15T13:09:42.347Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 72 20 f8 d4 6a c6 8d f8 42 1d 60 b0 52 f0 45 bc b2 a9 a7 ff cd b1 7a 8e 6b 00 8b 17 c5 09 7b 7c\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:09:42.390Z",
+    "type": "stdout",
+    "line": "preKeyId: 2252911"
+  },
+  {
+    "time": "2026-04-15T13:09:42.432Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:09:42.475Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:13:49.677Z",
+    "type": "stderr",
+    "line": "Closing open session in favor of incoming prekey bundle"
+  },
+  {
+    "time": "2026-04-15T13:13:50.076Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:13:50.576Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:13:50.776Z",
+    "type": "stdout",
+    "line": "'BcjAyN07pOxMEomJwL/0PPeLRKjOsz3bRTfT5lN3AHAN': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:13:50.976Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:13:51.177Z",
+    "type": "stdout",
+    "line": "registrationId: 84,"
+  },
+  {
+    "time": "2026-04-15T13:13:51.677Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:13:52.376Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:13:52.476Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 c8 c0 c8 dd 3b a4 ec 4c 12 89 89 c0 bf f4 3c f7 8b 44 a8 ce b3 3d db 45 37 d3 e6 53 77 00 70 0d\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:13:52.676Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer a0 de 06 f1 c5 3f 06 9c 22 71 72 ac d5 c4 7a d5 a6 bd 1f e0 12 8b 14 c9 52 50 a8 85 6c 2c ce 73\u003E"
+  },
+  {
+    "time": "2026-04-15T13:13:52.876Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:13:52.976Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 c6 f0 2e 7e 2e 53 1a 76 17 7d 58 ef 5a 35 48 92 17 b1 4b 66 2c 7e fe 4e 82 73 88 27 8d 45 d0 40\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:13:53.376Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:13:53.476Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 83 c7 4a df da 25 36 5e 12 3c 2b a5 98 15 90 cb 80 01 60 a9 38 90 aa d9 3c e8 33 5f 7a 00 eb 94\u003E"
+  },
+  {
+    "time": "2026-04-15T13:13:53.876Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:13:53.976Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:13:54.976Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 db f8 f1 00 34 8e 93 fe 40 10 03 3d 7b b7 e1 b8 34 18 42 88 42 ce 76 de 40 a6 a4 25 0b e9 df 5f\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:13:57.476Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:13:59.077Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:13:59.576Z",
+    "type": "stdout",
+    "line": "used: 1776258791007,"
+  },
+  {
+    "time": "2026-04-15T13:13:59.777Z",
+    "type": "stdout",
+    "line": "created: 1776258791007,"
+  },
+  {
+    "time": "2026-04-15T13:13:59.976Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 11 33 04 26 bc 48 8c 04 ea 4b c5 b4 43 45 db 58 35 cc 9a d6 8c 60 2d fb bc d9 95 f4 6d 39 21 36\u003E"
+  },
+  {
+    "time": "2026-04-15T13:14:00.376Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:14:01.476Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:14:01.976Z",
+    "type": "stdout",
+    "line": "signedKeyId: 1,"
+  },
+  {
+    "time": "2026-04-15T13:14:02.077Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 db f8 f1 00 34 8e 93 fe 40 10 03 3d 7b b7 e1 b8 34 18 42 88 42 ce 76 de 40 a6 a4 25 0b e9 df 5f\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:14:02.276Z",
+    "type": "stdout",
+    "line": "preKeyId: 3774"
+  },
+  {
+    "time": "2026-04-15T13:14:02.476Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:14:02.976Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:15:11.952Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:15:15.178Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:15:17.477Z",
+    "type": "stderr",
+    "line": "Session error:SessionError: Over 2000 messages into the future! SessionError: Over 2000 messages into the future!"
+  },
+  {
+    "time": "2026-04-15T13:15:18.677Z",
+    "type": "stderr",
+    "line": "at SessionCipher.fillMessageKeys (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:261:19)"
+  },
+  {
+    "time": "2026-04-15T13:15:19.377Z",
+    "type": "stderr",
+    "line": "at SessionCipher.maybeStepRatchet (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:280:18)"
+  },
+  {
+    "time": "2026-04-15T13:15:20.077Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:227:14)"
+  },
+  {
+    "time": "2026-04-15T13:15:20.778Z",
+    "type": "stderr",
+    "line": "at SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:40)"
+  },
+  {
+    "time": "2026-04-15T13:15:21.677Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:15:25.276Z",
+    "type": "stderr",
+    "line": "at 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:39)"
+  },
+  {
+    "time": "2026-04-15T13:15:26.777Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:15:26.777Z",
+    "type": "stderr",
+    "line": "at SessionCipher.fillMessageKeys (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:261:19)"
+  },
+  {
+    "time": "2026-04-15T13:15:26.778Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:28.877Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:15:28.877Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:15:29.877Z",
+    "type": "stderr",
+    "line": "Session error:SessionError: Over 2000 messages into the future! SessionError: Over 2000 messages into the future!"
+  },
+  {
+    "time": "2026-04-15T13:15:29.877Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:15:30.577Z",
+    "type": "stderr",
+    "line": "at SessionCipher.fillMessageKeys (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:261:19)"
+  },
+  {
+    "time": "2026-04-15T13:15:30.577Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:15:31.077Z",
+    "type": "stderr",
+    "line": "at SessionCipher.maybeStepRatchet (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:280:18)"
+  },
+  {
+    "time": "2026-04-15T13:15:31.077Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:31.778Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:227:14)"
+  },
+  {
+    "time": "2026-04-15T13:15:31.778Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:15:32.879Z",
+    "type": "stderr",
+    "line": "at SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:40)"
+  },
+  {
+    "time": "2026-04-15T13:15:33.376Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:33.777Z",
+    "type": "stderr",
+    "line": "at 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:39)"
+  },
+  {
+    "time": "2026-04-15T13:15:33.778Z",
+    "type": "stderr",
+    "line": "Session error:SessionError: Over 2000 messages into the future! SessionError: Over 2000 messages into the future!"
+  },
+  {
+    "time": "2026-04-15T13:15:34.478Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:34.478Z",
+    "type": "stderr",
+    "line": "at SessionCipher.fillMessageKeys (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:261:19)"
+  },
+  {
+    "time": "2026-04-15T13:15:36.077Z",
+    "type": "stderr",
+    "line": "Closing open session in favor of incoming prekey bundle"
+  },
+  {
+    "time": "2026-04-15T13:15:36.277Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:15:36.278Z",
+    "type": "stdout",
+    "line": "'BTu1Q6Wv3Md6qkF6BoHD8Eq0AuCThYnUDQ59WKB+fQEq': { chainKey: [Object], chainType: 2, messageKeys: {} },"
+  },
+  {
+    "time": "2026-04-15T13:15:36.278Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:15:37.378Z",
+    "type": "stdout",
+    "line": "'BaUwJTg/LefRzByeoMVV9GtaEoh6cwFtwo88PQ8axEIw': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:15:37.378Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:15:37.378Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:15:40.077Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:15:40.078Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:227:14)"
+  },
+  {
+    "time": "2026-04-15T13:15:40.078Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:15:40.078Z",
+    "type": "stdout",
+    "line": "'BffuKkJLtZBEi/SF2SRTwqBIZJPPHS5HA0fpLFVTJHIO': { chainKey: [Object], chainType: 2, messageKeys: [Object] },"
+  },
+  {
+    "time": "2026-04-15T13:15:42.778Z",
+    "type": "stderr",
+    "line": "at SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:40)"
+  },
+  {
+    "time": "2026-04-15T13:15:42.778Z",
+    "type": "stdout",
+    "line": "BfYF7faOs2LbP6SiTjzkzuWncaNdwM7ez5mOKTMxtT8k: { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:15:42.778Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:15:42.779Z",
+    "type": "stdout",
+    "line": "registrationId: 84,"
+  },
+  {
+    "time": "2026-04-15T13:15:42.779Z",
+    "type": "stdout",
+    "line": "'BbrJRq4K6aqfj2jjiADNxNEPj+CirzduXD7zwWoGGNVr': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:15:43.478Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:15:43.478Z",
+    "type": "stderr",
+    "line": "at 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:39)"
+  },
+  {
+    "time": "2026-04-15T13:15:43.478Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:43.479Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:15:43.479Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:15:48.377Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:48.377Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:15:48.377Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:227:14)"
+  },
+  {
+    "time": "2026-04-15T13:15:48.377Z",
+    "type": "stdout",
+    "line": "registrationId: 196,"
+  },
+  {
+    "time": "2026-04-15T13:15:48.377Z",
+    "type": "stdout",
+    "line": "registrationId: 84,"
+  },
+  {
+    "time": "2026-04-15T13:15:49.978Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:49.979Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:15:49.979Z",
+    "type": "stderr",
+    "line": "at SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:40)"
+  },
+  {
+    "time": "2026-04-15T13:15:50.004Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:15:50.004Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:15:50.022Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:15:50.022Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:15:50.048Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:15:50.048Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:15:50.066Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:50.091Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 f6 05 ed f6 8e b3 62 db 3f a4 a2 4e 3c e4 ce e5 a7 71 a3 5d c0 ce de cf 99 8e 29 33 31 b5 3f 24\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:15:50.092Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:50.099Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 ba c9 46 ae 0a e9 aa 9f 8f 68 e3 88 00 cd c4 d1 0f 8f e0 a2 af 37 6e 5c 3e f3 c1 6a 06 18 d5 6b\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:15:50.110Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:15:50.135Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 28 58 e4 b5 11 60 2c ca 5b f3 12 0b a0 98 76 fb ef 23 4b e8 a6 2f 35 93 70 17 f8 eb 1e 70 a9 6e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:15:50.136Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:15:50.476Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 38 02 6f 3e 8a f1 69 e4 61 f4 e8 8d 20 45 e3 8b e2 ea 97 9c 01 41 d0 93 21 7f a5 9e df fc 64 6e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:15:50.477Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:15:52.577Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:15:52.578Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:52.877Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:15:52.877Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:15:53.678Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 c6 f0 2e 7e 2e 53 1a 76 17 7d 58 ef 5a 35 48 92 17 b1 4b 66 2c 7e fe 4e 82 73 88 27 8d 45 d0 40\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:15:53.678Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:15:54.477Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 f7 ee 2a 42 4b b5 90 44 8b f4 85 d9 24 53 c2 a0 48 64 93 cf 1d 2e 47 03 47 e9 2c 55 53 24 72 0e\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:15:54.478Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:54.479Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:15:55.377Z",
+    "type": "stderr",
+    "line": "Session error:SessionError: Over 2000 messages into the future! SessionError: Over 2000 messages into the future!"
+  },
+  {
+    "time": "2026-04-15T13:15:55.378Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:15:55.378Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:15:55.776Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 97 ad 63 52 06 b5 dc 84 c2 6b f1 01 03 54 db 56 fc 96 bd ed 11 ba 7a c0 4c 97 f2 47 50 6c 73 3a\u003E"
+  },
+  {
+    "time": "2026-04-15T13:15:55.778Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer ff eb d8 a4 c5 92 af 89 ad 9d 0c 6d 0a 23 cf 4d d2 45 d1 37 a0 5e b2 c5 33 29 48 44 e0 a4 85 b2\u003E"
+  },
+  {
+    "time": "2026-04-15T13:15:55.778Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:55.779Z",
+    "type": "stderr",
+    "line": "at SessionCipher.fillMessageKeys (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:261:19)"
+  },
+  {
+    "time": "2026-04-15T13:15:56.477Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:15:56.477Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:15:56.478Z",
+    "type": "stderr",
+    "line": "at SessionCipher.maybeStepRatchet (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:280:18)"
+  },
+  {
+    "time": "2026-04-15T13:15:56.977Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:15:56.978Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:227:14)"
+  },
+  {
+    "time": "2026-04-15T13:15:56.978Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:15:57.677Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 79 b2 62 54 5f 60 2c 67 3d cb 00 f1 b2 b8 b4 ba 88 01 45 57 eb 31 58 42 ac a6 57 13 d8 b6 05 7e\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:15:57.678Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 7c 2d 9b 82 05 b0 de 7d 36 91 a0 ac f1 9a 4e b8 91 93 b9 a3 81 c7 37 43 d4 16 73 ff 13 3f 61 14\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:15:57.678Z",
+    "type": "stderr",
+    "line": "at SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:40)"
+  },
+  {
+    "time": "2026-04-15T13:15:57.976Z",
+    "type": "stdout",
+    "line": "baseKeyType: 2,"
+  },
+  {
+    "time": "2026-04-15T13:15:57.977Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:15:57.978Z",
+    "type": "stderr",
+    "line": "at 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:39)"
+  },
+  {
+    "time": "2026-04-15T13:15:58.776Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:15:58.777Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:15:58.777Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:15:58.778Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 a5 30 25 38 3f 2d e7 d1 cc 1c 9e a0 c5 55 f4 6b 5a 12 88 7a 73 01 6d c2 8f 3c 3d 0f 1a c4 42 30\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:15:59.078Z",
+    "type": "stdout",
+    "line": "used: 1776258580070,"
+  },
+  {
+    "time": "2026-04-15T13:15:59.079Z",
+    "type": "stdout",
+    "line": "used: 1776258920062,"
+  },
+  {
+    "time": "2026-04-15T13:15:59.676Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 98 88 5e d0 5a 58 ed fd 2e a9 35 c8 5b 83 93 8d f2 0e 9a 53 ed 50 07 be f9 1f 3a f3 60 50 b2 7d\u003E"
+  },
+  {
+    "time": "2026-04-15T13:16:00.377Z",
+    "type": "stdout",
+    "line": "created: 1776258580070,"
+  },
+  {
+    "time": "2026-04-15T13:16:00.377Z",
+    "type": "stdout",
+    "line": "created: 1776258920062,"
+  },
+  {
+    "time": "2026-04-15T13:16:00.379Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:16:00.379Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:16:00.977Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 3b b5 43 a5 af dc c7 7a aa 41 7a 06 81 c3 f0 4a b4 02 e0 93 85 89 d4 0d 0e 7d 58 a0 7e 7d 01 2a\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:16:00.978Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 24 f9 d9 64 33 39 ad c6 b7 e2 a0 ce 1e 78 28 eb de c5 8d 14 b4 ea ef 26 59 4d 27 6f 18 73 7f 13\u003E"
+  },
+  {
+    "time": "2026-04-15T13:16:00.978Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 11 33 04 26 bc 48 8c 04 ea 4b c5 b4 43 45 db 58 35 cc 9a d6 8c 60 2d fb bc d9 95 f4 6d 39 21 36\u003E"
+  },
+  {
+    "time": "2026-04-15T13:16:00.979Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:16:01.576Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:16:01.577Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:16:01.578Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:16:01.579Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:16:01.877Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 7a 1e 9c a6 ef 40 4c d6 7d d4 7e b3 72 ce cc cd ef 2f 5a 8a d1 19 8f ab be cf 97 f4 2e d1 c7 91\u003E"
+  },
+  {
+    "time": "2026-04-15T13:16:01.877Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:16:01.877Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:16:02.277Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:16:02.277Z",
+    "type": "stdout",
+    "line": "signedKeyId: 1,"
+  },
+  {
+    "time": "2026-04-15T13:16:02.477Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:16:02.477Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 7c 2d 9b 82 05 b0 de 7d 36 91 a0 ac f1 9a 4e b8 91 93 b9 a3 81 c7 37 43 d4 16 73 ff 13 3f 61 14\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:16:05.977Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 14 f8 0e ab 32 13 ee fb d6 f2 d2 fd b3 02 b2 6b 45 b1 b3 d8 ea 01 68 94 38 97 6d b2 78 78 56 3b\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:16:05.977Z",
+    "type": "stdout",
+    "line": "preKeyId: 3785"
+  },
+  {
+    "time": "2026-04-15T13:16:05.979Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:16:06.277Z",
+    "type": "stdout",
+    "line": "baseKeyType: 2,"
+  },
+  {
+    "time": "2026-04-15T13:16:06.278Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:16:06.278Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:16:06.877Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:16:06.878Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:16:07.977Z",
+    "type": "stdout",
+    "line": "used: 1776258820807,"
+  },
+  {
+    "time": "2026-04-15T13:16:08.577Z",
+    "type": "stdout",
+    "line": "created: 1776258820807,"
+  },
+  {
+    "time": "2026-04-15T13:16:09.677Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 11 33 04 26 bc 48 8c 04 ea 4b c5 b4 43 45 db 58 35 cc 9a d6 8c 60 2d fb bc d9 95 f4 6d 39 21 36\u003E"
+  },
+  {
+    "time": "2026-04-15T13:16:10.677Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:16:10.977Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:20:20.440Z",
+    "type": "stdout",
+    "line": "[BOT] Connection timed out — reconnecting in 6s..."
+  },
+  {
+    "time": "2026-04-15T13:20:20.444Z",
+    "type": "stdout",
+    "line": "[BOT] Disconnected — code: 408"
+  },
+  {
+    "time": "2026-04-15T13:20:20.499Z",
+    "type": "stdout",
+    "line": "[BOT] Using WA version 2.3000.1035194821"
+  },
+  {
+    "time": "2026-04-15T13:20:20.677Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:20:20.977Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:21.377Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:21.677Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:22.277Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:22.377Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:22.777Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:23.377Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:24.077Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:26.177Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:26.677Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:27.077Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:27.477Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:27.677Z",
+    "type": "stderr",
+    "line": "Session error:SessionError: Over 2000 messages into the future! SessionError: Over 2000 messages into the future!"
+  },
+  {
+    "time": "2026-04-15T13:20:28.477Z",
+    "type": "stderr",
+    "line": "at SessionCipher.fillMessageKeys (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:261:19)"
+  },
+  {
+    "time": "2026-04-15T13:20:29.077Z",
+    "type": "stderr",
+    "line": "at SessionCipher.maybeStepRatchet (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:280:18)"
+  },
+  {
+    "time": "2026-04-15T13:20:29.179Z",
+    "type": "stdout",
+    "line": "[DB] Database initialized at /tmp/berahost_dep_13/Database/db.json"
+  },
+  {
+    "time": "2026-04-15T13:20:29.179Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:227:14)"
+  },
+  {
+    "time": "2026-04-15T13:20:29.677Z",
+    "type": "stderr",
+    "line": "at SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:40)"
+  },
+  {
+    "time": "2026-04-15T13:20:30.277Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:30.377Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:30.777Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:32.877Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:33.777Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:34.777Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:34.877Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:34.977Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:49.177Z",
+    "type": "stdout",
+    "line": "[BOT] Unhandled crypto rejection — reconnecting in 6s..."
+  },
+  {
+    "time": "2026-04-15T13:20:55.291Z",
+    "type": "stdout",
+    "line": "[DB] Database initialized at /tmp/berahost_dep_13/Database/db.json"
+  },
+  {
+    "time": "2026-04-15T13:20:55.353Z",
+    "type": "stdout",
+    "line": "[BOT] Using WA version 2.3000.1035194821"
+  },
+  {
+    "time": "2026-04-15T13:20:56.680Z",
+    "type": "stdout",
+    "line": "[BOT] ✅ Connected as Developer Bera (254116763755@s.whatsapp.net)"
+  },
+  {
+    "time": "2026-04-15T13:20:56.708Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:56.708Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:20:56.723Z",
+    "type": "stdout",
+    "line": "[BOT] 🤖 Bera is online and ready!"
+  },
+  {
+    "time": "2026-04-15T13:20:56.750Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:56.793Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:56.836Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:56.878Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:56.921Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:56.963Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:57.005Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.047Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.065Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:20:57.090Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.108Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:20:57.132Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.150Z",
+    "type": "stdout",
+    "line": "'BVhQO0cXS8ecP5a/IBC1M0f9OKCmDRbfDeVthdLX8ZYO': { chainKey: [Object], chainType: 2, messageKeys: {} },"
+  },
+  {
+    "time": "2026-04-15T13:20:57.172Z",
+    "type": "stdout",
+    "line": "[BOT] ✅ Bot profile picture updated"
+  },
+  {
+    "time": "2026-04-15T13:20:57.176Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.193Z",
+    "type": "stdout",
+    "line": "BdFYISPvFfSfyB0L4v7ARL4ssa4KJ2DOdMJkWS0SvtJq: { chainKey: [Object], chainType: 2, messageKeys: {} },"
+  },
+  {
+    "time": "2026-04-15T13:20:57.219Z",
+    "type": "stderr",
+    "line": "Session error:SessionError: Over 2000 messages into the future! SessionError: Over 2000 messages into the future!"
+  },
+  {
+    "time": "2026-04-15T13:20:57.235Z",
+    "type": "stdout",
+    "line": "'BdfHx00tOFZd0+uYSZWNvVKk5JbdGVHkgTquZwrp4R8Q': { chainKey: [Object], chainType: 2, messageKeys: {} },"
+  },
+  {
+    "time": "2026-04-15T13:20:57.261Z",
+    "type": "stderr",
+    "line": "at SessionCipher.fillMessageKeys (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:261:19)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.277Z",
+    "type": "stdout",
+    "line": "'BRkyExX3bzAGOGU+nX5I8kvFdTL+dmE9VagrlLsM4d4o': { chainKey: [Object], chainType: 2, messageKeys: {} },"
+  },
+  {
+    "time": "2026-04-15T13:20:57.304Z",
+    "type": "stderr",
+    "line": "at SessionCipher.maybeStepRatchet (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:280:18)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.319Z",
+    "type": "stdout",
+    "line": "BXCkcNx5SUr41mwVWdEusyOUMYcQAgYAVXK3g2borxxS: { chainKey: [Object], chainType: 2, messageKeys: [Object] },"
+  },
+  {
+    "time": "2026-04-15T13:20:57.346Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:227:14)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.361Z",
+    "type": "stdout",
+    "line": "'BdWqzwD/wTyIyBAW8gcf7XYl5+dvlFcDvV/u3mqGnhd+': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:20:57.388Z",
+    "type": "stderr",
+    "line": "at SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:40)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.404Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:20:57.430Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.446Z",
+    "type": "stdout",
+    "line": "registrationId: 1870990541,"
+  },
+  {
+    "time": "2026-04-15T13:20:57.474Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.488Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:20:57.516Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:57.530Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:20:57.558Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.572Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 d5 aa cf 00 ff c1 3c 88 c8 10 16 f2 07 1f ed 76 25 e7 e7 6f 94 57 03 bd 5f ee de 6a 86 9e 17 7e\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:20:57.600Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.615Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 88 b9 5d af 0c 2f 67 71 12 23 13 5c 19 9d 72 8b 8a ce 4f 07 f4 c7 22 41 ce 2d 55 fa 5c 7b b3 4a\u003E"
+  },
+  {
+    "time": "2026-04-15T13:20:57.642Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.657Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:20:57.685Z",
+    "type": "stderr",
+    "line": "at async 233620836974620_1.19 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.699Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 70 a4 70 dc 79 49 4a f8 d6 6c 15 59 d1 2e b3 23 94 31 87 10 02 06 00 55 72 b7 83 66 e8 af 1c 52\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:20:57.727Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.730Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:57.730Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:20:57.741Z",
+    "type": "stdout",
+    "line": "previousCounter: 24,"
+  },
+  {
+    "time": "2026-04-15T13:20:57.773Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.783Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer e5 73 6f 6f 1c 02 fe 5b 84 2d 61 59 56 7a e4 6a 47 9b 22 14 c3 94 3a f6 fe 91 f8 2d c8 68 3a 55\u003E"
+  },
+  {
+    "time": "2026-04-15T13:20:57.817Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.827Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:20:57.861Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.870Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:20:57.904Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.912Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 ae 26 d3 9d b5 93 f7 ac dd bf 99 e7 32 e6 7e ea f8 96 ac 71 2e 93 ab 9e 4f 12 c5 86 d0 ca 00 31\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:20:57.948Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:57.954Z",
+    "type": "stdout",
+    "line": "baseKeyType: 2,"
+  },
+  {
+    "time": "2026-04-15T13:20:57.997Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:20:58.007Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:20:58.007Z",
+    "type": "stderr",
+    "line": "Session error:MessageCounterError: Key used already or never filled MessageCounterError: Key used already or never filled"
+  },
+  {
+    "time": "2026-04-15T13:20:58.008Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:58.011Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:58.012Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:20:58.040Z",
+    "type": "stdout",
+    "line": "used: 1776259220338,"
+  },
+  {
+    "time": "2026-04-15T13:20:58.051Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.053Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:236:19)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.055Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.082Z",
+    "type": "stdout",
+    "line": "created: 1776258581297,"
+  },
+  {
+    "time": "2026-04-15T13:20:58.094Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.097Z",
+    "type": "stderr",
+    "line": "at SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:40)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.098Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.124Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 df ca f4 5b 4c c6 90 ec 71 78 9f dc 71 71 14 d1 e9 f4 02 c0 53 bf f3 f2 4e d4 38 14 86 9e 43 5e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:20:58.137Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.141Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.142Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.167Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:20:58.181Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.184Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.187Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.209Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:20:58.224Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.228Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.232Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:58.267Z",
+    "type": "stderr",
+    "line": "Session error:MessageCounterError: Key used already or never filled MessageCounterError: Key used already or never filled"
+  },
+  {
+    "time": "2026-04-15T13:20:58.275Z",
+    "type": "stderr",
+    "line": "Session error:MessageCounterError: Key used already or never filled MessageCounterError: Key used already or never filled"
+  },
+  {
+    "time": "2026-04-15T13:20:58.277Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.310Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:236:19)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.319Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:236:19)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.321Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.353Z",
+    "type": "stderr",
+    "line": "at SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:40)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.362Z",
+    "type": "stderr",
+    "line": "at SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:40)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.366Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.395Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.406Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.411Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.438Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.449Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.456Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.481Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:58.492Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:20:58.524Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.536Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.567Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.580Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.610Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.624Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.653Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.668Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.696Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:20:58.711Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:00.101Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:00.102Z",
+    "type": "stderr",
+    "line": "Closing open session in favor of incoming prekey bundle"
+  },
+  {
+    "time": "2026-04-15T13:21:00.145Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:00.188Z",
+    "type": "stdout",
+    "line": "'BZ2Zudu/qUD5/nAG5pJQA+9ZNyhGr1sA+6ZBo28mr8Rj': { chainKey: [Object], chainType: 2, messageKeys: [Object] },"
+  },
+  {
+    "time": "2026-04-15T13:21:00.231Z",
+    "type": "stdout",
+    "line": "'BdcyU+ZeuYSjvOsmxnnEzAi2Gy1YE8UFJFVXwFlyFi1Q': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:00.274Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:00.317Z",
+    "type": "stdout",
+    "line": "registrationId: 196,"
+  },
+  {
+    "time": "2026-04-15T13:21:00.361Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:00.404Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:00.447Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 d7 32 53 e6 5e b9 84 a3 bc eb 26 c6 79 c4 cc 08 b6 1b 2d 58 13 c5 05 24 55 57 c0 59 72 16 2d 50\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:00.491Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 08 d7 2a 14 5b a5 d3 d7 78 8f 0a 0b ac c1 fc 8b 84 ba ad 9f 01 8a ab c3 88 c3 72 86 c0 b7 63 53\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:00.534Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:00.577Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 9d 99 b9 db bf a9 40 f9 fe 70 06 e6 92 50 03 ef 59 37 28 46 af 5b 00 fb a6 41 a3 6f 26 af c4 63\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:00.621Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:00.664Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer c5 07 be 1b 8e 66 31 8d 43 ab c1 a7 1d b7 71 52 a9 7e 27 d5 d7 a1 40 c8 58 23 45 c0 2e 26 b9 2b\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:00.707Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:00.750Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:00.793Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 c9 9e ff b3 e5 9b 3e 06 bf 3c e8 27 ae 2b a0 bd 06 94 a2 1e a7 e2 de 38 e8 3c 42 01 a6 6f c3 6a\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:00.837Z",
+    "type": "stdout",
+    "line": "baseKeyType: 2,"
+  },
+  {
+    "time": "2026-04-15T13:21:00.880Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:00.915Z",
+    "type": "stderr",
+    "line": "Closing open session in favor of incoming prekey bundle"
+  },
+  {
+    "time": "2026-04-15T13:21:00.916Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:00.923Z",
+    "type": "stdout",
+    "line": "used: 1776258934463,"
+  },
+  {
+    "time": "2026-04-15T13:21:00.959Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:00.966Z",
+    "type": "stdout",
+    "line": "created: 1776258934463,"
+  },
+  {
+    "time": "2026-04-15T13:21:01.003Z",
+    "type": "stdout",
+    "line": "BU2VUecFNyzQuul9BB3mbDOSMNg9eoXXP91VBkkR3fQN: { chainKey: [Object], chainType: 2, messageKeys: [Object] },"
+  },
+  {
+    "time": "2026-04-15T13:21:01.008Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 24 f9 d9 64 33 39 ad c6 b7 e2 a0 ce 1e 78 28 eb de c5 8d 14 b4 ea ef 26 59 4d 27 6f 18 73 7f 13\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:01.047Z",
+    "type": "stdout",
+    "line": "BTUEmOtTv931u3j6mbP77BjaRelv0AhZadfmXqe6KjMn: { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:01.051Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:01.090Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:01.094Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:01.134Z",
+    "type": "stdout",
+    "line": "registrationId: 196,"
+  },
+  {
+    "time": "2026-04-15T13:21:01.178Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:01.222Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:01.265Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 35 04 98 eb 53 bf dd f5 bb 78 fa 99 b3 fb ec 18 da 45 e9 6f d0 08 59 69 d7 e6 5e a7 ba 2a 33 27\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:01.309Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer f8 77 f6 03 d6 4c bc 87 1a a2 45 35 ae fd 06 44 f6 0d 71 a1 f4 26 4c 83 ab cc 80 04 77 00 16 43\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:01.353Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:01.397Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 4d 95 51 e7 05 37 2c d0 ba e9 7d 04 1d e6 6c 33 92 30 d8 3d 7a 85 d7 3f dd 55 06 49 11 dd f4 0d\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:01.440Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:01.484Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 9c 3d c3 9b ed fc 66 2c 6c b0 31 2a dc 08 af fd de dc 64 f4 04 03 d8 0a b5 8a 6c ae d8 27 05 fe\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:01.528Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:01.573Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:01.616Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 87 ec e3 a8 f1 25 df 2e 30 cd 42 3c ae 39 71 de 4c 18 37 2a 76 52 9b 9d 2a a1 fc c4 d8 eb 5b 7f\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:01.660Z",
+    "type": "stdout",
+    "line": "baseKeyType: 2,"
+  },
+  {
+    "time": "2026-04-15T13:21:01.704Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:01.747Z",
+    "type": "stdout",
+    "line": "used: 1776259260086,"
+  },
+  {
+    "time": "2026-04-15T13:21:01.791Z",
+    "type": "stdout",
+    "line": "created: 1776259260086,"
+  },
+  {
+    "time": "2026-04-15T13:21:01.834Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 24 f9 d9 64 33 39 ad c6 b7 e2 a0 ce 1e 78 28 eb de c5 8d 14 b4 ea ef 26 59 4d 27 6f 18 73 7f 13\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:01.879Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:01.922Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:04.104Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:04.105Z",
+    "type": "stderr",
+    "line": "Closing open session in favor of incoming prekey bundle"
+  },
+  {
+    "time": "2026-04-15T13:21:04.148Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:04.191Z",
+    "type": "stdout",
+    "line": "'BZDvMM4tO/xq9dLi0Xa3bEKUWhSRHLJ9Go/er+kmsKRh': { chainKey: [Object], chainType: 2, messageKeys: [Object] },"
+  },
+  {
+    "time": "2026-04-15T13:21:04.234Z",
+    "type": "stdout",
+    "line": "'BUJ4+M7JcNXtsD8MH0h1gO5hA02oPLj0EcYyPmdCm6MN': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:04.277Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:04.320Z",
+    "type": "stdout",
+    "line": "registrationId: 196,"
+  },
+  {
+    "time": "2026-04-15T13:21:04.363Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:04.408Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:04.451Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 42 78 f8 ce c9 70 d5 ed b0 3f 0c 1f 48 75 80 ee 61 03 4d a8 3c b8 f4 11 c6 32 3e 67 42 9b a3 0d\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:04.494Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 80 57 2b 51 8d d0 38 cf 48 6f f2 cb bb 7a ff 43 e5 62 6e 9a 0c 3a 7f ef b1 45 2e b1 8f d3 16 7a\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:04.537Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:04.580Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 90 ef 30 ce 2d 3b fc 6a f5 d2 e2 d1 76 b7 6c 42 94 5a 14 91 1c b2 7d 1a 8f de af e9 26 b0 a4 61\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:04.624Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:04.667Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 92 fb 5a 62 e6 69 a9 ce bb 93 a9 43 04 97 00 cc a1 8d 2a 8b 83 56 59 de d0 ea 87 3c 9e 39 04 9e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:04.710Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:04.753Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:04.797Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 54 63 a1 7a 5e 76 df f2 ce 18 ad 29 47 9f 74 30 32 00 ee cf c1 19 41 fa 83 e6 4e 4f be 84 ae 5f\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:04.840Z",
+    "type": "stdout",
+    "line": "baseKeyType: 2,"
+  },
+  {
+    "time": "2026-04-15T13:21:04.883Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:04.922Z",
+    "type": "stderr",
+    "line": "Closing open session in favor of incoming prekey bundle"
+  },
+  {
+    "time": "2026-04-15T13:21:04.923Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:04.926Z",
+    "type": "stdout",
+    "line": "used: 1776259260900,"
+  },
+  {
+    "time": "2026-04-15T13:21:04.967Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:04.969Z",
+    "type": "stdout",
+    "line": "created: 1776259260900,"
+  },
+  {
+    "time": "2026-04-15T13:21:05.012Z",
+    "type": "stdout",
+    "line": "'BZPQvLewayVJEn4heq56ixTw+t5RwqqYoTrmuBE1Bx81': { chainKey: [Object], chainType: 2, messageKeys: [Object] },"
+  },
+  {
+    "time": "2026-04-15T13:21:05.013Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 24 f9 d9 64 33 39 ad c6 b7 e2 a0 ce 1e 78 28 eb de c5 8d 14 b4 ea ef 26 59 4d 27 6f 18 73 7f 13\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:05.056Z",
+    "type": "stdout",
+    "line": "'BQeDeDDmV+7/dJnvhR9c5Zy1qeMyEkS9o7dn9bg2KFdd': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:05.056Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:05.099Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:05.100Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:05.144Z",
+    "type": "stdout",
+    "line": "registrationId: 196,"
+  },
+  {
+    "time": "2026-04-15T13:21:05.188Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:05.232Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:05.276Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 07 83 78 30 e6 57 ee ff 74 99 ef 85 1f 5c e5 9c b5 a9 e3 32 12 44 bd a3 b7 67 f5 b8 36 28 57 5d\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:05.321Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer b8 53 81 10 fd 97 a2 2b da 74 4d d9 03 26 21 55 b5 a0 6b 5f 98 43 3c a5 79 d5 98 c4 b2 5a a5 42\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:05.370Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:05.414Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 93 d0 bc b7 b0 6b 25 49 12 7e 21 7a ae 7a 8b 14 f0 fa de 51 c2 aa 98 a1 3a e6 b8 11 35 07 1f 35\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:05.458Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:05.502Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 79 99 91 31 81 a1 12 63 bf 8a 4d ed d4 22 86 18 6d 07 30 7d 9d 4c d5 83 dc 82 7d 34 74 4a 80 56\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:05.546Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:05.590Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:05.634Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 eb c0 6d 48 af 92 bd b2 70 2c 36 0a 32 b9 0a d4 e6 4b 28 2d 2f dd 65 9e c3 6b c8 b2 e8 fc 12 20\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:05.678Z",
+    "type": "stdout",
+    "line": "baseKeyType: 2,"
+  },
+  {
+    "time": "2026-04-15T13:21:05.721Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:05.765Z",
+    "type": "stdout",
+    "line": "used: 1776259264090,"
+  },
+  {
+    "time": "2026-04-15T13:21:05.809Z",
+    "type": "stdout",
+    "line": "created: 1776259264090,"
+  },
+  {
+    "time": "2026-04-15T13:21:05.853Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 24 f9 d9 64 33 39 ad c6 b7 e2 a0 ce 1e 78 28 eb de c5 8d 14 b4 ea ef 26 59 4d 27 6f 18 73 7f 13\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:05.898Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:05.942Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:06.915Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:06.916Z",
+    "type": "stderr",
+    "line": "Closing open session in favor of incoming prekey bundle"
+  },
+  {
+    "time": "2026-04-15T13:21:06.959Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:07.002Z",
+    "type": "stdout",
+    "line": "'BXsbBepKo7//4hL8RSvuQAbgXdAi1oUaR8qG+QBaAnVq': { chainKey: [Object], chainType: 2, messageKeys: [Object] },"
+  },
+  {
+    "time": "2026-04-15T13:21:07.045Z",
+    "type": "stdout",
+    "line": "'Bc7vJ+bj+voAC0+LxiRLFaJxkGN9Qtk+SWuq0Ocu1wQc': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:07.088Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:07.132Z",
+    "type": "stdout",
+    "line": "registrationId: 196,"
+  },
+  {
+    "time": "2026-04-15T13:21:07.175Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:07.218Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:07.261Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 ce ef 27 e6 e3 fa fa 00 0b 4f 8b c6 24 4b 15 a2 71 90 63 7d 42 d9 3e 49 6b aa d0 e7 2e d7 04 1c\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:07.304Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 98 c0 93 05 03 3f a2 7f 7f 9f 63 da 01 f0 6b 85 20 d9 a1 6f 13 2e 9d f6 70 38 c3 51 98 c3 2e 48\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:07.347Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:07.390Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 7b 1b 05 ea 4a a3 bf ff e2 12 fc 45 2b ee 40 06 e0 5d d0 22 d6 85 1a 47 ca 86 f9 00 5a 02 75 6a\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:07.434Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:07.476Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 28 67 5f f4 b5 c7 83 c6 a3 d8 32 4d 46 7d f2 a9 8b 72 8f 9d 3c 1f 20 7c 33 f3 c6 64 6c 23 57 d3\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:07.520Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:07.563Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:07.610Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 0a 2e ef 40 59 76 ec 40 ee 0d a6 1d 9e 33 f3 85 f0 ed 14 2d af 70 94 58 38 9b a6 a6 60 47 e4 59\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:07.653Z",
+    "type": "stdout",
+    "line": "baseKeyType: 2,"
+  },
+  {
+    "time": "2026-04-15T13:21:07.696Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:07.740Z",
+    "type": "stdout",
+    "line": "used: 1776259264907,"
+  },
+  {
+    "time": "2026-04-15T13:21:07.783Z",
+    "type": "stdout",
+    "line": "created: 1776259264907,"
+  },
+  {
+    "time": "2026-04-15T13:21:07.826Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 24 f9 d9 64 33 39 ad c6 b7 e2 a0 ce 1e 78 28 eb de c5 8d 14 b4 ea ef 26 59 4d 27 6f 18 73 7f 13\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:07.869Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:07.912Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:10.044Z",
+    "type": "stderr",
+    "line": "Closing open session in favor of incoming prekey bundle"
+  },
+  {
+    "time": "2026-04-15T13:21:10.045Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:10.089Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:10.133Z",
+    "type": "stdout",
+    "line": "'BfvSmkaXFfRTLEedS8sU3Dbuij+OPS7RSQOyYEmH6RFp': { chainKey: [Object], chainType: 2, messageKeys: [Object] },"
+  },
+  {
+    "time": "2026-04-15T13:21:10.177Z",
+    "type": "stdout",
+    "line": "'BUCkXwYUIHcRIl8JN6Lgu5UsJ0/HyiIsaJR/D7J2sPge': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:10.221Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:10.264Z",
+    "type": "stdout",
+    "line": "registrationId: 196,"
+  },
+  {
+    "time": "2026-04-15T13:21:10.308Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:10.352Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:10.396Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 40 a4 5f 06 14 20 77 11 22 5f 09 37 a2 e0 bb 95 2c 27 4f c7 ca 22 2c 68 94 7f 0f b2 76 b0 f8 1e\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:10.439Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer a8 81 a2 fe 99 4b c7 99 ad 6c 78 69 7f 3f 27 25 f0 1b cd c2 f2 dc 4b a5 05 35 ff f2 99 2b 7d 49\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:10.484Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:10.527Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 fb d2 9a 46 97 15 f4 53 2c 47 9d 4b cb 14 dc 36 ee 8a 3f 8e 3d 2e d1 49 03 b2 60 49 87 e9 11 69\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:10.571Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:10.615Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 32 34 c0 b4 12 82 12 ba 8f 57 9f 60 8c 53 31 52 01 d7 b8 b7 64 fe 99 81 7c eb 33 41 63 8f 99 dc\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:10.659Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:10.703Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:10.747Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 0c 90 09 5f 2e 35 88 4a 9a 2b 4c ac e1 dd 4b 21 88 8c 75 ef 0e 6c c9 37 e2 27 f6 d1 25 ca 79 1a\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:10.791Z",
+    "type": "stdout",
+    "line": "baseKeyType: 2,"
+  },
+  {
+    "time": "2026-04-15T13:21:10.835Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:10.879Z",
+    "type": "stdout",
+    "line": "used: 1776259266900,"
+  },
+  {
+    "time": "2026-04-15T13:21:10.923Z",
+    "type": "stdout",
+    "line": "created: 1776259266900,"
+  },
+  {
+    "time": "2026-04-15T13:21:10.967Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 24 f9 d9 64 33 39 ad c6 b7 e2 a0 ce 1e 78 28 eb de c5 8d 14 b4 ea ef 26 59 4d 27 6f 18 73 7f 13\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:11.002Z",
+    "type": "stderr",
+    "line": "Decrypted message with closed session."
+  },
+  {
+    "time": "2026-04-15T13:21:11.011Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:11.054Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:11.739Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:11.739Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:21:11.782Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:11.825Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:11.871Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:11.888Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:21:11.889Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:11.893Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:21:11.894Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:11.914Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:11.933Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:11.940Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:11.940Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:11.958Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:11.976Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:11.985Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:11.986Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.002Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.020Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.030Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.031Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.045Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.063Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.068Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:21:12.068Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.076Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.077Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.082Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.083Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:21:12.087Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.107Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.111Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.122Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.122Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.126Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.130Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.150Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.153Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.168Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.168Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.169Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.172Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.194Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.195Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.212Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.212Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.213Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.216Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.238Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.238Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.256Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.258Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.258Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.280Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.281Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.299Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.301Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.302Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.323Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.324Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.342Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.344Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.347Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.366Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.367Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.386Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.386Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.393Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.409Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.410Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.430Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.430Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.431Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:12.436Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.436Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:21:12.437Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.438Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:21:12.452Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.453Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.474Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.474Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.477Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:12.479Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.482Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.494Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.497Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.518Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.518Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.522Z",
+    "type": "stdout",
+    "line": "'BYRN0nv1xd6b+ZvU//olM17fqnx/a99dl9Mk0ZZLN2x/': { chainKey: [Object], chainType: 2, messageKeys: {} },"
+  },
+  {
+    "time": "2026-04-15T13:21:12.523Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.537Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.540Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.561Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.562Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.568Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.568Z",
+    "type": "stdout",
+    "line": "BWrzwYr0OQ1FNaCCtYoPWHelYbG8E28KIpH0uDrA43FB: { chainKey: [Object], chainType: 2, messageKeys: {} },"
+  },
+  {
+    "time": "2026-04-15T13:21:12.580Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.583Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.605Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.605Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.611Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.613Z",
+    "type": "stdout",
+    "line": "'BZ0QjWfv2HRI+Wj9tETMpDfAz9EAxIO5jFz9L7kwVccq': { chainKey: [Object], chainType: 2, messageKeys: {} },"
+  },
+  {
+    "time": "2026-04-15T13:21:12.623Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.626Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.654Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.655Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.658Z",
+    "type": "stdout",
+    "line": "'BUgcdfS8o5+SkDzc0vxzJpijTA+7O7vA4M8cvePBgRMJ': { chainKey: [Object], chainType: 2, messageKeys: {} },"
+  },
+  {
+    "time": "2026-04-15T13:21:12.660Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:12.668Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.670Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.696Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.698Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.699Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.702Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:12.703Z",
+    "type": "stdout",
+    "line": "BXCkcNx5SUr41mwVWdEusyOUMYcQAgYAVXK3g2borxxS: { chainKey: [Object], chainType: 2, messageKeys: [Object] },"
+  },
+  {
+    "time": "2026-04-15T13:21:12.710Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.713Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.738Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.741Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.742Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.745Z",
+    "type": "stdout",
+    "line": "'BcO+jiE7G0CQObIpYARsgxa/vByU5ZF6ZYMF9sygC1Ai': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:12.747Z",
+    "type": "stdout",
+    "line": "'BZR21eziUwkFOpcD+XLWtFueHBk21ZuQmA8BCMARizRc': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:12.752Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.756Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.781Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.785Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.786Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.788Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:12.793Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:12.795Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.823Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.828Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.829Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.830Z",
+    "type": "stdout",
+    "line": "registrationId: 1870990541,"
+  },
+  {
+    "time": "2026-04-15T13:21:12.837Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.837Z",
+    "type": "stdout",
+    "line": "registrationId: 1870990541,"
+  },
+  {
+    "time": "2026-04-15T13:21:12.865Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.871Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.873Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.873Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:12.873Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:12.880Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.883Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:12.908Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.914Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.916Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:12.916Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.917Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:12.923Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.928Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:12.953Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.958Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:12.959Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 c3 be 8e 21 3b 1b 40 90 39 b2 29 60 04 6c 83 16 bf bc 1c 94 e5 91 7a 65 83 05 f6 cc a0 0b 50 22\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:12.960Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:12.960Z",
+    "type": "stdout",
+    "line": "'BWZjPE1E4f0Jn7xux8NN0ymw2/FKxn5XLZPr4PapJ/EE': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:12.973Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 94 76 d5 ec e2 53 09 05 3a 97 03 f9 72 d6 b4 5b 9e 1c 19 36 d5 9b 90 98 0f 01 08 c0 11 8b 34 5c\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:12.996Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.002Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer a0 7d 70 89 24 00 9d da 1c 10 cb 20 e4 2d c4 64 e7 1a ed 44 c9 12 0f f9 2e c0 03 ee 44 ab 8f 76\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:13.004Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.004Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.019Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 18 8c de 28 8a 76 57 bb 1f b3 94 85 46 7e 93 a8 49 d7 a1 d8 23 ba 42 bb a3 13 6a ee 16 74 3e 60\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:13.038Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.045Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.047Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.048Z",
+    "type": "stdout",
+    "line": "registrationId: 1870990541,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.065Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.081Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.088Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 ed 38 80 6c 66 db ad d3 65 16 06 d3 79 ad 24 b7 10 39 8c 6e 34 2d 05 9d 2a a4 da 6b b1 10 d7 2b\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.090Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.091Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.111Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 70 a4 70 dc 79 49 4a f8 d6 6c 15 59 d1 2e b3 23 94 31 87 10 02 06 00 55 72 b7 83 66 e8 af 1c 52\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.123Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.131Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.134Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.134Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.156Z",
+    "type": "stdout",
+    "line": "previousCounter: 7,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.165Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.174Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer ea 66 7e c2 3d d1 30 2b 93 28 78 a3 1d 5c 5a 5a 1b e7 61 2e 26 c7 ef e0 8b 4f e7 3d 32 9f 14 d4\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:13.177Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 66 63 3c 4d 44 e1 fd 09 9f bc 6e c7 c3 4d d3 29 b0 db f1 4a c6 7e 57 2d 93 eb e0 f6 a9 27 f1 04\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.178Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.201Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 6a c7 57 b1 48 91 e5 6f 36 70 95 3b 6e f3 d1 d9 e3 b1 b9 45 30 4d 01 96 3f ec db c7 2d e5 a3 35\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:13.207Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:13.221Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.222Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer f8 73 f9 6a 1e 12 52 30 9e 96 f2 e9 f4 71 b8 ad 66 b1 6b 90 30 fd 92 3a ac 87 34 03 42 b7 4f 5b\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:13.222Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:13.242Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.246Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.249Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.264Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.266Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.266Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.285Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.290Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.291Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.307Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 51 a3 08 ec 5f 49 26 80 0a 2d c2 64 dc 92 9c 5d 3e 59 d2 87 4c 50 7b 1e 5b 07 64 53 27 71 cf 3a\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.309Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 ed 38 80 6c 66 db ad d3 65 16 06 d3 79 ad 24 b7 10 39 8c 6e 34 2d 05 9d 2a a4 da 6b b1 10 d7 2b\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.309Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.329Z",
+    "type": "stdout",
+    "line": "Bfw7jafFPY0VNtt9dSKxT6VOHG3xBZmx7jxSLVBL69Us: { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:13.336Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.337Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 1c 88 3b 23 86 96 e3 39 d3 cb 58 d5 56 d7 e7 38 2a be ab a1 e0 91 98 39 00 fb e6 d9 42 bf f2 0d\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.350Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.352Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.352Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.372Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.378Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.381Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.392Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.395Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 6f 2c fe d3 f0 f0 07 fb 18 65 bd 39 57 70 c5 3e ab d6 44 06 af 77 dc 5b 1a d8 74 bf 39 48 ac b7\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:13.395Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.415Z",
+    "type": "stdout",
+    "line": "registrationId: 1870990541,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.421Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.426Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.435Z",
+    "type": "stdout",
+    "line": "used: 1776259272414,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.438Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.439Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.458Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.463Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:13.471Z",
+    "type": "stdout",
+    "line": "used: 1776259270026,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.478Z",
+    "type": "stdout",
+    "line": "created: 1776259272414,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.481Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.502Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.505Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.516Z",
+    "type": "stdout",
+    "line": "created: 1776259257047,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.520Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 df ca f4 5b 4c c6 90 ec 71 78 9f dc 71 71 14 d1 e9 f4 02 c0 53 bf f3 f2 4e d4 38 14 86 9e 43 5e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:13.524Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 31 04 7f cc 8b 4e bd be 2c 13 44 a8 33 ed 08 f2 a9 1c 30 b7 bc e7 a2 11 30 59 36 c6 6a 31 a4 51\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.545Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 fc 3b 8d a7 c5 3d 8d 15 36 db 7d 75 22 b1 4f a5 4e 1c 6d f1 05 99 b1 ee 3c 52 2d 50 4b eb d5 2c\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.546Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.561Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 df ca f4 5b 4c c6 90 ec 71 78 9f dc 71 71 14 d1 e9 f4 02 c0 53 bf f3 f2 4e d4 38 14 86 9e 43 5e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:13.563Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.567Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.588Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 30 ae 4d 79 7f a3 1c 7a 3b 92 15 9a 94 e6 94 83 c1 6a ee 05 da 2a 2d 04 d1 94 0e 23 80 2b 5e 7a\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:13.588Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.606Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.606Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:13.610Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.630Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.631Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.649Z",
+    "type": "stdout",
+    "line": "signedKeyId: 13888199,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.651Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:13.653Z",
+    "type": "stdout",
+    "line": "used: 1776259272643,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.672Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:13.674Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 ed 38 80 6c 66 db ad d3 65 16 06 d3 79 ad 24 b7 10 39 8c 6e 34 2d 05 9d 2a a4 da 6b b1 10 d7 2b\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.693Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 51 a3 08 ec 5f 49 26 80 0a 2d c2 64 dc 92 9c 5d 3e 59 d2 87 4c 50 7b 1e 5b 07 64 53 27 71 cf 3a\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.697Z",
+    "type": "stdout",
+    "line": "created: 1776259272643,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.717Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.735Z",
+    "type": "stdout",
+    "line": "preKeyId: 2252856"
+  },
+  {
+    "time": "2026-04-15T13:21:13.740Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 df ca f4 5b 4c c6 90 ec 71 78 9f dc 71 71 14 d1 e9 f4 02 c0 53 bf f3 f2 4e d4 38 14 86 9e 43 5e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:13.760Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer c4 fc a3 28 e4 4d 7e 3b ba 60 76 4c 79 9c 59 8b f7 42 73 56 48 f1 5a 0f f5 ad 39 e9 c4 2d b3 79\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:13.778Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:13.784Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.803Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:13.821Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:13.827Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.846Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:13.870Z",
+    "type": "stdout",
+    "line": "signedKeyId: 13888199,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.889Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 bf 33 20 f8 30 d7 f3 21 0a 9f 91 d3 9e 0b 36 b1 e4 78 00 9a 33 ee cc 6b ad 93 6e ce 14 32 eb 29\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.913Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 31 04 7f cc 8b 4e bd be 2c 13 44 a8 33 ed 08 f2 a9 1c 30 b7 bc e7 a2 11 30 59 36 c6 6a 31 a4 51\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.933Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.957Z",
+    "type": "stdout",
+    "line": "preKeyId: 2253127"
+  },
+  {
+    "time": "2026-04-15T13:21:13.976Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:13.997Z",
+    "type": "stderr",
+    "line": "Decrypted message with closed session."
+  },
+  {
+    "time": "2026-04-15T13:21:14.000Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:14.019Z",
+    "type": "stdout",
+    "line": "used: 1776259272856,"
+  },
+  {
+    "time": "2026-04-15T13:21:14.043Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:14.062Z",
+    "type": "stdout",
+    "line": "created: 1776259272856,"
+  },
+  {
+    "time": "2026-04-15T13:21:14.106Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 df ca f4 5b 4c c6 90 ec 71 78 9f dc 71 71 14 d1 e9 f4 02 c0 53 bf f3 f2 4e d4 38 14 86 9e 43 5e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:14.150Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:14.193Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:21:14.239Z",
+    "type": "stdout",
+    "line": "signedKeyId: 13888199,"
+  },
+  {
+    "time": "2026-04-15T13:21:14.282Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 bf 33 20 f8 30 d7 f3 21 0a 9f 91 d3 9e 0b 36 b1 e4 78 00 9a 33 ee cc 6b ad 93 6e ce 14 32 eb 29\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:14.325Z",
+    "type": "stdout",
+    "line": "preKeyId: 2253115"
+  },
+  {
+    "time": "2026-04-15T13:21:14.362Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:14.362Z",
+    "type": "stderr",
+    "line": "Failed to decrypt message with any known session..."
+  },
+  {
+    "time": "2026-04-15T13:21:14.369Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:14.405Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.412Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:14.448Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.491Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.534Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.577Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.620Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.663Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:14.706Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.749Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.792Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.835Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.879Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.923Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:14.935Z",
+    "type": "stderr",
+    "line": "Closing open session in favor of incoming prekey bundle"
+  },
+  {
+    "time": "2026-04-15T13:21:14.935Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:14.966Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:14.978Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:15.009Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.022Z",
+    "type": "stdout",
+    "line": "'BXotx3YoK+OT1LybCRmQROoR7kVOeGo2dl4Mq++aHlc3': { chainKey: [Object], chainType: 2, messageKeys: [Object] },"
+  },
+  {
+    "time": "2026-04-15T13:21:15.052Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.065Z",
+    "type": "stdout",
+    "line": "BameRuNvG0RzOs0E8jCsWNnMnGUEcMQVtfpP7DYLJsJO: { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:15.095Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.108Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:15.138Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.152Z",
+    "type": "stdout",
+    "line": "registrationId: 196,"
+  },
+  {
+    "time": "2026-04-15T13:21:15.184Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.195Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:15.227Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.239Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:15.270Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:15.283Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 a9 9e 46 e3 6f 1b 44 73 3a cd 04 f2 30 ac 58 d9 cc 9c 65 04 70 c4 15 b5 fa 4f ec 36 0b 26 c2 4e\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:15.313Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.326Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 78 b8 5f cd 9d c4 a9 50 c9 d1 74 06 0b a1 10 b2 8e 14 e2 c7 f9 22 9f b3 a7 00 3d 62 a0 e4 e5 42\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:15.356Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.369Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:15.400Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.413Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 7a 2d c7 76 28 2b e3 93 d4 bc 9b 09 19 90 44 ea 11 ee 45 4e 78 6a 36 76 5e 0c ab ef 9a 1e 57 37\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:15.443Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.456Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:15.486Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.499Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 82 43 00 09 32 80 55 68 d2 47 06 c9 07 05 9d 21 2d 99 31 15 aa 85 b5 6d 90 8d d0 69 78 7b fc 0d\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:15.529Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.543Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:15.572Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:15.586Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:15.615Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.629Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 28 fb 8f 87 26 bf 2c ba 96 c5 6c 6f 87 c8 4d d3 1a 84 7b ca 8a 9b 6f 5a 62 de d1 d2 93 00 cc 48\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:15.658Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.672Z",
+    "type": "stdout",
+    "line": "baseKeyType: 2,"
+  },
+  {
+    "time": "2026-04-15T13:21:15.701Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.716Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:15.744Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.759Z",
+    "type": "stdout",
+    "line": "used: 1776259270029,"
+  },
+  {
+    "time": "2026-04-15T13:21:15.787Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.804Z",
+    "type": "stdout",
+    "line": "created: 1776259270029,"
+  },
+  {
+    "time": "2026-04-15T13:21:15.830Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.847Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 24 f9 d9 64 33 39 ad c6 b7 e2 a0 ce 1e 78 28 eb de c5 8d 14 b4 ea ef 26 59 4d 27 6f 18 73 7f 13\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:15.873Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:15.892Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:15.916Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:15.936Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:15.959Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:16.002Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:16.046Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:16.089Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:16.132Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:16.175Z",
+    "type": "stderr",
+    "line": "Session error:Error: Bad MAC Error: Bad MAC"
+  },
+  {
+    "time": "2026-04-15T13:21:16.218Z",
+    "type": "stderr",
+    "line": "at Object.verifyMAC (/tmp/berahost_dep_13/node_modules/libsignal/src/crypto.js:87:15)"
+  },
+  {
+    "time": "2026-04-15T13:21:16.261Z",
+    "type": "stderr",
+    "line": "at SessionCipher.doDecryptWhisperMessage (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:250:16)"
+  },
+  {
+    "time": "2026-04-15T13:21:16.304Z",
+    "type": "stderr",
+    "line": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  {
+    "time": "2026-04-15T13:21:16.348Z",
+    "type": "stderr",
+    "line": "at async SessionCipher.decryptWithSessions (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:147:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:16.391Z",
+    "type": "stderr",
+    "line": "at async 43113670250666_1.0 [as awaitable] (/tmp/berahost_dep_13/node_modules/libsignal/src/session_cipher.js:171:28)"
+  },
+  {
+    "time": "2026-04-15T13:21:16.435Z",
+    "type": "stderr",
+    "line": "at async _asyncQueueExecutor (/tmp/berahost_dep_13/node_modules/libsignal/src/queue_job.js:20:29)"
+  },
+  {
+    "time": "2026-04-15T13:21:17.256Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:17.299Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:17.342Z",
+    "type": "stdout",
+    "line": "BctBrLbJf6CiUObEwUVw39v17JJVud2AGjjPb772UK9j: { chainKey: [Object], chainType: 2, messageKeys: {} },"
+  },
+  {
+    "time": "2026-04-15T13:21:17.386Z",
+    "type": "stdout",
+    "line": "'BSqhVtEm2ArXIifQgbEuawl9/IeDF/ppQflERoyG+3Rz': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:17.429Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:17.473Z",
+    "type": "stdout",
+    "line": "registrationId: 1870990541,"
+  },
+  {
+    "time": "2026-04-15T13:21:17.517Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:17.560Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:17.604Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 2a a1 56 d1 26 d8 0a d7 22 27 d0 81 b1 2e 6b 09 7d fc 87 83 17 fa 69 41 f9 44 46 8c 86 fb 74 73\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:17.647Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer d0 ef 5c e9 a3 90 cd 05 51 8e 35 59 fe e6 20 3c f4 69 ee b0 00 5b 53 ff ff 77 77 2f ae 71 bd 7a\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:17.690Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:17.734Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 cb 41 ac b6 c9 7f a0 a2 50 e6 c4 c1 45 70 df db f5 ec 92 55 b9 dd 80 1a 38 cf 6f be f6 50 af 63\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:17.777Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:17.820Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 69 3f 86 63 7f 44 1c 97 46 74 84 c1 15 bc b6 32 ff 6d 8c 79 31 15 a1 df ce 2d ca 80 7a e8 e5 81\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:17.864Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:17.908Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:17.951Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 88 33 70 a2 9a 50 ad e1 0c 9d cc a4 27 2b f9 77 a7 44 d7 4a b6 88 bd dc e7 99 34 23 65 ab fb 2b\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:17.995Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:21:18.038Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:18.081Z",
+    "type": "stdout",
+    "line": "used: 1776259273225,"
+  },
+  {
+    "time": "2026-04-15T13:21:18.125Z",
+    "type": "stdout",
+    "line": "created: 1776259273225,"
+  },
+  {
+    "time": "2026-04-15T13:21:18.169Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 df ca f4 5b 4c c6 90 ec 71 78 9f dc 71 71 14 d1 e9 f4 02 c0 53 bf f3 f2 4e d4 38 14 86 9e 43 5e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:18.212Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:18.256Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:21:18.299Z",
+    "type": "stdout",
+    "line": "signedKeyId: 13888199,"
+  },
+  {
+    "time": "2026-04-15T13:21:18.342Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 88 33 70 a2 9a 50 ad e1 0c 9d cc a4 27 2b f9 77 a7 44 d7 4a b6 88 bd dc e7 99 34 23 65 ab fb 2b\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:18.386Z",
+    "type": "stdout",
+    "line": "preKeyId: 2253533"
+  },
+  {
+    "time": "2026-04-15T13:21:18.429Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:18.473Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:28.549Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:28.593Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:28.636Z",
+    "type": "stdout",
+    "line": "BVQCPfgDiouh8IY5sdb9hrA5OKYpGLL2DEsCLldIWIET: { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:28.679Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:28.722Z",
+    "type": "stdout",
+    "line": "registrationId: 113,"
+  },
+  {
+    "time": "2026-04-15T13:21:28.765Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:28.808Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:28.852Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 54 02 3d f8 03 8a 8b a1 f0 86 39 b1 d6 fd 86 b0 39 38 a6 29 18 b2 f6 0c 4b 02 2e 57 48 58 81 13\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:28.896Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer f0 24 26 41 a2 77 8f 54 95 f1 e2 99 7d b5 56 a8 2a 62 1b 26 33 17 f2 78 0b 81 a7 6e 95 d0 3e 62\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:28.939Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:28.982Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 78 1d 74 ac 08 1c 85 5c 7e 9a 55 41 6b 2a 86 35 97 86 c0 ca 00 d2 63 de 54 98 50 67 42 63 14 46\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:29.025Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:29.068Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer 26 ea 89 57 e4 57 4c d4 56 95 bb 66 53 64 57 17 2c be cf 71 61 5f a7 9c 6b 4f 99 77 b7 b1 4b e7\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:29.113Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:29.157Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:29.200Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 aa a7 21 54 d4 d2 d8 3a 07 2f 5b 9d c4 33 22 e3 1d 60 84 89 fa df e7 f6 f0 87 62 ed ef 01 37 5b\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:29.243Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:21:29.287Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:29.329Z",
+    "type": "stdout",
+    "line": "used: 1776259269290,"
+  },
+  {
+    "time": "2026-04-15T13:21:29.373Z",
+    "type": "stdout",
+    "line": "created: 1776259269290,"
+  },
+  {
+    "time": "2026-04-15T13:21:29.416Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 41 72 c2 e8 95 bd 62 ad ce ee c0 70 22 fd 61 be bf f1 27 b9 40 70 09 3d 3a a3 49 7c d5 76 3a 2e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:29.459Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:29.502Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:21:29.545Z",
+    "type": "stdout",
+    "line": "signedKeyId: 1,"
+  },
+  {
+    "time": "2026-04-15T13:21:29.590Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 aa a7 21 54 d4 d2 d8 3a 07 2f 5b 9d c4 33 22 e3 1d 60 84 89 fa df e7 f6 f0 87 62 ed ef 01 37 5b\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:29.633Z",
+    "type": "stdout",
+    "line": "preKeyId: 1065"
+  },
+  {
+    "time": "2026-04-15T13:21:29.676Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:29.719Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:53.709Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:53.752Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:53.795Z",
+    "type": "stdout",
+    "line": "'BR8bG62zPl75lw9+OAn2ML4KVd/T6DLSjyIrvAqAu+8R': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:53.839Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:53.882Z",
+    "type": "stdout",
+    "line": "registrationId: 113,"
+  },
+  {
+    "time": "2026-04-15T13:21:53.925Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:53.968Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:54.012Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 1f 1b 1b ad b3 3e 5e f9 97 0f 7e 38 09 f6 30 be 0a 55 df d3 e8 32 d2 8f 22 2b bc 0a 80 bb ef 11\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:54.056Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer d0 09 25 1d 14 5f 99 07 50 59 57 9b 69 0e c4 f6 80 a8 89 ef f2 1e dc 69 d9 0f 7c 5b fa ac 9d 46\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:54.099Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:54.143Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 78 1d 74 ac 08 1c 85 5c 7e 9a 55 41 6b 2a 86 35 97 86 c0 ca 00 d2 63 de 54 98 50 67 42 63 14 46\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:54.187Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:54.231Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer ce 8e de b6 79 75 a7 81 75 3a 0e 93 d3 a2 88 fd ed 02 71 c5 71 06 5e 3f 00 1b 54 ae 6b 18 92 e4\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:54.275Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:54.318Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:54.362Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 34 4e f0 5e ac ad 27 e8 42 15 a1 e7 e6 d1 6d 55 68 e2 2b cb c6 82 1f 40 a4 b3 31 91 27 78 80 13\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:54.406Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:21:54.450Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:54.494Z",
+    "type": "stdout",
+    "line": "used: 1776259288532,"
+  },
+  {
+    "time": "2026-04-15T13:21:54.537Z",
+    "type": "stdout",
+    "line": "created: 1776259288532,"
+  },
+  {
+    "time": "2026-04-15T13:21:54.581Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 41 72 c2 e8 95 bd 62 ad ce ee c0 70 22 fd 61 be bf f1 27 b9 40 70 09 3d 3a a3 49 7c d5 76 3a 2e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:54.625Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:54.668Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:21:54.711Z",
+    "type": "stdout",
+    "line": "signedKeyId: 1,"
+  },
+  {
+    "time": "2026-04-15T13:21:54.755Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 34 4e f0 5e ac ad 27 e8 42 15 a1 e7 e6 d1 6d 55 68 e2 2b cb c6 82 1f 40 a4 b3 31 91 27 78 80 13\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:54.799Z",
+    "type": "stdout",
+    "line": "preKeyId: 847"
+  },
+  {
+    "time": "2026-04-15T13:21:54.843Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:54.886Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:58.557Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:21:58.602Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:21:58.645Z",
+    "type": "stdout",
+    "line": "BVyoNmRdh42guiSytNbP4sPFwiZYOEI7pqljhCcqdJ4i: { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:21:58.690Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:58.734Z",
+    "type": "stdout",
+    "line": "registrationId: 113,"
+  },
+  {
+    "time": "2026-04-15T13:21:58.777Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:21:58.821Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:21:58.865Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 5c a8 36 64 5d 87 8d a0 ba 24 b2 b4 d6 cf e2 c3 c5 c2 26 58 38 42 3b a6 a9 63 84 27 2a 74 9e 22\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:58.908Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 38 53 a8 72 16 03 80 72 7a ec d3 30 aa 38 90 97 d0 7d b1 66 41 38 3b e2 18 fe 9d 03 cd e0 1c 4e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:58.951Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:58.995Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 78 1d 74 ac 08 1c 85 5c 7e 9a 55 41 6b 2a 86 35 97 86 c0 ca 00 d2 63 de 54 98 50 67 42 63 14 46\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:59.038Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:21:59.082Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer b3 43 fc 13 38 a0 3c b3 15 6f e4 1f 59 66 f4 88 e5 2a e0 34 aa 41 5e 78 14 3b 96 f9 6e 37 d3 0e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:59.126Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:59.169Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:21:59.213Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 18 9f c9 90 e2 11 7d e1 ae f7 b1 b7 46 2b f1 b7 0a 72 3f 28 3c dc 95 f0 0a 74 bf b7 37 f3 45 10\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:59.256Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:21:59.300Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:21:59.343Z",
+    "type": "stdout",
+    "line": "used: 1776259313691,"
+  },
+  {
+    "time": "2026-04-15T13:21:59.386Z",
+    "type": "stdout",
+    "line": "created: 1776259313691,"
+  },
+  {
+    "time": "2026-04-15T13:21:59.430Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 41 72 c2 e8 95 bd 62 ad ce ee c0 70 22 fd 61 be bf f1 27 b9 40 70 09 3d 3a a3 49 7c d5 76 3a 2e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:21:59.474Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:21:59.517Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:21:59.560Z",
+    "type": "stdout",
+    "line": "signedKeyId: 1,"
+  },
+  {
+    "time": "2026-04-15T13:21:59.604Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 18 9f c9 90 e2 11 7d e1 ae f7 b1 b7 46 2b f1 b7 0a 72 3f 28 3c dc 95 f0 0a 74 bf b7 37 f3 45 10\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:21:59.648Z",
+    "type": "stdout",
+    "line": "preKeyId: 1082"
+  },
+  {
+    "time": "2026-04-15T13:21:59.691Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:21:59.735Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:24:03.677Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:24:04.077Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:24:05.477Z",
+    "type": "stdout",
+    "line": "'Ba09s5edkky0WLO+ZY/qEQkVgF/jQcFxule/eXaip3Jp': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:24:06.678Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:24:06.978Z",
+    "type": "stdout",
+    "line": "registrationId: 113,"
+  },
+  {
+    "time": "2026-04-15T13:24:08.778Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:24:10.479Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:24:12.978Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 ad 3d b3 97 9d 92 4c b4 58 b3 be 65 8f ea 11 09 15 80 5f e3 41 c1 71 ba 57 bf 79 76 a2 a7 72 69\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:24:13.378Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer e8 72 17 d4 9c 8b 99 1d 92 ea 8c 3e 31 9b eb d8 cb 2a 1a 87 b4 c4 b1 e0 ec 9f 04 79 3d b9 f1 7c\u003E"
+  },
+  {
+    "time": "2026-04-15T13:24:14.677Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:24:15.077Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 78 1d 74 ac 08 1c 85 5c 7e 9a 55 41 6b 2a 86 35 97 86 c0 ca 00 d2 63 de 54 98 50 67 42 63 14 46\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:24:15.478Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:24:15.779Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer b9 89 2a 32 d5 6f c9 d4 4d 95 37 fb 67 93 15 96 dc 12 10 54 92 3f a5 d9 ef 76 92 8b 22 9f 45 b7\u003E"
+  },
+  {
+    "time": "2026-04-15T13:24:16.977Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:24:17.577Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:24:18.278Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 09 fa 91 cf 15 32 ce a5 0f 56 df 26 ac 7c 03 31 44 cd d7 22 0d 31 07 44 2b d6 13 a9 8c eb 10 7f\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:24:19.578Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:24:20.777Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:24:20.978Z",
+    "type": "stdout",
+    "line": "used: 1776259318541,"
+  },
+  {
+    "time": "2026-04-15T13:24:21.379Z",
+    "type": "stdout",
+    "line": "created: 1776259318541,"
+  },
+  {
+    "time": "2026-04-15T13:24:21.431Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 41 72 c2 e8 95 bd 62 ad ce ee c0 70 22 fd 61 be bf f1 27 b9 40 70 09 3d 3a a3 49 7c d5 76 3a 2e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:24:21.476Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:24:21.521Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:24:21.565Z",
+    "type": "stdout",
+    "line": "signedKeyId: 1,"
+  },
+  {
+    "time": "2026-04-15T13:24:21.610Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 09 fa 91 cf 15 32 ce a5 0f 56 df 26 ac 7c 03 31 44 cd d7 22 0d 31 07 44 2b d6 13 a9 8c eb 10 7f\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:24:21.655Z",
+    "type": "stdout",
+    "line": "preKeyId: 1461"
+  },
+  {
+    "time": "2026-04-15T13:24:21.699Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:24:21.743Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:25:59.578Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:25:59.976Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:26:00.376Z",
+    "type": "stdout",
+    "line": "'BSEEqH+1Kna0al/0bmyD64KBWlNzmCgXuLVfkcwlhiEE': { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:26:00.576Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:26:01.276Z",
+    "type": "stdout",
+    "line": "registrationId: 113,"
+  },
+  {
+    "time": "2026-04-15T13:26:02.376Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:26:02.877Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:26:02.976Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 21 04 a8 7f b5 2a 76 b4 6a 5f f4 6e 6c 83 eb 82 81 5a 53 73 98 28 17 b8 b5 5f 91 cc 25 86 21 04\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:26:03.276Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 60 99 bc 69 9b 12 e0 c4 09 23 77 f7 fd 6c e3 6f 0a d2 87 4f 19 99 10 d0 47 ef 76 6e 97 b2 e7 6a\u003E"
+  },
+  {
+    "time": "2026-04-15T13:26:04.676Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:26:06.076Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 78 1d 74 ac 08 1c 85 5c 7e 9a 55 41 6b 2a 86 35 97 86 c0 ca 00 d2 63 de 54 98 50 67 42 63 14 46\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:26:06.776Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:26:09.177Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer e4 23 e4 c4 65 ef 19 88 cf 5d f9 48 30 fb 06 40 8d 91 f7 4c e8 1b 3c c1 4a b6 8d 4f 70 ae 4e 4b\u003E"
+  },
+  {
+    "time": "2026-04-15T13:26:09.477Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:26:10.778Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:26:11.277Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 97 0a 40 b8 78 74 f1 25 ab 43 2c ba 5d c7 02 67 c2 2b 4c be c4 26 30 47 af 89 fe 50 0d 3f b7 21\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:26:11.676Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:26:11.777Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:26:11.976Z",
+    "type": "stdout",
+    "line": "used: 1776259442561,"
+  },
+  {
+    "time": "2026-04-15T13:26:12.077Z",
+    "type": "stdout",
+    "line": "created: 1776259442561,"
+  },
+  {
+    "time": "2026-04-15T13:26:12.376Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 41 72 c2 e8 95 bd 62 ad ce ee c0 70 22 fd 61 be bf f1 27 b9 40 70 09 3d 3a a3 49 7c d5 76 3a 2e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:26:13.476Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:26:14.177Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:26:14.276Z",
+    "type": "stdout",
+    "line": "signedKeyId: 1,"
+  },
+  {
+    "time": "2026-04-15T13:26:14.277Z",
+    "type": "stdout",
+    "line": "Closing session: SessionEntry {"
+  },
+  {
+    "time": "2026-04-15T13:26:14.476Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 97 0a 40 b8 78 74 f1 25 ab 43 2c ba 5d c7 02 67 c2 2b 4c be c4 26 30 47 af 89 fe 50 0d 3f b7 21\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:26:14.477Z",
+    "type": "stdout",
+    "line": "_chains: {"
+  },
+  {
+    "time": "2026-04-15T13:26:14.576Z",
+    "type": "stdout",
+    "line": "preKeyId: 1440"
+  },
+  {
+    "time": "2026-04-15T13:26:14.577Z",
+    "type": "stdout",
+    "line": "BZGYLzuBxz3SpFyoVrdpDSPg85CuO6R0MFOMxjeqgqhT: { chainKey: [Object], chainType: 1, messageKeys: {} }"
+  },
+  {
+    "time": "2026-04-15T13:26:14.776Z",
+    "type": "warn",
+    "line": "[BERAHOST] ⚠ Connection Replaced (error 440): another device logged in with this session. Bot will NOT auto-restart. Generate a fresh Session ID to fix this."
+  },
+  {
+    "time": "2026-04-15T13:26:14.777Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:26:14.876Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:26:14.877Z",
+    "type": "stdout",
+    "line": "registrationId: 113,"
+  },
+  {
+    "time": "2026-04-15T13:26:15.076Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:26:15.077Z",
+    "type": "stdout",
+    "line": "currentRatchet: {"
+  },
+  {
+    "time": "2026-04-15T13:26:15.277Z",
+    "type": "stdout",
+    "line": "ephemeralKeyPair: {"
+  },
+  {
+    "time": "2026-04-15T13:26:15.377Z",
+    "type": "stdout",
+    "line": "pubKey: \u003CBuffer 05 91 98 2f 3b 81 c7 3d d2 a4 5c a8 56 b7 69 0d 23 e0 f3 90 ae 3b a4 74 30 53 8c c6 37 aa 82 a8 53\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:26:15.477Z",
+    "type": "stdout",
+    "line": "privKey: \u003CBuffer 70 49 96 7d 46 b3 cb 98 97 9c 5b 5a 26 52 54 c9 61 8d 47 22 a3 1b e2 33 79 51 92 95 bf d9 ba 45\u003E"
+  },
+  {
+    "time": "2026-04-15T13:26:15.527Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:26:15.677Z",
+    "type": "stdout",
+    "line": "lastRemoteEphemeralKey: \u003CBuffer 05 78 1d 74 ac 08 1c 85 5c 7e 9a 55 41 6b 2a 86 35 97 86 c0 ca 00 d2 63 de 54 98 50 67 42 63 14 46\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:26:15.878Z",
+    "type": "stdout",
+    "line": "previousCounter: 0,"
+  },
+  {
+    "time": "2026-04-15T13:26:16.177Z",
+    "type": "stdout",
+    "line": "rootKey: \u003CBuffer e3 40 8b e4 34 95 3e 28 e7 13 34 3a 97 b6 c6 99 76 3d 9f 55 5e 7c 2c a9 f7 d7 de 82 4c a1 aa 27\u003E"
+  },
+  {
+    "time": "2026-04-15T13:26:16.377Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:26:16.477Z",
+    "type": "stdout",
+    "line": "indexInfo: {"
+  },
+  {
+    "time": "2026-04-15T13:26:16.578Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 31 f9 9f 74 c5 0e 6d a9 91 55 e4 97 02 e6 28 53 e3 16 2a 15 20 94 0f f0 01 8e 40 d4 7f 2c c4 75\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:26:16.777Z",
+    "type": "stdout",
+    "line": "baseKeyType: 1,"
+  },
+  {
+    "time": "2026-04-15T13:26:16.977Z",
+    "type": "stdout",
+    "line": "closed: -1,"
+  },
+  {
+    "time": "2026-04-15T13:26:17.077Z",
+    "type": "stdout",
+    "line": "used: 1776259559562,"
+  },
+  {
+    "time": "2026-04-15T13:26:17.377Z",
+    "type": "stdout",
+    "line": "created: 1776259559562,"
+  },
+  {
+    "time": "2026-04-15T13:26:17.577Z",
+    "type": "stdout",
+    "line": "remoteIdentityKey: \u003CBuffer 05 41 72 c2 e8 95 bd 62 ad ce ee c0 70 22 fd 61 be bf f1 27 b9 40 70 09 3d 3a a3 49 7c d5 76 3a 2e\u003E"
+  },
+  {
+    "time": "2026-04-15T13:26:17.677Z",
+    "type": "stdout",
+    "line": "},"
+  },
+  {
+    "time": "2026-04-15T13:26:17.777Z",
+    "type": "stdout",
+    "line": "pendingPreKey: {"
+  },
+  {
+    "time": "2026-04-15T13:26:18.077Z",
+    "type": "stdout",
+    "line": "signedKeyId: 1,"
+  },
+  {
+    "time": "2026-04-15T13:26:18.178Z",
+    "type": "stdout",
+    "line": "baseKey: \u003CBuffer 05 31 f9 9f 74 c5 0e 6d a9 91 55 e4 97 02 e6 28 53 e3 16 2a 15 20 94 0f f0 01 8e 40 d4 7f 2c c4 75\u003E,"
+  },
+  {
+    "time": "2026-04-15T13:26:18.479Z",
+    "type": "stdout",
+    "line": "preKeyId: 938"
+  },
+  {
+    "time": "2026-04-15T13:26:18.531Z",
+    "type": "stdout",
+    "line": "}"
+  },
+  {
+    "time": "2026-04-15T13:26:18.576Z",
+    "type": "stdout",
+    "line": "}"
+  }
+]

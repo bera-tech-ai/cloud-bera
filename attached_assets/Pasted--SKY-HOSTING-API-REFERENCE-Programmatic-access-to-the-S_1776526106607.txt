@@ -1,0 +1,410 @@
+
+SKY_HOSTING
+API REFERENCE
+Programmatic access to the Sky Hosting deployment engine.
+
+Overview
+Base URL
+
+https://sky-hosting.replit.app/api
+
+All API requests must be made over HTTPS. Every endpoint returns JSON. Successful responses use standard HTTP status codes (200, 201, 204). Errors return a JSON body with an error field explaining what went wrong.
+
+Format
+
+JSON
+
+Protocol
+
+HTTPS only
+
+Real-time
+
+Socket.io
+
+Authentication
+All protected endpoints require a Bearer token in the Authorization header.
+
+Authorization: Bearer <your-api-key>
+
+read
+List projects, check deployment status, read logs
+
+write
+Create projects, trigger & delete deployments
+
+admin
+System stats, generate new keys of any scope
+
+The master key YOUR_ADMIN_KEY has full admin access and can be found in the Admin panel.
+
+API Keys
+Generate a key using the master key. Save the returned key — it is shown only once.
+
+curl -X POST https://sky-hosting.replit.app/api/v1/keys/generate \
+  -H "Authorization: Bearer YOUR_ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "my-ci-bot", "scope": "write" }'
+
+{
+  "key": "<your-api-key>",
+  "name": "my-ci-bot",
+  "scope": "write",
+  "createdAt": "2025-01-01T00:00:00.000Z"
+}
+
+Real-time Logs
+Instead of polling for logs, connect via Socket.io to receive live build output as it happens.
+
+npm install socket.io-client
+
+import { io } from "socket.io-client";
+
+const socket = io("https://sky-hosting.replit.app", {
+  path: "/api/socket.io",
+});
+
+// Subscribe to a deployment's log stream
+socket.emit("join-deployment", "dep_xyz789");
+
+// Receive log lines in real time
+socket.on("log", (entry) => {
+  console.log(`[${entry.level}] ${entry.message}`);
+});
+
+// Fired when the deployment finishes
+socket.on("deployment-complete", (data) => {
+  console.log("Status:", data.status);
+  console.log("Live URL:", data.liveUrl);
+});
+
+Full Integration Flow
+A complete example — create a project, deploy a repo, wait for it to go live, and retrieve the URL.
+
+#!/bin/bash
+API="https://sky-hosting.replit.app/api"
+KEY="<your-api-key>"
+
+# 1. Create a project (one-time setup)
+PROJECT=$(curl -s -X POST $API/v1/projects \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"My App","repoUrl":"https://github.com/you/repo"}')
+PROJECT_ID=$(echo $PROJECT | jq -r '.id')
+echo "Project: $PROJECT_ID"
+
+# 2. Trigger a deployment
+DEPLOY=$(curl -s -X POST $API/v1/deploy \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"projectId\":\"$PROJECT_ID\",\"branch\":\"main\"}")
+DEP_ID=$(echo $DEPLOY | jq -r '.id')
+echo "Deployment started: $DEP_ID"
+
+# 3. Poll until live or failed
+while true; do
+  STATUS=$(curl -s $API/v1/deployments/$DEP_ID \
+    -H "Authorization: Bearer $KEY")
+  STATE=$(echo $STATUS | jq -r '.status')
+  echo "Status: $STATE"
+
+  if [ "$STATE" = "live" ]; then
+    LIVE_URL=$(echo $STATUS | jq -r '.liveUrl')
+    echo "Live at: $LIVE_URL"
+    break
+  elif [ "$STATE" = "failed" ]; then
+    echo "Deployment failed"
+    break
+  fi
+  sleep 5
+done
+
+Endpoints
+GET
+https://sky-hosting.replit.app/api/healthz
+No Auth
+Check if the API is online. No authentication required.
+Example Request
+
+curl https://sky-hosting.replit.app/api/healthz
+
+Response
+
+{ "status": "ok" }
+
+POST
+https://sky-hosting.replit.app/api/v1/keys/generate
+admin key
+Generate a new API key. Use the master key or an admin-scoped key to create new keys with read, write, or admin scope.
+Example Request
+
+curl -X POST https://sky-hosting.replit.app/api/v1/keys/generate \
+  -H "Authorization: Bearer YOUR_ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-ci-bot",
+    "scope": "write"
+  }'
+
+Response
+
+{
+  "key": "<your-api-key>",
+  "name": "my-ci-bot",
+  "scope": "write",
+  "createdAt": "2025-01-01T00:00:00.000Z"
+}
+
+GET
+https://sky-hosting.replit.app/api/v1/projects
+read key
+List all projects in the system.
+Example Request
+
+curl https://sky-hosting.replit.app/api/v1/projects \
+  -H "Authorization: Bearer <your-api-key>"
+
+Response
+
+[
+  {
+    "id": "proj_abc123",
+    "name": "My App",
+    "status": "live",
+    "runtime": "nodejs",
+    "liveUrl": "https://sky-hosting.replit.app/preview/abc123/",
+    "repoUrl": "https://github.com/you/your-repo",
+    "deploymentCount": 3,
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-01T00:00:00.000Z"
+  }
+]
+
+POST
+https://sky-hosting.replit.app/api/v1/projects
+write key
+Create a new project. You only need to do this once per app — reuse the project ID for all future deployments.
+Example Request
+
+curl -X POST https://sky-hosting.replit.app/api/v1/projects \
+  -H "Authorization: Bearer <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My App",
+    "description": "Production API service",
+    "repoUrl": "https://github.com/you/your-repo"
+  }'
+
+Response
+
+{
+  "id": "proj_abc123",
+  "name": "My App",
+  "status": "idle",
+  "runtime": "unknown",
+  "liveUrl": null,
+  "deploymentCount": 0,
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-01T00:00:00.000Z"
+}
+
+GET
+https://sky-hosting.replit.app/api/v1/projects/:id
+read key
+Get a single project. The liveUrl field always reflects the current live deployment.
+Example Request
+
+curl https://sky-hosting.replit.app/api/v1/projects/proj_abc123 \
+  -H "Authorization: Bearer <your-api-key>"
+
+Response
+
+{
+  "id": "proj_abc123",
+  "name": "My App",
+  "status": "live",
+  "runtime": "nodejs",
+  "liveUrl": "https://sky-hosting.replit.app/preview/abc123/",
+  "repoUrl": "https://github.com/you/your-repo",
+  "deploymentCount": 3,
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-02T00:00:00.000Z"
+}
+
+DELETE
+https://sky-hosting.replit.app/api/v1/projects/:id
+write key
+Delete a project and all its associated deployments.
+Example Request
+
+curl -X DELETE https://sky-hosting.replit.app/api/v1/projects/proj_abc123 \
+  -H "Authorization: Bearer <your-api-key>"
+
+Response
+
+HTTP 204 No Content
+
+POST
+https://sky-hosting.replit.app/api/v1/deploy
+write key
+Trigger a new deployment for a project. The engine clones the repo, detects the runtime, installs dependencies, and starts the process. Poll the returned deployment ID for status updates.
+Example Request
+
+curl -X POST https://sky-hosting.replit.app/api/v1/deploy \
+  -H "Authorization: Bearer <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "projectId": "proj_abc123",
+    "repoUrl": "https://github.com/you/your-repo",
+    "branch": "main",
+    "envVars": {
+      "PORT": "3000",
+      "NODE_ENV": "production"
+    }
+  }'
+
+Response
+
+{
+  "id": "dep_xyz789",
+  "projectId": "proj_abc123",
+  "projectName": "My App",
+  "status": "queued",
+  "runtime": "unknown",
+  "branch": "main",
+  "liveUrl": null,
+  "repoUrl": "https://github.com/you/your-repo",
+  "createdAt": "2025-01-01T00:00:00.000Z"
+}
+
+GET
+https://sky-hosting.replit.app/api/v1/deployments
+read key
+List all deployments. Filter by project using the projectId query param.
+Example Request
+
+# All deployments
+curl https://sky-hosting.replit.app/api/v1/deployments \
+  -H "Authorization: Bearer <your-api-key>"
+
+# Filter by project
+curl "https://sky-hosting.replit.app/api/v1/deployments?projectId=proj_abc123" \
+  -H "Authorization: Bearer <your-api-key>"
+
+Response
+
+[
+  {
+    "id": "dep_xyz789",
+    "projectId": "proj_abc123",
+    "status": "live",
+    "runtime": "nodejs",
+    "liveUrl": "https://sky-hosting.replit.app/preview/dep_xyz789/",
+    "branch": "main",
+    "createdAt": "2025-01-01T00:00:00.000Z"
+  }
+]
+
+GET
+https://sky-hosting.replit.app/api/v1/deployments/:id
+read key
+Get deployment details. Poll this endpoint until status becomes live or failed. Once live, the liveUrl is ready to use.
+Example Request
+
+curl https://sky-hosting.replit.app/api/v1/deployments/dep_xyz789 \
+  -H "Authorization: Bearer <your-api-key>"
+
+Response
+
+{
+  "id": "dep_xyz789",
+  "projectId": "proj_abc123",
+  "projectName": "My App",
+  "status": "live",
+  "runtime": "nodejs",
+  "branch": "main",
+  "commitHash": "a1b2c3d",
+  "liveUrl": "https://sky-hosting.replit.app/preview/dep_xyz789/",
+  "repoUrl": "https://github.com/you/your-repo",
+  "startedAt": "2025-01-01T00:00:00.000Z",
+  "completedAt": "2025-01-01T00:01:23.000Z",
+  "createdAt": "2025-01-01T00:00:00.000Z"
+}
+
+DELETE
+https://sky-hosting.replit.app/api/v1/deployments/:id
+write key
+Take down a live deployment. The process is killed and the URL stops responding.
+Example Request
+
+curl -X DELETE https://sky-hosting.replit.app/api/v1/deployments/dep_xyz789 \
+  -H "Authorization: Bearer <your-api-key>"
+
+Response
+
+HTTP 204 No Content
+
+GET
+https://sky-hosting.replit.app/api/v1/logs/:deploymentId
+read key
+Retrieve the full build and runtime log history for a deployment. For real-time streaming logs, use Socket.io instead.
+Example Request
+
+curl https://sky-hosting.replit.app/api/v1/logs/dep_xyz789 \
+  -H "Authorization: Bearer <your-api-key>"
+
+Response
+
+{
+  "deploymentId": "dep_xyz789",
+  "logs": [
+    { "timestamp": "2025-01-01T00:00:01.000Z", "level": "info",    "message": "Cloning repository..." },
+    { "timestamp": "2025-01-01T00:00:05.000Z", "level": "info",    "message": "Detected runtime: nodejs" },
+    { "timestamp": "2025-01-01T00:00:06.000Z", "level": "info",    "message": "Running npm install..." },
+    { "timestamp": "2025-01-01T00:01:10.000Z", "level": "success", "message": "Deployment is live" }
+  ]
+}
+
+GET
+https://sky-hosting.replit.app/api/v1/activity
+read key
+Get a feed of recent deployment events across all projects.
+Example Request
+
+curl https://sky-hosting.replit.app/api/v1/activity \
+  -H "Authorization: Bearer <your-api-key>"
+
+Response
+
+[
+  {
+    "id": "act_001",
+    "type": "deployed",
+    "projectName": "My App",
+    "deploymentId": "dep_xyz789",
+    "message": "My App deployed successfully",
+    "timestamp": "2025-01-01T00:01:23.000Z"
+  }
+]
+
+GET
+https://sky-hosting.replit.app/api/v1/admin/stats
+admin key
+Get system-wide statistics. Requires an admin-scoped key.
+Example Request
+
+curl https://sky-hosting.replit.app/api/v1/admin/stats \
+  -H "Authorization: Bearer YOUR_ADMIN_KEY"
+
+Response
+
+{
+  "totalProjects": 12,
+  "totalDeployments": 47,
+  "activeDeployments": 9,
+  "failedDeployments": 3,
+  "activeWebSocketConnections": 5,
+  "serverLoad": 0.4,
+  "uptime": 86400
+}
+
