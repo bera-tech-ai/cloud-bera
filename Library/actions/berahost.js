@@ -8,7 +8,7 @@ const axios = require('axios')
 // API base — try multiple known URLs for BeraHost, configurable via env or DB
 const BH_FALLBACK_URLS = [
     'https://bera-host-bot--berahost15.replit.app',
-    'https://berahost.com',
+    'https://bera-host-bot--berahost15.replit.app',
 ]
 const getBhBaseUrl = () => {
     const fromDb  = global.db?.data?.settings?.bhApiUrl
