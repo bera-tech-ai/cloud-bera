@@ -1,340 +1,395 @@
 const axios = require('axios')
+const config = require('../Config')
 
-const BH_BASE = 'https://bera-host-bot--berahost15.replit.app/api'
-const PTERO_BASE = process.env.PTERODACTYL_URL || 'https://panel.berahost.com'
-
-const react = (conn, m, emoji) =>
-    conn.sendMessage(m.chat, { react: { text: emoji, key: m.key } }).catch(() => {})
-
-const getBhKey = () => global.db?.data?.settings?.bhApiKey || null
-const getPtKey = () => process.env.PTERODACTYL_API_KEY || global.db?.data?.settings?.ptApiKey || null
-
-const bhApi = async (method, path, data = null) => {
-    const key = getBhKey()
-    if (!key) return { error: 'No BeraHost API key set. Use .setbhkey <key>' }
-    try {
-        const cfg = {
-            method, url: `${BH_BASE}${path}`,
+const handle = async (conn, m, { command, args, text, reply, prefix, isOwner }) => {
+    // ─── helpers ─────────────────────────────────────────────────────────────
+    const db = global.db?.data
+    const getBase = () => {
+        const raw = db?.settings?.bhApiUrl || process.env.BH_API_URL || 'https://bera-host-bot--berahost15.replit.app'
+        return raw.replace(/\/api\/?$/, '').replace(/\/$/, '') + '/api'
+    }
+    const getKey = () => db?.settings?.bhApiKey || process.env.BH_API_KEY || ''
+    const bh = async (method, path, body) => {
+        const key = getKey()
+        if (!key) throw new Error('No BeraHost API key set. Use: ' + prefix + 'bh setkey <key>')
+        const res = await axios({
+            method, url: getBase() + path,
             headers: { 'x-api-key': key, 'Content-Type': 'application/json' },
-            timeout: 20000
-        }
-        if (data) cfg.data = data
-        const r = await axios(cfg)
-        return r.data
-    } catch (e) {
-        return { error: e.response?.data?.message || e.message }
-    }
-}
-
-const ptApi = async (method, path, data = null) => {
-    const key = getPtKey()
-    if (!key) return { error: 'No Pterodactyl API key set.' }
-    try {
-        const cfg = {
-            method,
-            url: `${PTERO_BASE}/api/client${path}`,
-            headers: {
-                'Authorization': `Bearer ${key}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            timeout: 20000
-        }
-        if (data) cfg.data = data
-        const r = await axios(cfg)
-        return r.data
-    } catch (e) {
-        return { error: e.response?.data?.errors?.[0]?.detail || e.message }
-    }
-}
-
-const fmtBytes = (b) => {
-    if (!b && b !== 0) return 'N/A'
-    if (b < 1024) return b + ' B'
-    if (b < 1048576) return (b / 1024).toFixed(1) + ' KB'
-    return (b / 1048576).toFixed(1) + ' MB'
-}
-
-const handle = async (m, { conn, command, args, reply, prefix, text, isOwner, isAdmin }) => {
-
-    // ── .berahost / .bh ─────────────────────────────────────────────────────
-    if (command === 'berahost' || command === 'bh') {
-        const sub = args[0]?.toLowerCase() || 'help'
-
-        // Help / no args
-        if (sub === 'help' || sub === '--help') {
-            return reply(
-`🖥️ *BeraHost Dashboard*
-──────────────────────────
-❍ *.bh bots* — List all deployed bots
-❍ *.bh status <id>* — Bot status
-❍ *.bh start <id>* — Start a bot
-❍ *.bh stop <id>* — Stop a bot
-❍ *.bh restart <id>* — Restart a bot
-❍ *.bh logs <id>* — Last 50 log lines
-❍ *.bh deploy <url>* — Deploy from GitHub
-❍ *.bh env <id> KEY=VAL* — Set env variable
-❍ *.bh domain add <domain>* — Add custom domain
-❍ *.bh promote <from> <to>* — Promote environment
-❍ *.bh delete <id>* — Delete a bot
-
-📌 Set your key: *.setbhkey <api-key>*`)
-        }
-
-        // LIST BOTS
-        if (sub === 'bots' || sub === 'list') {
-            await react(conn, m, '⏳')
-            const r = await bhApi('GET', '/bots')
-            if (r.error) {
-                await react(conn, m, '❌')
-                return reply(`❌ ${r.error}`)
-            }
-            const bots = r.bots || r.data || r
-            if (!Array.isArray(bots) || !bots.length) {
-                await react(conn, m, '✅')
-                return reply('📭 No bots deployed yet.')
-            }
-            await react(conn, m, '✅')
-            const lines = bots.map(b => {
-                const st = b.status === 'running' ? '🟢' : b.status === 'stopped' ? '🔴' : '🟡'
-                return `${st} *${b.name || b.id}* (${b.id})\n   CPU: ${b.cpu || 'N/A'} | RAM: ${fmtBytes(b.memory)} | ${b.status || 'unknown'}`
-            })
-            return reply(`🖥️ *BeraHost Bots* (${bots.length})\n${'─'.repeat(30)}\n\n${lines.join('\n\n')}`)
-        }
-
-        // STATUS
-        if (sub === 'status') {
-            const id = args[1]
-            if (!id) return reply(`Usage: *.bh status <bot-id>*`)
-            await react(conn, m, '⏳')
-            const r = await bhApi('GET', `/bots/${id}`)
-            if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-            await react(conn, m, '✅')
-            const b = r.bot || r
-            const st = b.status === 'running' ? '🟢 Running' : b.status === 'stopped' ? '🔴 Stopped' : `🟡 ${b.status}`
-            return reply(`🖥️ *${b.name || id}*\n${'─'.repeat(28)}\n📌 ID: ${b.id || id}\n⚡ Status: ${st}\n🔗 URL: ${b.url || 'N/A'}\n💾 RAM: ${fmtBytes(b.memory)}\n🖥️ CPU: ${b.cpu || 'N/A'}\n📅 Created: ${b.created_at || 'N/A'}`)
-        }
-
-        // START
-        if (sub === 'start') {
-            if (!(isOwner || isAdmin)) return reply('❌ Owner/admin only.')
-            const id = args[1]; if (!id) return reply(`Usage: *.bh start <id>*`)
-            await react(conn, m, '⏳')
-            const r = await bhApi('POST', `/bots/${id}/start`)
-            if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-            await react(conn, m, '✅')
-            return reply(`✅ Bot *${id}* started.`)
-        }
-
-        // STOP
-        if (sub === 'stop') {
-            if (!(isOwner || isAdmin)) return reply('❌ Owner/admin only.')
-            const id = args[1]; if (!id) return reply(`Usage: *.bh stop <id>*`)
-            await react(conn, m, '⏳')
-            const r = await bhApi('POST', `/bots/${id}/stop`)
-            if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-            await react(conn, m, '✅')
-            return reply(`🛑 Bot *${id}* stopped.`)
-        }
-
-        // RESTART
-        if (sub === 'restart') {
-            if (!(isOwner || isAdmin)) return reply('❌ Owner/admin only.')
-            const id = args[1]; if (!id) return reply(`Usage: *.bh restart <id>*`)
-            await react(conn, m, '⏳')
-            const r = await bhApi('POST', `/bots/${id}/restart`)
-            if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-            await react(conn, m, '✅')
-            return reply(`🔄 Bot *${id}* restarted.`)
-        }
-
-        // LOGS
-        if (sub === 'logs') {
-            const id = args[1]; if (!id) return reply(`Usage: *.bh logs <bot-id>*`)
-            await react(conn, m, '⏳')
-            const r = await bhApi('GET', `/bots/${id}/logs`)
-            if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-            await react(conn, m, '✅')
-            const logs = r.logs || r.data || r
-            const logStr = Array.isArray(logs) ? logs.slice(-50).join('\n') :
-                String(logs).split('\n').slice(-50).join('\n')
-            const trimmed = logStr.slice(-3500)
-            return reply(`📋 *Logs: ${id}*\n${'─'.repeat(28)}\n\`\`\`\n${trimmed || 'No logs.'}\n\`\`\``)
-        }
-
-        // DEPLOY
-        if (sub === 'deploy') {
-            if (!(isOwner || isAdmin)) return reply('❌ Owner/admin only.')
-            const url = args[1]
-            if (!url || !url.startsWith('http')) return reply(`Usage: *.bh deploy <github-url>*`)
-            await react(conn, m, '⏳')
-            const r = await bhApi('POST', '/bots/deploy', { repoUrl: url })
-            if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-            await react(conn, m, '✅')
-            const b = r.bot || r
-            return reply(`🚀 *Deployed!*\n📌 ID: ${b.id || 'N/A'}\n🔗 URL: ${b.url || 'N/A'}\n⚡ Status: ${b.status || 'starting'}`)
-        }
-
-        // ENV
-        if (sub === 'env') {
-            if (!(isOwner || isAdmin)) return reply('❌ Owner/admin only.')
-            const id = args[1]; const kv = args.slice(2).join(' ')
-            if (!id || !kv) return reply(`Usage: *.bh env <id> KEY=VALUE*`)
-            const [k, ...vp] = kv.split('='); const v = vp.join('=')
-            if (!k || v === undefined) return reply('❌ Format: KEY=VALUE')
-            await react(conn, m, '⏳')
-            const r = await bhApi('POST', `/bots/${id}/env`, { key: k.trim(), value: v })
-            if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-            await react(conn, m, '✅')
-            return reply(`✅ Env var *${k.trim()}* set for bot *${id}*.`)
-        }
-
-        // DOMAIN
-        if (sub === 'domain') {
-            if (!(isOwner || isAdmin)) return reply('❌ Owner/admin only.')
-            const action = args[1]; const domain = args[2]
-            if (action === 'add') {
-                if (!domain) return reply(`Usage: *.bh domain add <domain>*`)
-                await react(conn, m, '⏳')
-                const r = await bhApi('POST', '/domains', { domain })
-                if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-                await react(conn, m, '✅')
-                return reply(`✅ Domain *${domain}* added.`)
-            }
-            return reply(`Usage: *.bh domain add <domain>*`)
-        }
-
-        // PROMOTE
-        if (sub === 'promote') {
-            if (!(isOwner || isAdmin)) return reply('❌ Owner/admin only.')
-            const from = args[1]; const to = args[2]
-            if (!from || !to) return reply(`Usage: *.bh promote <from-id> <to-id>*`)
-            await react(conn, m, '⏳')
-            const r = await bhApi('POST', '/bots/promote', { from, to })
-            if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-            await react(conn, m, '✅')
-            return reply(`✅ Promoted *${from}* → *${to}* successfully.`)
-        }
-
-        // DELETE
-        if (sub === 'delete') {
-            if (!isOwner) return reply('❌ Owner only.')
-            const id = args[1]; if (!id) return reply(`Usage: *.bh delete <id>*`)
-            await react(conn, m, '⏳')
-            const r = await bhApi('DELETE', `/bots/${id}`)
-            if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-            await react(conn, m, '✅')
-            return reply(`🗑️ Bot *${id}* deleted.`)
-        }
-
-        return reply(`❓ Unknown subcommand. Type *.bh help* to see available commands.`)
-    }
-
-    // ── PTERODACTYL COMMANDS ─────────────────────────────────────────────────
-    if (command === 'ptlist') {
-        await react(conn, m, '⏳')
-        const r = await ptApi('GET', '/servers')
-        if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-        const servers = r.data || []
-        if (!servers.length) { await react(conn, m, '✅'); return reply('📭 No servers found.') }
-        await react(conn, m, '✅')
-        const lines = servers.slice(0, 10).map(s => {
-            const a = s.attributes || s
-            const st = a.status === 'running' ? '🟢' : '🔴'
-            return `${st} *${a.name}* [${a.identifier}]\n   RAM: ${fmtBytes((a.limits?.memory || 0) * 1048576)} | CPU: ${a.limits?.cpu || 0}%`
+            data: body, timeout: 20000
         })
-        return reply(`🖥️ *Pterodactyl Servers*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+        return res.data
     }
 
-    if (command === 'ptstatus') {
-        const id = args[0]; if (!id) return reply(`Usage: *.ptstatus <server-id>*`)
-        await react(conn, m, '⏳')
-        const r = await ptApi('GET', `/servers/${id}/resources`)
-        if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-        await react(conn, m, '✅')
-        const s = r.attributes || r
-        const cpu = ((s.cpu_absolute || 0)).toFixed(1)
-        const ram = fmtBytes(s.memory_bytes || 0)
-        const disk = fmtBytes(s.disk_bytes || 0)
-        const net = s.network || {}
-        const stMap = { running: '🟢 Running', offline: '🔴 Offline', starting: '🟡 Starting', stopping: '🟠 Stopping' }
-        return reply(`🖥️ *Server ${id}*\n${'─'.repeat(28)}\n⚡ Status: ${stMap[s.current_state] || s.current_state || 'Unknown'}\n🖥️ CPU: ${cpu}%\n💾 RAM: ${ram}\n💿 Disk: ${disk}\n📡 Net ↑: ${fmtBytes(net.rx_bytes)} / ↓: ${fmtBytes(net.tx_bytes)}`)
+    const statusEmoji = s => ({ running:'🟢', stopped:'🔴', starting:'🟡', installing:'🔵', failed:'💀', error:'🔥' }[s] || '⚪')
+    const fmtUptime = s => {
+        if (!s) return 'n/a'
+        const d = Math.floor(s/86400), h = Math.floor((s%86400)/3600), m2 = Math.floor((s%3600)/60)
+        return d > 0 ? `${d}d ${h}h ${m2}m` : h > 0 ? `${h}h ${m2}m` : `${m2}m`
     }
+    const fmtDate = d => d ? new Date(d).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi', dateStyle:'short', timeStyle:'short' }) : 'n/a'
 
-    if (command === 'ptstart' || command === 'ptstop' || command === 'ptrestart') {
-        if (!(isOwner || isAdmin)) return reply('❌ Owner/admin only.')
-        const id = args[0]; if (!id) return reply(`Usage: *.${command} <server-id>*`)
-        const signal = command === 'ptstart' ? 'start' : command === 'ptstop' ? 'kill' : 'restart'
-        await react(conn, m, '⏳')
-        const r = await ptApi('POST', `/servers/${id}/power`, { signal })
-        if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-        await react(conn, m, '✅')
-        const labels = { start: 'started ✅', kill: 'stopped 🛑', restart: 'restarting 🔄' }
-        return reply(`Server *${id}* ${labels[signal]}`)
-    }
+    // ─── .deploy ─────────────────────────────────────────────────────────────
+    if (command === 'deploy') {
+        if (!isOwner) return reply('❌ Owner only.')
+        if (!args[0]) return reply(
+            `*Deploy a bot on BeraHost*\n\n` +
+            `*Usage:*\n` +
+            `  \`${prefix}deploy <botname> <ownerNumber> [apiUrl]\`\n\n` +
+            `*Examples:*\n` +
+            `  \`${prefix}deploy beraai 254712345678\`\n` +
+            `  \`${prefix}deploy atassa 254712345678 Gifted~yourSession\`\n\n` +
+            `Use \`${prefix}bh bots\` to see available bots.`
+        )
 
-    if (command === 'ptcmd' || command === 'ptcommand') {
-        if (!(isOwner || isAdmin)) return reply('❌ Owner/admin only.')
-        const id = args[0]; const cmd = args.slice(1).join(' ')
-        if (!id || !cmd) return reply(`Usage: *.ptcmd <server-id> <command>*`)
-        await react(conn, m, '⏳')
-        const r = await ptApi('POST', `/servers/${id}/command`, { command: cmd })
-        if (r.error) { await react(conn, m, '❌'); return reply(`❌ ${r.error}`) }
-        await react(conn, m, '✅')
-        return reply(`✅ Command sent to server *${id}*: \`${cmd}\``)
-    }
+        // parse args: deploy <botname> <ownerNum> [sessionId_if_Gifted~] [url]
+        let [botName, ownerNum, ...rest] = args
+        let sessionId = null
+        let apiUrlArg = null
 
-    // .ptwatch
-    if (command === 'ptwatch') {
-        if (!(isOwner || isAdmin)) return reply('❌ Owner/admin only.')
-        const id = args[0]; if (!id) return reply(`Usage: *.ptwatch <server-id>*`)
-        const db = global.db?.data
-        if (!db.settings.ptWatchers) db.settings.ptWatchers = {}
-        if (db.settings.ptWatchers[id]) return reply(`👁️ Already watching server *${id}*.`)
-        db.settings.ptWatchers[id] = { chat: m.chat, lastStatus: null }
-        await global.db.write().catch(() => {})
-        // Start watcher interval
-        const interval = setInterval(async () => {
-            const r = await ptApi('GET', `/servers/${id}/resources`)
-            if (r.error) return
-            const status = r.attributes?.current_state
-            const prev = global.db?.data?.settings?.ptWatchers?.[id]?.lastStatus
-            if (prev && status !== prev) {
-                const chatId = global.db?.data?.settings?.ptWatchers?.[id]?.chat
-                const stMap = { offline: '🔴 went OFFLINE!', running: '🟢 is back ONLINE', starting: '🟡 is starting...' }
-                await conn.sendMessage(chatId, { text: `⚠️ *Pterodactyl Alert*\nServer *${id}* ${stMap[status] || `status: ${status}`}` }).catch(() => {})
-            }
-            if (global.db?.data?.settings?.ptWatchers?.[id]) {
-                global.db.data.settings.ptWatchers[id].lastStatus = status
-                await global.db.write().catch(() => {})
-            }
-        }, 60000)
-        // Store interval ref
-        if (!global._ptWatchIntervals) global._ptWatchIntervals = {}
-        global._ptWatchIntervals[id] = interval
-        await react(conn, m, '✅')
-        return reply(`👁️ Now watching server *${id}* — you'll be alerted on status changes.`)
-    }
-
-    if (command === 'ptunwatch') {
-        const id = args[0]; if (!id) return reply(`Usage: *.ptunwatch <server-id>*`)
-        if (global._ptWatchIntervals?.[id]) {
-            clearInterval(global._ptWatchIntervals[id])
-            delete global._ptWatchIntervals[id]
+        for (const r of rest) {
+            if (r.startsWith('Gifted~') || r.startsWith('gifted~')) sessionId = r
+            else if (r.startsWith('http')) apiUrlArg = r
         }
-        if (global.db?.data?.settings?.ptWatchers?.[id]) {
-            delete global.db.data.settings.ptWatchers[id]
-            await global.db.write().catch(() => {})
+        if (apiUrlArg && db?.settings) {
+            db.settings.bhApiUrl = apiUrlArg.replace(/\/api\/?$/, '').replace(/\/$/, '')
+            await global.db.write()
         }
-        return reply(`🛑 Stopped watching server *${id}*.`)
+
+        await reply(`🔍 Looking up bot *${botName}*...`)
+        let bots
+        try { bots = await bh('get', '/bots') } catch (e) { return reply('❌ ' + e.message) }
+
+        const bot = bots.find(b =>
+            b.name.toLowerCase().replace(/[\s\-_]/g, '').includes(botName.toLowerCase().replace(/[\s\-_]/g, '')) ||
+            String(b.id) === botName
+        )
+        if (!bot) {
+            const names = bots.map(b => `• *${b.name}* (id:${b.id})`).join('\n')
+            return reply(`❌ Bot *${botName}* not found.\n\nAvailable bots:\n${names}`)
+        }
+
+        // build envVars
+        const envVars = {}
+        if (ownerNum) envVars['OWNER_NUMBER'] = ownerNum
+        if (sessionId) envVars['SESSION_ID'] = sessionId
+
+        // check if required vars are missing
+        const required = Object.keys(bot.requiredVars || {})
+        const missing = required.filter(k => !envVars[k])
+        if (missing.length) {
+            const hints = missing.map(k => `  • *${k}* — ${bot.requiredVars[k]}`).join('\n')
+            return reply(`⚠️ Bot *${bot.name}* needs:\n${hints}\n\nProvide them as extra args after the number.`)
+        }
+
+        await reply(`🚀 Deploying *${bot.name}*...\n\n${Object.entries(envVars).map(([k,v])=>`• ${k}: \`${k==='SESSION_ID'?v.slice(0,12)+'…':v}\``).join('\n')}`)
+
+        let dep
+        try { dep = await bh('post', '/deployments', { botId: bot.id, envVars }) }
+        catch (e) {
+            const msg = e.response?.data?.error || e.response?.data?.message || e.message
+            return reply('❌ Deploy failed: ' + msg)
+        }
+
+        // poll status
+        const depId = dep.id
+        let status = dep.status
+        let attempts = 0
+        while ((status === 'starting' || status === 'installing') && attempts < 24) {
+            await new Promise(r => setTimeout(r, 5000))
+            attempts++
+            try {
+                const d = await bh('get', `/deployments/${depId}`)
+                status = d.status
+            } catch {}
+        }
+
+        let coins = null
+        try { coins = await bh('get', '/coins/balance') } catch {}
+
+        return reply(
+            `${statusEmoji(status)} *${bot.name}* deployed!\n\n` +
+            `🆔 Deployment ID: *${depId}*\n` +
+            `📊 Status: *${status}*\n` +
+            `${coins ? `💰 Coins remaining: *${coins.coins.toLocaleString()}*\n` : ''}` +
+            `\n*Useful commands:*\n` +
+            `  \`${prefix}bh logs ${depId}\` — view logs\n` +
+            `  \`${prefix}bh metrics ${depId}\` — CPU/RAM\n` +
+            `  \`${prefix}bh stop ${depId}\` — stop bot\n` +
+            `  \`${prefix}bh env ${depId} KEY=VAL\` — set env vars`
+        )
+    }
+
+    // ─── .bh ─────────────────────────────────────────────────────────────────
+    if (command === 'bh' || command === 'berahost') {
+        if (!isOwner) return reply('❌ Owner only.')
+
+        const sub = args[0]?.toLowerCase()
+
+        // ── setkey ──
+        if (sub === 'setkey') {
+            if (!args[1]) return reply(`Usage: ${prefix}bh setkey <api_key>`)
+            if (!db.settings) db.settings = {}
+            db.settings.bhApiKey = args[1]
+            await global.db.write()
+            return reply('✅ BeraHost API key saved.')
+        }
+
+        // ── seturl ──
+        if (sub === 'seturl') {
+            if (!args[1]) return reply(`Usage: ${prefix}bh seturl <url>`)
+            if (!db.settings) db.settings = {}
+            db.settings.bhApiUrl = args[1].replace(/\/api\/?$/, '').replace(/\/$/, '')
+            await global.db.write()
+            return reply('✅ BeraHost API URL saved: ' + db.settings.bhApiUrl)
+        }
+
+        // ── coins balance ──
+        if (sub === 'coins' || sub === 'balance') {
+            let c
+            try { c = await bh('get', '/coins/balance') } catch (e) { return reply('❌ ' + e.message) }
+            return reply(
+                `💰 *BeraHost Coins*\n\n` +
+                `Balance: *${c.coins.toLocaleString()} coins*\n` +
+                `Streak: *${c.streak} days*\n` +
+                `Daily claim: ${c.canClaimToday ? `✅ Available — use \`${prefix}bh claim\`` : '⏳ Already claimed today'}`
+            )
+        }
+
+        // ── claim ──
+        if (sub === 'claim') {
+            let r
+            try { r = await bh('post', '/coins/daily-claim') } catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            return reply(`🎁 *Daily coins claimed!*\n\n+${r.earned || r.coins || ''} coins\nNew balance: *${r.balance?.toLocaleString?.() || r.newBalance?.toLocaleString?.() || '?'} coins*\nStreak: ${r.streak || '?'} days 🔥`)
+        }
+
+        // ── txns / transactions ──
+        if (sub === 'txns' || sub === 'transactions') {
+            let txns
+            try { txns = await bh('get', '/coins/transactions') } catch (e) { return reply('❌ ' + e.message) }
+            const rows = (Array.isArray(txns) ? txns : txns.transactions || []).slice(0, 10)
+            const lines = rows.map(t => `${t.amount > 0 ? '📈' : '📉'} *${t.amount > 0 ? '+' : ''}${t.amount}* — ${t.reference} _(${fmtDate(t.createdAt)})_`)
+            return reply(`📊 *Recent Transactions*\n\n${lines.join('\n')}`)
+        }
+
+        // ── plans ──
+        if (sub === 'plans') {
+            let p
+            try { p = await bh('get', '/payments/plans') } catch (e) { return reply('❌ ' + e.message) }
+            const coins = (p.coinPackages || []).map(pkg =>
+                `  ${pkg.popular ? '⭐' : pkg.best ? '🏆' : '•'} *${pkg.name}* — Ksh ${pkg.kes} → ${pkg.totalCoins} coins${pkg.bonus ? ` (+${pkg.bonus} bonus)` : ''}`
+            ).join('\n')
+            const subs = (p.subscriptionPlans || []).map(s =>
+                `  • *${s.name}* — ${s.priceKes === 0 ? 'Free' : `Ksh ${s.priceKes}/mo`} · ${s.botLimit} bots · ${s.features.slice(0,2).join(', ')}`
+            ).join('\n')
+            return reply(`💳 *BeraHost Plans*\n\n*🪙 Coin Packages:*\n${coins}\n\n*📦 Subscriptions:*\n${subs}\n\n_Top up: \`${prefix}bh pay <amount> <phone>\`_`)
+        }
+
+        // ── pay ──
+        if (sub === 'pay') {
+            if (!args[1] || !args[2]) return reply(`Usage: ${prefix}bh pay <amount_kes> <phone>\nExample: ${prefix}bh pay 30 254712345678`)
+            let r
+            try { r = await bh('post', '/payments/initiate', { amount: parseInt(args[1]), phone: args[2] }) }
+            catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            return reply(
+                `📲 *M-Pesa STK Push Sent!*\n\n` +
+                `Amount: *Ksh ${args[1]}*\n` +
+                `Phone: *${args[2]}*\n` +
+                `Payment ID: \`${r.id || r.paymentId || 'n/a'}\`\n\n` +
+                `Check your phone for the M-Pesa prompt.\n` +
+                `_Verify: \`${prefix}bh paystatus ${r.id || r.paymentId}\`_`
+            )
+        }
+
+        // ── paystatus ──
+        if (sub === 'paystatus') {
+            if (!args[1]) return reply(`Usage: ${prefix}bh paystatus <paymentId>`)
+            let r
+            try { r = await bh('get', `/payments/status/${args[1]}`) } catch (e) { return reply('❌ ' + e.message) }
+            const icon = r.status === 'completed' ? '✅' : r.status === 'pending' ? '⏳' : '❌'
+            return reply(`${icon} *Payment ${r.id || args[1]}*\n\nStatus: *${r.status}*\nAmount: Ksh ${r.amount || '?'}\n${r.status === 'completed' ? `Coins added: *+${r.coins || '?'}*` : ''}`)
+        }
+
+        // ── bots (available templates) ──
+        if (sub === 'bots') {
+            let bots
+            try { bots = await bh('get', '/bots') } catch (e) { return reply('❌ ' + e.message) }
+            const lines = bots.map(b => {
+                const req = Object.keys(b.requiredVars || {}).join(', ')
+                const cost = b.deployCost ? `💰 ${b.deployCost} coins` : '💰 free'
+                return `*[${b.id}] ${b.name}* ${b.isFeatured ? '⭐' : ''}\n  ${cost} · Needs: \`${req}\`\n  _${b.description?.slice(0, 80)}..._`
+            })
+            return reply(
+                `🤖 *Available Bots on BeraHost*\n\n${lines.join('\n\n')}\n\n` +
+                `_Deploy: \`${prefix}deploy <botname> <ownerNumber>\`_`
+            )
+        }
+
+        // ── list (my deployments) ──
+        if (!sub || sub === 'list') {
+            let [deps, coins] = [null, null]
+            try { [deps, coins] = await Promise.all([bh('get', '/deployments'), bh('get', '/coins/balance')]) }
+            catch (e) { return reply('❌ ' + e.message) }
+
+            if (!deps.length) return reply(
+                `📭 *No deployments yet.*\n\nDeploy your first bot:\n\`${prefix}deploy beraai 254712345678\``
+            )
+
+            const lines = deps.map(d =>
+                `${statusEmoji(d.status)} *${d.bot?.name || 'Bot #' + d.botId}* — ID: \`${d.id}\`\n` +
+                `  Status: *${d.status}* · Last active: ${fmtDate(d.lastActive)}\n` +
+                `  Storage: ${d.storageUsedMb}/${d.storageLimitMb} MB`
+            )
+
+            return reply(
+                `🖥️ *BeraHost Dashboard*\n\n` +
+                `💰 Coins: *${coins?.coins?.toLocaleString() || '?'}* ${coins?.canClaimToday ? '· 🎁 claim available' : ''}\n` +
+                `🤖 Bots: *${deps.length}*\n\n` +
+                lines.join('\n\n') +
+                `\n\n_\`${prefix}bh status <id>\` · \`${prefix}bh logs <id>\` · \`${prefix}bh coins\`_`
+            )
+        }
+
+        // ── status <id> ──
+        if (sub === 'status') {
+            if (!args[1]) return reply(`Usage: ${prefix}bh status <deploymentId>`)
+            let [dep, met] = [null, null]
+            try {
+                [dep, met] = await Promise.all([
+                    bh('get', `/deployments/${args[1]}`),
+                    bh('get', `/deployments/${args[1]}/metrics`).catch(() => null)
+                ])
+            } catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+
+            const env = Object.entries(dep.envVars || {}).map(([k, v]) =>
+                `  • ${k}: \`${k.toLowerCase().includes('session') ? v.slice(0, 12) + '…' : v}\``
+            ).join('\n') || '  (none)'
+
+            return reply(
+                `${statusEmoji(dep.status)} *${dep.bot?.name || 'Deployment #' + dep.id}*\n\n` +
+                `🆔 ID: \`${dep.id}\`\n` +
+                `📊 Status: *${dep.status}*\n` +
+                `📅 Created: ${fmtDate(dep.createdAt)}\n` +
+                `⏰ Last active: ${fmtDate(dep.lastActive)}\n` +
+                `💾 Storage: ${dep.storageUsedMb}/${dep.storageLimitMb} MB\n` +
+                (met ? `\n📈 *Metrics:*\n  CPU: ${met.cpu}% · RAM: ${met.memMb} MB\n  Threads: ${met.threads} · Uptime: ${fmtUptime(met.uptime)}\n  Logs/hr: ${met.logsLastHour}` : '') +
+                `\n\n🔧 *Env Vars:*\n${env}\n\n` +
+                `_\`${prefix}bh logs ${dep.id}\` · \`${prefix}bh stop ${dep.id}\` · \`${prefix}bh env ${dep.id} KEY=VAL\`_`
+            )
+        }
+
+        // ── metrics <id> ──
+        if (sub === 'metrics') {
+            if (!args[1]) return reply(`Usage: ${prefix}bh metrics <deploymentId>`)
+            let met
+            try { met = await bh('get', `/deployments/${args[1]}/metrics`) } catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            return reply(
+                `📈 *Metrics — Deployment #${args[1]}*\n\n` +
+                `🟢 Status: *${met.status}*\n` +
+                `🖥️ CPU: *${met.cpu}%*\n` +
+                `🧠 RAM: *${met.memMb} MB*\n` +
+                `🔀 Threads: *${met.threads}*\n` +
+                `⏱️ Uptime: *${fmtUptime(met.uptime)}*\n` +
+                `📋 Logs/hr: *${met.logsLastHour}*`
+            )
+        }
+
+        // ── logs <id> [n] ──
+        if (sub === 'logs') {
+            if (!args[1]) return reply(`Usage: ${prefix}bh logs <deploymentId> [lines]`)
+            let logs
+            try { logs = await bh('get', `/deployments/${args[1]}/logs`) } catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            const n = parseInt(args[2]) || 20
+            const lines = (Array.isArray(logs) ? logs : logs.logs || []).slice(-n)
+            if (!lines.length) return reply('📭 No logs found.')
+            const out = lines.map(l => `[${l.logType === 'stderr' ? '⚠️' : ''}${new Date(l.createdAt).toLocaleTimeString('en-KE')}] ${l.logLine}`).join('\n')
+            return reply(`📋 *Logs — Deployment #${args[1]}* (last ${lines.length})\n\n\`\`\`\n${out.slice(0, 3000)}\n\`\`\``)
+        }
+
+        // ── start <id> ──
+        if (sub === 'start') {
+            if (!args[1]) return reply(`Usage: ${prefix}bh start <deploymentId>`)
+            try { await bh('post', `/deployments/${args[1]}/start`) }
+            catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            return reply(`🟢 Deployment *#${args[1]}* starting...\n_Check: \`${prefix}bh status ${args[1]}\`_`)
+        }
+
+        // ── stop <id> ──
+        if (sub === 'stop') {
+            if (!args[1]) return reply(`Usage: ${prefix}bh stop <deploymentId>`)
+            try { await bh('post', `/deployments/${args[1]}/stop`) }
+            catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            return reply(`🔴 Deployment *#${args[1]}* stopped.`)
+        }
+
+        // ── restart <id> ──
+        if (sub === 'restart') {
+            if (!args[1]) return reply(`Usage: ${prefix}bh restart <deploymentId>`)
+            try {
+                await bh('post', `/deployments/${args[1]}/stop`)
+                await new Promise(r => setTimeout(r, 2000))
+                await bh('post', `/deployments/${args[1]}/start`)
+            } catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            return reply(`🔄 Deployment *#${args[1]}* restarted.\n_Check: \`${prefix}bh status ${args[1]}\`_`)
+        }
+
+        // ── env <id> KEY=VAL [KEY2=VAL2 ...] ──
+        if (sub === 'env') {
+            if (!args[1] || !args[2]) return reply(
+                `Usage: ${prefix}bh env <id> KEY=VAL [KEY2=VAL2]\n` +
+                `Example: ${prefix}bh env 42 BOT_NAME=MyBot LANGUAGE=sw`
+            )
+            const envVars = {}
+            args.slice(2).forEach(a => {
+                const eq = a.indexOf('=')
+                if (eq > 0) envVars[a.slice(0, eq)] = a.slice(eq + 1)
+            })
+            if (!Object.keys(envVars).length) return reply('❌ No valid KEY=VAL pairs found.')
+            try { await bh('put', `/deployments/${args[1]}/env`, { envVars }) }
+            catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            const pairs = Object.entries(envVars).map(([k, v]) => `  • ${k} = ${k.toLowerCase().includes('session') ? v.slice(0,12)+'…' : v}`).join('\n')
+            return reply(`✅ Env vars updated on *#${args[1]}*:\n${pairs}\n\n_Restart to apply: \`${prefix}bh restart ${args[1]}\`_`)
+        }
+
+        // ── delete <id> ──
+        if (sub === 'delete' || sub === 'del' || sub === 'remove') {
+            if (!args[1]) return reply(`Usage: ${prefix}bh delete <deploymentId>`)
+            try { await bh('delete', `/deployments/${args[1]}`) }
+            catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            return reply(`🗑️ Deployment *#${args[1]}* deleted.`)
+        }
+
+        // ── help ──
+        return reply(
+            `🖥️ *BeraHost Commands*\n\n` +
+            `*Deploy a new bot:*\n` +
+            `  \`${prefix}deploy beraai 254712345678\`\n` +
+            `  \`${prefix}deploy atassa 254712345678 Gifted~session\`\n\n` +
+            `*Manage deployments:*\n` +
+            `  \`${prefix}bh\` — dashboard (all bots + coins)\n` +
+            `  \`${prefix}bh bots\` — available bot templates\n` +
+            `  \`${prefix}bh status <id>\` — status + metrics\n` +
+            `  \`${prefix}bh logs <id> [n]\` — last N log lines\n` +
+            `  \`${prefix}bh metrics <id>\` — CPU, RAM, uptime\n` +
+            `  \`${prefix}bh start <id>\` — start bot\n` +
+            `  \`${prefix}bh stop <id>\` — stop bot\n` +
+            `  \`${prefix}bh restart <id>\` — restart bot\n` +
+            `  \`${prefix}bh env <id> KEY=VAL\` — update env vars\n` +
+            `  \`${prefix}bh delete <id>\` — delete deployment\n\n` +
+            `*Coins & payments:*\n` +
+            `  \`${prefix}bh coins\` — balance + streak\n` +
+            `  \`${prefix}bh claim\` — claim daily coins\n` +
+            `  \`${prefix}bh txns\` — transaction history\n` +
+            `  \`${prefix}bh plans\` — coin & subscription plans\n` +
+            `  \`${prefix}bh pay <amount> <phone>\` — M-Pesa top-up\n` +
+            `  \`${prefix}bh paystatus <id>\` — check payment\n\n` +
+            `*Setup:*\n` +
+            `  \`${prefix}bh setkey <key>\` — save API key\n` +
+            `  \`${prefix}bh seturl <url>\` — save API base URL`
+        )
     }
 }
 
-handle.command = [
-    'berahost', 'bh',
-    'ptlist', 'ptstatus', 'ptstart', 'ptstop', 'ptrestart', 'ptcmd', 'ptcommand',
-    'ptwatch', 'ptunwatch'
-]
-handle.tags = ['admin', 'servers', 'hosting']
+handle.command = ['bh', 'berahost', 'deploy']
+handle.tags = ['berahost']
 
 module.exports = handle
