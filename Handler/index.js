@@ -12,7 +12,7 @@ try { require('gifted-btns') } catch {}
 
 const _seenMsgIds = new Set()
 
-const commandFiles = ['general', 'bera', 'group', 'admin', 'media']
+const commandFiles = ['general', 'bera', 'group', 'admin', 'media', 'berahost', 'gifted', 'key', 'pterodactyl']
 const handlers = commandFiles.map(f => require(`../Commands/${f}`))
 
 const loadPlugins = () => {
