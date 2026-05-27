@@ -2,7 +2,7 @@ const axios = require('axios')
 const config = require('../../Config')
 
 const MAX_HISTORY = config.maxHistory || 20
-const GIFTED = 'https://api.giftedtech.co.ke'
+const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
 const PERSONALITY = `You are Bera AI — a smart, witty WhatsApp bot assistant built by Bera Tech. You work for the bot owner (${config.owner}). You help everyone who messages the bot.
