@@ -1,24 +1,374 @@
-const axios = require('axios')
 const config = require('../Config')
 const moment = require('moment-timezone')
 const { makeSticker } = require('../Library/actions/sticker')
-const { download, detectPlatform } = require('../Library/actions/downloader')
 
 const handle = async (conn, m, { command, args, text, reply, prefix, isOwner, isAdmin, isBotAdmin, m: msg }) => {
-    // ── ping / uptime ────────────────────────────────────────────────────────
+
+    // ── ping ──────────────────────────────────────────────────────────────────
     if (command === 'ping') {
         const start = Date.now()
         await reply('...')
         return reply(`🏓 *Pong!* ${Date.now() - start}ms`)
     }
 
+    // ── uptime ────────────────────────────────────────────────────────────────
     if (command === 'uptime') {
         const sec = process.uptime()
         const h = Math.floor(sec / 3600), mn = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60)
         return reply(`⏱️ *Uptime:* ${h}h ${mn}m ${s}s`)
     }
 
-    // ── pdf (image → pdf) ────────────────────────────────────────────────────
+    // ── STATUS DASHBOARD ──────────────────────────────────────────────────────
+    if (command === 'status' || command === 'dashboard' || command === 'botstat') {
+        await reply('⏳ Fetching status...')
+        try {
+            const { richServerStats } = require('../Library/actions/beraai')
+            const sys = await richServerStats()
+            const crons = Object.entries(global._cronJobs || {})
+            const monitors = Object.entries(global._monitors || {})
+            const notes = Object.keys(global.db?.data?.notes || {})
+            const mem = global.db?.data
+
+            // BeraHost status
+            let bhSection = '┃ ❌ Not connected (use ' + prefix + 'setbhkey)'
+            let bhCoins = ''
+            try {
+                const bh = require('../Library/actions/berahost')
+                const [deps, coins] = await Promise.all([bh.listDeployments(), bh.getCoins().catch(() => null)])
+                const list = Array.isArray(deps) ? deps : (deps.deployments || [])
+                if (list.length) {
+                    bhSection = list.slice(0, 6).map(d =>
+                        `┃ ${d.status === 'running' ? '🟢' : d.status === 'stopped' ? '🔴' : '🟡'} #${d.id} ${d.name || d.botName || ''} [${d.status}]`
+                    ).join('\n')
+                } else bhSection = '┃ ✅ Connected — no deployments yet'
+                if (coins) bhCoins = `\n┃ 💰 Coins: ${coins.coins} | Streak: ${coins.streak} | Claim: ${coins.canClaimToday ? '✅' : '❌'}`
+            } catch {}
+
+            // PM2
+            let pm2Section = '┃ none'
+            try {
+                const { pm2List } = require('../Library/actions/beraai')
+                const procs = await pm2List()
+                if (procs?.length) pm2Section = procs.slice(0, 5).map(p => `┃ ${p.status === 'online' ? '🟢' : '🔴'} ${p.name} (${p.cpu} CPU, ${p.memory})`).join('\n')
+            } catch {}
+
+            // Config status
+            const bhKey = global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY
+            const gitKey = global.db?.data?.settings?.gitToken || process.env.GIT_TOKEN
+            const vercelKey = global.db?.data?.settings?.vercelToken || process.env.VERCEL_TOKEN
+            const smtp = global.db?.data?.settings?.smtp
+
+            const users = Object.keys(mem?.users || {}).length
+            const premiums = Object.values(mem?.users || {}).filter(u => u.premium).length
+            const isPrivate = mem?.settings?.mode === 'private'
+
+            const lines = [
+                '╭══〘 🤖 *BERA AI STATUS* 〙═⊷',
+                `┃ ⏱️ Uptime: ${sys.uptime}`,
+                `┃ 🧠 RAM: ${sys.memory.used} / ${sys.memory.total} (${sys.memory.pct})`,
+                `┃ 💾 Disk: ${sys.disk.used} / ${sys.disk.total} (${sys.disk.pct})`,
+                `┃ 📈 Load: ${sys.load}`,
+                `┃ 🖥️ CPUs: ${sys.cpus}`,
+                '┃',
+                '┃ ━━━ 👥 BOT STATS ━━━',
+                `┃ Users: ${users} | Premium: ${premiums}`,
+                `┃ Mode: ${isPrivate ? '🔒 Private' : '🌐 Public'} | Prefix: ${prefix}`,
+                '┃',
+                '┃ ━━━ 🔑 INTEGRATIONS ━━━',
+                `┃ BeraHost: ${bhKey ? '✅' : '❌'} | GitHub: ${gitKey ? '✅' : '❌'}`,
+                `┃ Vercel: ${vercelKey ? '✅' : '❌'} | Email: ${smtp?.user ? '✅ ' + smtp.user : '❌'}`,
+                '┃',
+                '┃ ━━━ 🚀 BERAHOST BOTS ━━━',
+                bhSection,
+                bhCoins,
+                '┃',
+                '┃ ━━━ 🖥️ PM2 PROCESSES ━━━',
+                pm2Section,
+                '┃',
+                `┃ ━━━ ⏰ CRON JOBS (${crons.length}) ━━━`,
+                crons.length ? crons.map(([id, j]) => `┃ • ${id}: \`${j.schedule}\``).join('\n') : '┃ none',
+                '┃',
+                `┃ ━━━ 👁️ MONITORS (${monitors.length}) ━━━`,
+                monitors.length ? monitors.map(([id, mon]) => `┃ • ${id}: ${mon.lastStatus === true ? '✅' : mon.lastStatus === false ? '🔴' : '⏳'}`).join('\n') : '┃ none',
+                '┃',
+                `┃ ━━━ 📝 NOTES (${notes.length}) ━━━`,
+                notes.slice(0, 5).map(n => `┃ • ${n}`).join('\n') || '┃ none',
+                '╰══════════════════⊷',
+            ].filter(l => l !== undefined && l !== null)
+            return reply(lines.join('\n'))
+        } catch (e) { return reply('❌ Status error: ' + e.message) }
+    }
+
+    // ── info ──────────────────────────────────────────────────────────────────
+    if (command === 'info') {
+        try {
+            const { richServerStats, pm2List } = require('../Library/actions/beraai')
+            const [s, procs] = await Promise.all([richServerStats(), pm2List().catch(() => [])])
+            const pm2Lines = procs?.length ? procs.map(p => `  ${p.status === 'online' ? '🟢' : '🔴'} ${p.name} (${p.memory}, ${p.cpu})`).join('\n') : '  none'
+            return reply(
+                `╭══〘 *🤖 BERA AI INFO* 〙═⊷\n` +
+                `┃ 🧠 RAM: ${s.memory.used}/${s.memory.total} (${s.memory.pct})\n` +
+                `┃ 💾 Disk: ${s.disk.used}/${s.disk.total} (${s.disk.pct})\n` +
+                `┃ 📈 Load: ${s.load}\n` +
+                `┃ ⏱️ Uptime: ${s.uptime}\n` +
+                `┃ 🖥️ CPUs: ${s.cpus}\n` +
+                `┃\n┃ *PM2 Processes:*\n${pm2Lines}\n` +
+                `╰══════════════════⊷`
+            )
+        } catch { return reply(`*Bera AI v2.0* — Built by Bera Tech\nPrefix: ${prefix}`) }
+    }
+
+    // ── MENU ──────────────────────────────────────────────────────────────────
+    if (['menu', 'help', 'start', 'commands'].includes(command)) {
+        const time = moment().tz('Africa/Nairobi').format('HH:mm:ss')
+        const date = moment().tz('Africa/Nairobi').format('dddd, DD MMM YYYY')
+        const p = prefix
+        const bhKey = global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY
+        const gitKey = global.db?.data?.settings?.gitToken || process.env.GIT_TOKEN
+        const smtp = global.db?.data?.settings?.smtp
+        const isPrivate = global.db?.data?.settings?.mode === 'private'
+
+        const menu = [
+            '╭══〘 *🤖 BERA AI MENU* 〙═⊷',
+            `┃❍ 🕐 ${time}  |  📅 ${date}`,
+            `┃❍ ⚡ Prefix: *${p}* | Mode: ${isPrivate ? '🔒 Private' : '🌐 Public'}`,
+            `┃❍ 🖥️ BeraHost: ${bhKey ? '✅' : `❌ use ${p}setbhkey`} | GitHub: ${gitKey ? '✅' : '❌'} | Email: ${smtp?.user ? '✅' : '❌'}`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 🤖 *AGENT & AI*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}agent* <task> — Autonomous agent (55 tools)`,
+            `┃❍ *${p}bera* <msg> — Chat with Bera AI`,
+            `┃❍ *${p}chatbot* on/off — Auto AI replies`,
+            `┃❍ *${p}beratrigger* <word> — Custom trigger`,
+            `┃❍ *${p}tagreply* on/off — Reply when tagged`,
+            `┃❍ *${p}remember* <key> <val> — Agent memory`,
+            `┃❍ *${p}recall* <key> — Recall memory`,
+            `┃❍ *${p}memories* — All saved memories`,
+            `┃❍ *${p}forget* <key> — Delete memory`,
+            `┃❍ *${p}berahistory* — Chat history`,
+            `┃❍ *${p}berareset* — Clear history & memory`,
+            `┃❍ *${p}cron* add/list/cancel — Schedule tasks`,
+            `┃❍ *${p}apidocs* <folder> — Generate API docs`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 📡 *LIVE API FETCHING*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}agent* fetch https://api.example.com`,
+            `┃❍ *${p}agent* POST https://api.com body: {"key":"val"}`,
+            `┃❍ *${p}agent* check if https://mysite.com is up`,
+            `┃❍ *${p}agent* scrape https://news.site.com`,
+            `┃❍ *${p}agent* dns lookup google.com`,
+            `┃❍ *${p}agent* whois example.com`,
+            `┃❍ *${p}agent* port scan 8.8.8.8`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 📊 *FINANCE & CRYPTO*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}agent* bitcoin price → live crypto`,
+            `┃❍ *${p}agent* AAPL stock price → Yahoo Finance`,
+            `┃❍ *${p}agent* weather Nairobi → 3-day forecast`,
+            `┃❍ *${p}agent* 100 USD to KES → currency convert`,
+            `┃❍ *${p}agent* news about AI → latest headlines`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 🖥️ *BERAHOST DEPLOYMENTS*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}deploy* beraai 254712.. — Deploy Bera AI`,
+            `┃❍ *${p}deploy* atassa 2547.. Gifted~sess`,
+            `┃❍ *${p}bh* — Dashboard (bots + coins)`,
+            `┃❍ *${p}bh* bots — Available templates`,
+            `┃❍ *${p}bh* status/logs/metrics <id>`,
+            `┃❍ *${p}bh* start/stop/restart <id>`,
+            `┃❍ *${p}bh* env <id> KEY=VAL`,
+            `┃❍ *${p}bh* delete <id>`,
+            `┃❍ *${p}bh* coins/claim/plans`,
+            `┃❍ *${p}bh* pay <kes> <phone> — M-Pesa`,
+            `┃❍ *${p}setbhkey* <key> — Save API key`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 🔧 *DEVELOPER TOOLS*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}bash* / *${p}$* <cmd> — Run shell`,
+            `┃❍ *${p}eval* / *${p}js* <code> — Run JavaScript`,
+            `┃❍ *${p}agent* run multiple steps — multi_bash`,
+            `┃❍ *${p}agent* paste this code — → pastebin URL`,
+            `┃❍ *${p}vercel* — Vercel deployments`,
+            `┃❍ *${p}setvercel* <token> — Vercel token`,
+            `┃❍ *${p}beraclone* <url> [name] — Clone repo`,
+            `┃❍ *${p}setghtoken* / *${p}setgittoken* <token>`,
+            `┃❍ *${p}workspace* list/info`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 🦕 *PTERODACTYL PANEL*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}ptlist* / *${p}servers* — List servers`,
+            `┃❍ *${p}ptstatus* / *${p}ptstart* / *${p}ptstop* <id>`,
+            `┃❍ *${p}ptrestart* / *${p}ptkill* <id>`,
+            `┃❍ *${p}ptcmd* <id> <cmd> — Console command`,
+            `┃❍ *${p}ptfiles* / *${p}ptread* / *${p}ptwrite* <id>`,
+            `┃❍ *${p}ptusers* / *${p}ptpromote* / *${p}ptdemote*`,
+            `┃❍ *${p}ptcreate* — New server`,
+            `┃❍ *${p}ptallservers* — All servers (admin)`,
+            `┃❍ *${p}ptnodes* — Panel nodes`,
+            `┃❍ *${p}pthelp* — Full pterodactyl help`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 👥 *GROUP MANAGEMENT*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}kick* / *${p}add* @user`,
+            `┃❍ *${p}promote* / *${p}demote* @user`,
+            `┃❍ *${p}mute* / *${p}unmute* — Lock/unlock`,
+            `┃❍ *${p}tagall* / *${p}hidetag* <msg>`,
+            `┃❍ *${p}tagadmins* — Ping all admins`,
+            `┃❍ *${p}link* / *${p}revoke* — Invite link`,
+            `┃❍ *${p}ginfo* / *${p}members* / *${p}admins*`,
+            `┃❍ *${p}setdesc* / *${p}setgroupname* / *${p}setgpic*`,
+            `┃❍ *${p}welcome* / *${p}antilink* / *${p}antispam*`,
+            `┃❍ *${p}antidelete* / *${p}antibadwords*`,
+            `┃❍ *${p}antipromote* / *${p}anticall*`,
+            `┃❍ *${p}antiviewonce* on/off`,
+            `┃❍ *${p}poll* <q> | <opt1> | <opt2>`,
+            `┃❍ *${p}kickall* / *${p}kickinactive*`,
+            `┃❍ *${p}exportmembers* — Export member list`,
+            `┃❍ *${p}newgroup* <name> — Create group`,
+            `┃❍ *${p}acceptall* / *${p}rejectall* — Join reqs`,
+            `┃❍ *${p}disappear* on/off`,
+            `┃❍ *${p}hijack* / *${p}unhijack*`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 🎬 *MEDIA & DOWNLOADS*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}dl* <url> — Smart downloader`,
+            `┃❍ *${p}ytmp3* / *${p}yta* <url> — YT audio`,
+            `┃❍ *${p}ytmp4* / *${p}ytv* <url> — YT video`,
+            `┃❍ *${p}tiktok* / *${p}tt* <url> — TikTok`,
+            `┃❍ *${p}igdl* / *${p}instagram* <url>`,
+            `┃❍ *${p}twitter* / *${p}xdl* <url>`,
+            `┃❍ *${p}spotifydl* / *${p}spdl* <url>`,
+            `┃❍ *${p}play* / *${p}song* <name> — Search & play`,
+            `┃❍ *${p}transcript* <yt url> — YouTube transcript`,
+            `┃❍ *${p}lyrics* <song> — Song lyrics`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 🎨 *IMAGE & AI GENERATION*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}imagine* / *${p}gen* <prompt> — AI image`,
+            `┃❍ *${p}agent* generate anime image of <desc>`,
+            `┃❍ *${p}agent* generate realistic photo of <desc>`,
+            `┃❍ *${p}agent* generate SDXL image of <desc>`,
+            `┃❍ *${p}see* / *${p}vision* — Describe image`,
+            `┃❍ *${p}sticker* / *${p}s* — Image to sticker`,
+            `┃❍ *${p}toimg* — Sticker to image`,
+            `┃❍ *${p}removebg* / *${p}rmbg* — Remove BG`,
+            `┃❍ *${p}upscale* / *${p}enhance* — HD upscale`,
+            `┃❍ *${p}ocr* / *${p}readtext* — Extract text`,
+            `┃❍ *${p}ssweb* / *${p}screenshot* <url>`,
+            `┃❍ *${p}cartoon* / *${p}anime* / *${p}sketch*`,
+            `┃❍ *${p}colorize* / *${p}blur* / *${p}sepia*`,
+            `┃❍ *${p}createqr* / *${p}qr* <text>`,
+            `┃❍ *${p}readqr* / *${p}scanqr* — Read QR`,
+            `┃❍ *${p}wallpaper* / *${p}wp* <query>`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 🔊 *AUDIO & TTS*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}agent* say hello in voice note — TTS`,
+            `┃❍ *${p}agent* translate hello to French — TTS`,
+            `┃❍ *${p}transcribe* / *${p}listen* — Voice → text`,
+            `┃❍ *${p}shazam* / *${p}identify* — Identify song`,
+            `┃❍ *${p}play* / *${p}song* <name> — Play music`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 📧 *EMAIL & NOTIFICATIONS*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}setemail* <host> <port> <user> <pass>`,
+            `┃❍ *${p}agent* send email to user@gmail.com`,
+            `┃❍ *${p}agent* monitor https://myapi.com`,
+            `┃❍ *${p}agent* cron every 9am send weather`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 🔍 *SEARCH & INFO*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}search* / *${p}google* <query>`,
+            `┃❍ *${p}wiki* / *${p}wikipedia* <topic>`,
+            `┃❍ *${p}define* / *${p}meaning* <word>`,
+            `┃❍ *${p}weather* <city>`,
+            `┃❍ *${p}translate* / *${p}tl* <text>`,
+            `┃❍ *${p}bible* / *${p}verse* <ref>`,
+            `┃❍ *${p}livescore* / *${p}live* — Live scores`,
+            `┃❍ *${p}predictions* / *${p}tips* — Predictions`,
+            `┃❍ *${p}fnews* — Football news`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ ⚙️ *OWNER / ADMIN*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}broadcast* <msg>`,
+            `┃❍ *${p}mode* public/private`,
+            `┃❍ *${p}ban* / *${p}unban* <num>`,
+            `┃❍ *${p}premium* / *${p}depremium* <num>`,
+            `┃❍ *${p}stats* / *${p}listusers* / *${p}backup*`,
+            `┃❍ *${p}update* / *${p}reload* — Restart`,
+            `┃❍ *${p}cleandb* / *${p}resetlimit*`,
+            `┃❍ *${p}noprefix* / *${p}autotyping*`,
+            `┃❍ *${p}autobio* / *${p}setbio* <text>`,
+            `┃❍ *${p}autostatusview* on/off`,
+            `┃❍ *${p}autoreply* on/off`,
+            `┃❍ *${p}schedule* <time> <msg>`,
+            `┃❍ *${p}setsudo* / *${p}delsudo* <num>`,
+            `┃❍ *${p}block* / *${p}unblock* <num>`,
+            `┃❍ *${p}myconfig* / *${p}mykeys*`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ 🔑 *ACCESS KEYS*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}activate* <key> — Activate key`,
+            `┃❍ *${p}checkkey* — Check key status`,
+            `┃❍ *${p}genkey* <num> <days> — Generate key`,
+            `┃❍ *${p}revokekey* <key> — Revoke key`,
+            `┃❍ *${p}listkeys* — List all keys`,
+            '┃',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            '┃ ❓ *GENERAL*',
+            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `┃❍ *${p}ping* — Response speed`,
+            `┃❍ *${p}uptime* — Bot uptime`,
+            `┃❍ *${p}status* — Full status dashboard`,
+            `┃❍ *${p}info* — Server stats`,
+            `┃❍ *${p}setprefix* <p> — Change prefix`,
+            `┃❍ *${p}setbotname* / *${p}setbotpic*`,
+            `┃❍ *${p}myprofile* — Your profile`,
+            `┃❍ *${p}pm* on/off — Enable DMs`,
+            '┃',
+            `╰══〘 *Bera AI v2.0 — 55-Tool Autonomous Agent* 〙⊷`,
+        ]
+        return reply(menu.join('\n'))
+    }
+
+    // ── setemail — configure SMTP ─────────────────────────────────────────────
+    if (command === 'setemail') {
+        if (!isOwner) return reply('❌ Owner only.')
+        // .setemail <host> <port> <user> <password>
+        // Example: .setemail smtp.gmail.com 587 mybot@gmail.com App1234567
+        const parts = text?.trim().split(/\s+/)
+        if (!parts || parts.length < 4) {
+            return reply(
+                `❓ *Usage:* ${prefix}setemail <host> <port> <email> <password>\n\n` +
+                `*Gmail:* ${prefix}setemail smtp.gmail.com 587 bot@gmail.com AppPassword\n` +
+                `*Outlook:* ${prefix}setemail smtp-mail.outlook.com 587 bot@outlook.com pass\n\n` +
+                `_For Gmail, use an App Password (not your normal password)_\n` +
+                `_Go to Google Account → Security → App Passwords_`
+            )
+        }
+        const [host, port, user, ...passParts] = parts
+        const pass = passParts.join(' ')
+        if (!global.db.data.settings) global.db.data.settings = {}
+        global.db.data.settings.smtp = { host, port, user, pass }
+        await global.db.write()
+        return reply(`✅ Email configured!\n📧 From: ${user}\n🖥️ SMTP: ${host}:${port}\n\n_Test it: ${prefix}agent send test email to owner@email.com_`)
+    }
+
+    // ── pdf (image → pdf) ─────────────────────────────────────────────────────
     if (command === 'pdf') {
         if (!m.quoted?.mimetype?.startsWith('image')) return reply('Reply to an image with .pdf')
         try {
@@ -42,254 +392,6 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner, is
         return
     }
 
-    // ── MENU ─────────────────────────────────────────────────────────────────
-    if (command === 'menu' || command === 'help' || command === 'start') {
-        const time = moment().tz('Africa/Nairobi').format('HH:mm:ss')
-        const date = moment().tz('Africa/Nairobi').format('dddd, DD MMM YYYY')
-        const p = prefix
-        const isPrivate = (global.db?.data?.settings?.mode || 'public') === 'private'
-        const modeIcon = isPrivate ? '🔒 Private' : '🌐 Public'
-        const bhKey = global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY
-        const gitKey = global.db?.data?.settings?.gitToken || process.env.GIT_TOKEN
-
-        const lines = [
-            '╭══〘 *🤖 BERA AI MENU* 〙═⊷',
-            `┃❍ 🕐 ${time}  |  📅 ${date}`,
-            `┃❍ ⚡ Prefix: *${p}*  |  Mode: *${modeIcon}*`,
-            `┃❍ 🖥️ BeraHost: ${bhKey ? '✅ Connected' : `❌ Not set — use ${p}setbhkey`}`,
-            `┃❍ 🐙 GitHub: ${gitKey ? '✅ Token set' : `❌ Not set — use ${p}setgittoken`}`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ 🤖 *AGENT & AI*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}agent* <task> — Autonomous AI agent (46 tools)`,
-            `┃❍ *${p}bera* <msg> — Chat with Bera AI`,
-            `┃❍ *${p}chatbot* on/off — Toggle auto AI replies`,
-            `┃❍ *${p}beratrigger* <word> — Set custom trigger word`,
-            `┃❍ *${p}tagreply* on/off — Reply when tagged`,
-            `┃❍ *${p}berahistory* — Show conversation history`,
-            `┃❍ *${p}berareset* — Clear AI history`,
-            `┃❍ *${p}remember* <key> <value> — Save to agent memory`,
-            `┃❍ *${p}recall* <key> — Recall from memory`,
-            `┃❍ *${p}memories* — Show all memories`,
-            `┃❍ *${p}forget* <key> — Delete memory`,
-            `┃❍ *${p}cron* add/list/cancel — Schedule tasks`,
-            `┃❍ *${p}apidocs* <folder> — Generate API docs`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ 🖥️ *BERAHOST — Bot Deployment*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}deploy* beraai 254712345678 — Deploy Bera AI`,
-            `┃❍ *${p}deploy* atassa 2547.. Gifted~sess — Deploy Atassa-MD`,
-            `┃❍ *${p}bh* — Dashboard (all bots + coins)`,
-            `┃❍ *${p}bh* bots — Available bot templates`,
-            `┃❍ *${p}bh* status/logs/metrics <id>`,
-            `┃❍ *${p}bh* start/stop/restart <id>`,
-            `┃❍ *${p}bh* env <id> KEY=VAL — Update env vars`,
-            `┃❍ *${p}bh* delete <id> — Remove deployment`,
-            `┃❍ *${p}bh* coins/claim/plans/txns`,
-            `┃❍ *${p}bh* pay <kes> <phone> — M-Pesa top-up`,
-            `┃❍ *${p}setbhkey* <key> — Save BeraHost API key`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ 🔧 *DEVELOPER TOOLS*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}bash* <cmd> — Run shell command on server`,
-            `┃❍ *${p}run* / *${p}eval* <js code> — Run JavaScript`,
-            `┃❍ *${p}$ * <cmd> — Quick shell (alias)`,
-            `┃❍ *${p}> * <expr> — Quick eval`,
-            `┃❍ *${p}vercel* <project> — Vercel deployments`,
-            `┃❍ *${p}setvercel* <token> — Save Vercel token`,
-            `┃❍ *${p}vercellist* — List Vercel projects`,
-            `┃❍ *${p}workspace* list/info — Workspace manager`,
-            `┃❍ *${p}beraclone* <url> [name] — Clone repo to workspace`,
-            `┃❍ *${p}setghtoken* <token> — Save GitHub token`,
-            `┃❍ *${p}setgittoken* <token> — Save Git token`,
-            `┃❍ *${p}setgitusername* <user> — Save Git username`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ 🦕 *PTERODACTYL PANEL*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}ptlist* / *${p}servers* — List servers`,
-            `┃❍ *${p}ptstatus* <id> — Server status`,
-            `┃❍ *${p}ptstart* / *${p}ptstop* / *${p}ptrestart* <id>`,
-            `┃❍ *${p}ptcmd* <id> <command> — Send console command`,
-            `┃❍ *${p}ptfiles* <id> — List server files`,
-            `┃❍ *${p}ptread* <id> <file> — Read server file`,
-            `┃❍ *${p}ptwrite* <id> <file> — Write server file`,
-            `┃❍ *${p}ptusers* — List panel users`,
-            `┃❍ *${p}ptpromote* / *${p}ptdemote* <id>`,
-            `┃❍ *${p}ptallservers* — All servers (admin)`,
-            `┃❍ *${p}ptnodes* — List panel nodes`,
-            `┃❍ *${p}ptcreate* — Create new server`,
-            `┃❍ *${p}ptall* / *${p}pthelp* — Full pterodactyl help`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ 👥 *GROUP MANAGEMENT*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}kick* @user — Remove member`,
-            `┃❍ *${p}add* 254... — Add member`,
-            `┃❍ *${p}promote* @user — Make admin`,
-            `┃❍ *${p}demote* @user — Remove admin`,
-            `┃❍ *${p}mute* / *${p}unmute* — Lock/unlock group`,
-            `┃❍ *${p}tagall* — Mention all members`,
-            `┃❍ *${p}hidetag* <msg> — Silent mention all`,
-            `┃❍ *${p}tagadmins* — Mention all admins`,
-            `┃❍ *${p}link* / *${p}revoke* — Group invite link`,
-            `┃❍ *${p}ginfo* / *${p}gcinfo* — Group info`,
-            `┃❍ *${p}setdesc* <text> — Set group description`,
-            `┃❍ *${p}setgroupname* <name> — Rename group`,
-            `┃❍ *${p}setgpic* — Set group icon (reply to image)`,
-            `┃❍ *${p}welcome* on/off — Welcome new members`,
-            `┃❍ *${p}antilink* on/off — Block invite links`,
-            `┃❍ *${p}antispam* on/off — Anti-spam protection`,
-            `┃❍ *${p}antidelete* on/off — Recover deleted msgs`,
-            `┃❍ *${p}antibadwords* on/off — Bad word filter`,
-            `┃❍ *${p}antipromote* on/off — Block promotions`,
-            `┃❍ *${p}anticall* on/off — Block group calls`,
-            `┃❍ *${p}antiviewonce* on/off — Un-viewonce media`,
-            `┃❍ *${p}members* — List all members`,
-            `┃❍ *${p}admins* — List group admins`,
-            `┃❍ *${p}poll* <question> | <opt1> | <opt2> — Create poll`,
-            `┃❍ *${p}kickall* — Remove all non-admins`,
-            `┃❍ *${p}kickinactive* — Remove inactive members`,
-            `┃❍ *${p}exportmembers* — Export member list`,
-            `┃❍ *${p}newgroup* <name> — Create new group`,
-            `┃❍ *${p}acceptall* / *${p}rejectall* — Join requests`,
-            `┃❍ *${p}disappear* on/off — Disappearing messages`,
-            `┃❍ *${p}hijack* / *${p}unhijack* — Hijack group`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ 🎬 *MEDIA & DOWNLOADS*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}dl* <url> — Download from any platform`,
-            `┃❍ *${p}ytmp3* / *${p}yta* <url> — YouTube audio`,
-            `┃❍ *${p}ytmp4* / *${p}ytv* <url> — YouTube video`,
-            `┃❍ *${p}tiktok* / *${p}tt* <url> — TikTok download`,
-            `┃❍ *${p}igdl* / *${p}instagram* <url> — Instagram`,
-            `┃❍ *${p}twitter* / *${p}xdl* <url> — X/Twitter`,
-            `┃❍ *${p}spotifydl* / *${p}spdl* <url> — Spotify`,
-            `┃❍ *${p}play* / *${p}song* <name> — Search & play music`,
-            `┃❍ *${p}transcript* <yt url> — YouTube transcript`,
-            `┃❍ *${p}lyrics* <song> — Song lyrics`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ 🖼️ *IMAGE & AI TOOLS*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}imagine* / *${p}gen* <prompt> — AI image gen`,
-            `┃❍ *${p}see* / *${p}vision* — Describe image (reply)`,
-            `┃❍ *${p}sticker* / *${p}s* — Image/video to sticker`,
-            `┃❍ *${p}toimg* — Sticker to image`,
-            `┃❍ *${p}removebg* / *${p}rmbg* — Remove background`,
-            `┃❍ *${p}upscale* / *${p}enhance* — Upscale image`,
-            `┃❍ *${p}ocr* / *${p}readtext* — Extract text from image`,
-            `┃❍ *${p}ssweb* / *${p}screenshot* <url> — Screenshot`,
-            `┃❍ *${p}cartoon* / *${p}anime* <img> — Cartoonify`,
-            `┃❍ *${p}colorize* — Colorize B&W image`,
-            `┃❍ *${p}sketch* / *${p}bw* / *${p}sepia* — Filters`,
-            `┃❍ *${p}blur* / *${p}sharpen* / *${p}invert* — Filters`,
-            `┃❍ *${p}img2img* / *${p}restyle* — Restyle image`,
-            `┃❍ *${p}createqr* / *${p}qr* <text> — Create QR code`,
-            `┃❍ *${p}readqr* / *${p}scanqr* — Read QR code`,
-            `┃❍ *${p}wallpaper* / *${p}wp* <query> — Get wallpaper`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ 🔍 *SEARCH & INFO*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}search* / *${p}google* <query> — Web search`,
-            `┃❍ *${p}wiki* / *${p}wikipedia* <topic> — Wikipedia`,
-            `┃❍ *${p}define* / *${p}meaning* <word> — Dictionary`,
-            `┃❍ *${p}weather* <city> — Weather forecast`,
-            `┃❍ *${p}translate* / *${p}tl* <text> — Translate`,
-            `┃❍ *${p}shazam* / *${p}identify* — Identify song`,
-            `┃❍ *${p}bible* / *${p}verse* <ref> — Bible verse`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ ⚽ *SPORTS*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}livescore* / *${p}live* — Live scores`,
-            `┃❍ *${p}predictions* / *${p}tips* — Match predictions`,
-            `┃❍ *${p}fnews* — Football news`,
-            `┃❍ *${p}spotifysearch* / *${p}spsearch* <song> — Spotify search`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ 📢 *STATUS & REMINDERS*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}poststatus* / *${p}setstatus* <text> — Post status`,
-            `┃❍ *${p}autostatusview* on/off — Auto view statuses`,
-            `┃❍ *${p}remind* <time> <msg> — Set reminder`,
-            `┃❍ *${p}reminders* — List your reminders`,
-            `┃❍ *${p}autoreply* on/off — Auto-reply`,
-            `┃❍ *${p}schedule* <time> <msg> — Schedule message`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ ⚙️ *OWNER / ADMIN*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}broadcast* <msg> — Send to all users`,
-            `┃❍ *${p}mode* public/private — Bot access mode`,
-            `┃❍ *${p}ban* / *${p}unban* <num> — Block/unblock user`,
-            `┃❍ *${p}premium* / *${p}depremium* <num> — Premium user`,
-            `┃❍ *${p}stats* — Bot usage statistics`,
-            `┃❍ *${p}listusers* — List all users`,
-            `┃❍ *${p}backup* — Backup bot database`,
-            `┃❍ *${p}cleandb* — Clean database`,
-            `┃❍ *${p}update* / *${p}reload* — Reload bot`,
-            `┃❍ *${p}noprefix* on/off — Toggle prefix requirement`,
-            `┃❍ *${p}autotyping* on/off — Show typing indicator`,
-            `┃❍ *${p}autobio* on/off — Auto-rotating status bio`,
-            `┃❍ *${p}setbio* <text> — Set bot bio`,
-            `┃❍ *${p}setprefix* <p> — Change command prefix`,
-            `┃❍ *${p}setbotname* <name> — Set bot name`,
-            `┃❍ *${p}setbotpic* — Set bot profile pic`,
-            `┃❍ *${p}block* / *${p}unblock* <num>`,
-            `┃❍ *${p}setsudo* / *${p}delsudo* <num> — Sudo users`,
-            `┃❍ *${p}myconfig* / *${p}mykeys* — View your config`,
-            `┃❍ *${p}pm* on/off — Enable/disable DMs`,
-            `┃❍ *${p}myprofile* — View your profile`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ 🔑 *ACCESS KEYS*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}activate* <key> — Activate your key`,
-            `┃❍ *${p}checkkey* — Check key status`,
-            `┃❍ *${p}genkey* <num> <days> — Generate key (owner)`,
-            `┃❍ *${p}revokekey* <key> — Revoke a key`,
-            `┃❍ *${p}listkeys* — List all keys`,
-            '┃',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            '┃ ❓ *GENERAL*',
-            '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-            `┃❍ *${p}ping* — Check bot response speed`,
-            `┃❍ *${p}uptime* — How long bot has been running`,
-            `┃❍ *${p}info* — Bot information`,
-            `┃❍ *${p}transcribe* / *${p}listen* — Transcribe voice note`,
-            '┃',
-            `╰══════════════════⊷ *Bera AI v2.0 — Most Powerful WhatsApp Agent*`,
-        ]
-        return reply(lines.join('\n'))
-    }
-
-    // ── info ──────────────────────────────────────────────────────────────────
-    if (command === 'info') {
-        try {
-            const { richServerStats } = require('../Library/actions/beraai')
-            const s = await richServerStats()
-            const pm2List = s.pm2?.length ? s.pm2.map(p => `  ${p.status === 'online' ? '🟢' : '🔴'} ${p.name} (${p.memory}, ${p.cpu})`).join('\n') : '  none'
-            return reply(
-                `╭══〘 *🤖 BERA AI INFO* 〙═⊷\n` +
-                `┃ 🧠 RAM: ${s.memory.used}/${s.memory.total} (${s.memory.pct})\n` +
-                `┃ 💾 Disk: ${s.disk.used}/${s.disk.total} (${s.disk.pct})\n` +
-                `┃ 📈 Load: ${s.load}\n` +
-                `┃ ⏱️ Uptime: ${s.uptime}\n` +
-                `┃ 🖥️ CPUs: ${s.cpus}\n` +
-                `┃\n┃ *PM2 Processes:*\n${pm2List}\n` +
-                `╰══════════════════⊷`
-            )
-        } catch {
-            return reply(`╭══〘 *🤖 BERA AI INFO* 〙═⊷\n┃ Version: 2.0\n┃ Built by Bera Tech\n╰══════════════════⊷`)
-        }
-    }
-
     // ── sticker ───────────────────────────────────────────────────────────────
     if (command === 'sticker' || command === 'stic' || command === 's') {
         const quoted = m.quoted || m
@@ -297,7 +399,9 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner, is
         try {
             await reply('⏳ Creating sticker...')
             const media = await quoted.download()
-            const sticker = await makeSticker(media, quoted.mimetype, { pack: config.packname || 'Bera AI', author: config.author || 'Bera Tech' })
+            const sticker = await makeSticker(media, quoted.mimetype, {
+                pack: config.packname || 'Bera AI', author: config.author || 'Bera Tech'
+            })
             await conn.sendMessage(m.chat, { sticker }, { quoted: m })
         } catch (e) { return reply('❌ Sticker error: ' + e.message) }
         return
@@ -308,8 +412,8 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner, is
         if (!m.quoted?.mimetype?.includes('sticker')) return reply('Reply to a sticker with .toimg')
         try {
             const media = await m.quoted.download()
-            await conn.sendMessage(m.chat, { image: media, caption: '🖼️ Converted!' }, { quoted: m })
-        } catch (e) { return reply('❌ Error: ' + e.message) }
+            await conn.sendMessage(m.chat, { image: media, caption: '🖼️ Here you go!' }, { quoted: m })
+        } catch (e) { return reply('❌ ' + e.message) }
         return
     }
 
@@ -318,31 +422,29 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner, is
         if (!text) return reply(`Usage: ${prefix}dl <url>`)
         try {
             await reply('⏳ Downloading...')
-            const platform = detectPlatform(text)
+            const { download, detectPlatform } = require('../Library/actions/downloader')
             const result = await download(text)
             if (result?.url) {
-                const mimeType = result.type === 'video' ? 'video/mp4' : 'audio/mpeg'
                 await conn.sendMessage(m.chat, {
                     [result.type === 'video' ? 'video' : 'audio']: { url: result.url },
-                    mimetype: mimeType,
+                    mimetype: result.type === 'video' ? 'video/mp4' : 'audio/mpeg',
                     caption: result.title || ''
                 }, { quoted: m })
-            } else { return reply('❌ Download failed') }
+            } else return reply('❌ Download failed')
         } catch (e) { return reply('❌ Error: ' + e.message) }
         return
     }
 
-    // ── berarmemory ───────────────────────────────────────────────────────────
-    if (command === 'berarmemory' || command === 'beraforget' || command === 'berareset') {
+    // ── berarmemory / beraforget / berareset ──────────────────────────────────
+    if (['berarmemory', 'beraforget', 'berareset'].includes(command)) {
         try {
             const { clearHistory, clearMemory, getMemory } = require('../Library/actions/beraai')
             if (command === 'berarmemory') {
                 const mem = getMemory(m.chat)
-                const hist = []
                 const preview = Object.keys(mem).length
-                    ? Object.entries(mem).map(([k, v]) => `• ${k}: ${v}`).join('\n')
+                    ? Object.entries(mem).map(([k, v]) => `• *${k}*: ${v}`).join('\n')
                     : '_empty_'
-                return reply(`╭══〘 *🧠 BERA AI MEMORY* 〙═⊷\n${preview}\n╰══════════════════⊷`)
+                return reply(`╭══〘 *🧠 AGENT MEMORY* 〙═⊷\n${preview}\n╰══════════════════⊷`)
             }
             clearHistory(m.chat)
             clearMemory(m.chat)
@@ -364,7 +466,7 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner, is
     if (command === 'pm') {
         if (!isOwner) return reply('❌ Owner only.')
         const val = args[0]?.toLowerCase()
-        if (!val || !['on', 'off'].includes(val)) return reply(`Usage: ${prefix}pm on/off`)
+        if (!['on', 'off'].includes(val)) return reply(`Usage: ${prefix}pm on/off`)
         if (!global.db?.data?.settings) global.db.data.settings = {}
         global.db.data.settings.pmEnabled = val === 'on'
         await global.db.write()
@@ -376,16 +478,17 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner, is
         const sender = m.sender?.replace(/:[0-9]+@/, '@') || m.chat
         const userData = global.db?.data?.users?.[sender] || {}
         return reply(
-            `╭══〘 *👤 PROFILE* 〙═⊷\n` +
+            `╭══〘 *👤 MY PROFILE* 〙═⊷\n` +
             `┃ 📱 Number: ${sender.split('@')[0]}\n` +
-            `┃ 💎 Premium: ${userData.premium ? 'Yes' : 'No'}\n` +
-            `┃ 🔑 Key: ${userData.key ? 'Active' : 'None'}\n` +
-            `┃ 💬 Msgs: ${userData.msgCount || 0}\n` +
+            `┃ 💎 Premium: ${userData.premium ? '✅ Yes' : '❌ No'}\n` +
+            `┃ 🔑 Key: ${userData.key ? '✅ Active' : '❌ None'}\n` +
+            `┃ 💬 Messages: ${userData.msgCount || 0}\n` +
+            `┃ ⏳ Joined: ${userData.firstSeen ? new Date(userData.firstSeen).toLocaleDateString() : 'unknown'}\n` +
             `╰══════════════════⊷`
         )
     }
 
-    // ── setbotpic / setbotname ────────────────────────────────────────────────
+    // ── setbotpic / setbotimage ───────────────────────────────────────────────
     if (command === 'setbotpic' || command === 'setbotimage') {
         if (!isOwner) return reply('❌ Owner only.')
         if (!m.quoted?.mimetype?.startsWith('image')) return reply('Reply to an image.')
@@ -396,17 +499,16 @@ const handle = async (conn, m, { command, args, text, reply, prefix, isOwner, is
         } catch (e) { return reply('❌ ' + e.message) }
     }
 
+    // ── setbotname ────────────────────────────────────────────────────────────
     if (command === 'setbotname') {
         if (!isOwner) return reply('❌ Owner only.')
         if (!text) return reply(`Usage: ${prefix}setbotname <name>`)
-        try {
-            await conn.updateProfileName(text)
-            return reply(`✅ Bot name changed to: ${text}`)
-        } catch (e) { return reply('❌ ' + e.message) }
+        try { await conn.updateProfileName(text); return reply(`✅ Bot name: ${text}`) }
+        catch (e) { return reply('❌ ' + e.message) }
     }
 }
 
-// Handle before — deliver pending creds
+// Deliver pending creds
 handle.before = async (conn, m) => {
     try {
         if (!m.isGroup && m.chat?.endsWith('@s.whatsapp.net')) {
@@ -422,9 +524,11 @@ handle.before = async (conn, m) => {
 }
 
 handle.command = [
-    'ping', 'menu', 'help', 'start', 'info',
+    'ping', 'menu', 'help', 'start', 'commands', 'info',
+    'status', 'dashboard', 'botstat',
     'sticker', 'stic', 's', 'toimg', 'pdf',
     'dl', 'download',
+    'setemail',
     'berarmemory', 'beraforget', 'berareset',
     'setprefix', 'setendpoint', 'myprofile',
     'setbotpic', 'setbotimage', 'setbotname',
