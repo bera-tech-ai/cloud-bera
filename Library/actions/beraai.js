@@ -9,7 +9,7 @@ const { exec } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 
-const GIFTED = 'https://api.giftedtech.co.ke'
+const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 const XWOLF = 'https://apis.xwolf.space'
 
