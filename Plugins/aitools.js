@@ -9,7 +9,7 @@ const axios = require('axios')
 const { sendButtons } = require('gifted-btns')
 const { getBtnMode } = require('../Library/actions/btnmode')
 
-const GIFTED = 'https://api.giftedtech.co.ke'
+const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
 const handle = {}
