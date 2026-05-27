@@ -2,7 +2,15 @@ const config = require('../Config')
 const moment = require('moment-timezone')
 const { makeSticker } = require('../Library/actions/sticker')
 
-const handle = async (conn, m, { command, args, text, reply, prefix, isOwner, isAdmin, isBotAdmin, m: msg }) => {
+const handle = async (conn, m, ctx) => {
+    // ── FIX: Guard clause to prevent destructuring error ──────────────────────
+    if (!ctx || typeof ctx !== 'object') {
+        console.error('[general.js] Invalid context received:', ctx);
+        return; // Exit early to prevent the error
+    }
+    
+    // Now destructure safely from ctx
+    const { command, args, text, reply, prefix, isOwner, isAdmin, isBotAdmin, m: msg } = ctx;
 
     // ── ping ──────────────────────────────────────────────────────────────────
     if (command === 'ping') {
