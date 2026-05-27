@@ -565,168 +565,765 @@ const preDispatch = async (text) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SYSTEM PROMPT — Full Agent Mode (46 tools)
 // ─────────────────────────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `╔══════════════════════════════════════════════════════════════╗
-║ BERA AI — AGENT MODE                                        ║
-║ Created by Bera Tech | All rights reserved                  ║
-╚══════════════════════════════════════════════════════════════╝
 
-You are BERA AI — the most advanced WhatsApp AI agent ever built. Created by Bera Tech.
-You are powered by OpenAI GPT-4o. You run as a WhatsApp bot on @whiskeysockets/baileys.
-NEVER deny being Bera AI. NEVER say you are ChatGPT or Claude directly.
+// ─────────────────────────────────────────────────────────────────────────────
+// SYSTEM PROMPT — Gemini-compatible function-calling agent
+// ─────────────────────────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are Bera AI — an intelligent WhatsApp assistant and autonomous agent built by Bera Tech.
+You can execute real actions using tools. When the user asks you to DO or PERFORM something, output a JSON tool call. When chatting, respond in plain text.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ABSOLUTE RULES — NEVER VIOLATE:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL RULES:
+1. When performing an action → output ONLY valid JSON (no text before or after the JSON)
+2. When chatting → respond in plain text
+3. NEVER describe what you would do — actually DO it with a tool call
+4. After seeing tool results → either call more tools or give a final plain text reply
+5. You CAN kick users from groups, run shell commands, install packages, clone repos, deploy apps
+6. For "kick @user" → use wa_kick tool with their number
+7. For "run ls" or "ls -la" → use bash tool: {"tool":"bash","cmd":"ls -la"}
+8. For "install express" → use install tool: {"tool":"install","packages":["express"],"path":"workspace/myapp"}
+9. For "clone repo to workspace/cloud" → {"tool":"bash","cmd":"git clone <url> workspace/cloud"}
+10. WORKSPACE is a real folder at workspace/ on this server. Files you create there persist.
 
-EXECUTE, DON'T DESCRIBE: When asked to DO something — DO IT with tools.
-ALWAYS VERIFY: After creating or deploying — verify it worked.
-PLAN FIRST: For 3+ step tasks, output your plan, then execute.
-SEND PROGRESS: For 5+ tool calls, send "⚙️ [N/total] Step..."
-NEVER HALF-DONE: Try 3 different approaches before giving up.
-SECRETS SACRED: Never output API keys, tokens, passwords.
-CONFIRM DESTRUCTIVE: Before deleting files, dropping databases — ask user.
-COMPLETE FILES: When writing code, write the ENTIRE file. Never truncate.
-PRODUCTION QUALITY: All code must handle errors, validate input, use env vars.
-PARALLEL EXECUTION: Execute independent tasks in parallel as an array.
+TOOL CALL FORMAT:
+Single: {"tool":"bash","cmd":"ls -la"}
+Parallel: [{"tool":"search","q":"bitcoin price"},{"tool":"bash","cmd":"uptime"}]
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TOOL CALL FORMAT: Output ONLY valid JSON:
-Single tool: {"tool":"bash","cmd":"ls -la"}
-Multiple parallel: [{"tool":"bash","cmd":"..."}, {"tool":"writefile","path":"...","content":"..."}]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AVAILABLE TOOLS:
 
-AVAILABLE TOOLS (46):
-
-FILE: bash, writefile, readfile, mkdir, deletefile, listfiles, zipfolder, unzip
-WEB: search, scrape, http, screenshot, webform
-CODE: runcode, install, lint, codereview, apidocs, regex, jsonformat, csv2json, json2csv, yaml2json, json2yaml, xml2json
-GIT: gitinit, gitdiff, gitlog, gitbranch, gitstatus, gitstash, gitpull, gitpush
-DEPLOY: deploy_vercel, deploy_railway, deploy_netlify, deploy_render, deploy_fly, deploy_sky
-SSH: ssh
-DATABASE: db, db_migrate
-MEMORY: remember, recall, recall_all, forget, forget_all
-NOTES: note
-CRON: cron
-MONITOR: monitor, syswatch, netcheck, portcheck
-WHATSAPP: wa_send, wa_send_image, wa_send_audio, wa_send_video, wa_send_file, wa_create_group, wa_get_groups, wa_react
-MEDIA: tts, transcribe_audio, audio_info, video_info, video_download, video_trim, video_thumbnail, imagine_hd, ocr, qrgen, qrread, convert
-MATH: calc, stats, unit_convert, currency, date_calc
-NOTIFY: send_email, send_webhook, send_telegram, send_discord
-PROJECT: project_analyze, project_deps, project_test, project_build, project_health, project_readme
-DEVOPS: docker, k8s, terraform
-ADVANCED: secret, tunnel, webhook, benchmark, logs, finetune, rag, playwright, mobile, web3, ml, pdf, excel
-BERAHOST: berahost
-SYSTEM: system
-
-EXAMPLES:
-{"tool":"bash","cmd":"ls -la workspace/"}
-{"tool":"writefile","path":"workspace/app/server.js","content":"const express=require('express')..."}
-{"tool":"http","method":"GET","url":"https://api.example.com/data"}
-{"tool":"ssh","server":"myserver","cmd":"pm2 restart all"}
-{"tool":"runcode","lang":"node","code":"console.log('hello')"}
+SHELL:
+{"tool":"bash","cmd":"any shell command","timeout":30000}
+{"tool":"runcode","lang":"node","code":"console.log('hi')"}
 {"tool":"install","packages":["express","dotenv"],"path":"workspace/myapp"}
-{"tool":"deploy_vercel","folder":"workspace/myapp","name":"my-app"}
-{"tool":"remember","key":"project","value":"Building REST API in Express"}
-{"tool":"cron","action":"add","id":"daily","schedule":"0 9 * * *","task":"search weather Nairobi","chat":"CHAT_ID"}
-{"tool":"monitor","action":"add","id":"mysite","url":"https://myapp.com","interval":300,"chat":"CHAT_ID"}
-{"tool":"docker","action":"ps"}
-{"tool":"berahost","action":"list"}
-{"tool":"db","action":"query","file":"workspace/data.sqlite","sql":"SELECT * FROM users LIMIT 10"}
-{"tool":"calc","expr":"(2^10 + sqrt(144)) * PI"}
-{"tool":"pdf","action":"generate","html":"workspace/report.html","output":"workspace/report.pdf"}
-{"tool":"imagine_hd","prompt":"A beautiful Nairobi skyline at sunset","size":"1024x1024"}
 
-PATTERNS:
-Build & Deploy: mkdir -> writefile -> install -> runcode -> gitinit -> deploy -> reply with URL
-SSH Task: ssh (echo ok) -> ssh (actual cmd) -> reply
-Code Review: readfile -> codereview -> reply
-Schedule: cron add -> confirm
-Parallel ops: [tool1, tool2, tool3] for independent tasks
+FILES:
+{"tool":"writefile","path":"workspace/app/index.js","content":"full file content here"}
+{"tool":"readfile","path":"workspace/app/index.js"}
+{"tool":"listfiles","path":"workspace/"}
+{"tool":"mkdir","path":"workspace/myapp"}
+{"tool":"deletefile","path":"workspace/old.js"}
+{"tool":"zipfolder","path":"workspace/myapp","output":"workspace/myapp.zip"}
+
+WEB:
+{"tool":"search","q":"latest bitcoin price"}
+{"tool":"scrape","url":"https://example.com"}
+{"tool":"http","method":"GET","url":"https://api.example.com/data","headers":{},"body":null}
+{"tool":"screenshot","url":"https://example.com"}
+
+MEMORY:
+{"tool":"remember","key":"server_ip","value":"45.67.89.12"}
+{"tool":"recall","key":"server_ip"}
+{"tool":"recall_all"}
+{"tool":"forget","key":"server_ip"}
+
+WHATSAPP GROUP MANAGEMENT:
+{"tool":"wa_kick","number":"254712345678","group":"GROUP_JID"}
+{"tool":"wa_promote","number":"254712345678","group":"GROUP_JID"}
+{"tool":"wa_demote","number":"254712345678","group":"GROUP_JID"}
+{"tool":"wa_send","number":"254712345678@s.whatsapp.net","message":"Hello!"}
+{"tool":"wa_react","emoji":"👍"}
+
+SYSTEM:
+{"tool":"system"}
+
+BERAHOST:
+{"tool":"berahost","action":"list"}
+{"tool":"berahost","action":"status","id":42}
+{"tool":"berahost","action":"start","id":42}
+{"tool":"berahost","action":"stop","id":42}
+{"tool":"berahost","action":"logs","id":42}
+{"tool":"berahost","action":"deploy","botId":2,"envVars":{"OWNER_NUMBER":"254712345678"}}
+{"tool":"berahost","action":"coins"}
+{"tool":"berahost","action":"bots"}
+
+DEPLOY:
+{"tool":"deploy_vercel","folder":"workspace/myapp","name":"my-app","token":"TOKEN"}
+{"tool":"deploy_railway","folder":"workspace/myapp","name":"my-app"}
+
+DATABASE:
+{"tool":"db","action":"query","file":"workspace/data.sqlite","sql":"SELECT * FROM users"}
+{"tool":"db","action":"exec","file":"workspace/data.sqlite","sql":"CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT)"}
+
+SCHEDULE:
+{"tool":"cron","action":"add","id":"daily-weather","schedule":"0 9 * * *","task":"search weather Nairobi"}
+{"tool":"cron","action":"list"}
+{"tool":"cron","action":"cancel","id":"daily-weather"}
+
+UTILITIES:
+{"tool":"calc","expr":"2^10 + sqrt(144)"}
+{"tool":"qrgen","text":"https://wa.me/254712345678"}
+{"tool":"tts","text":"Hello this is Bera AI","lang":"en"}
+{"tool":"currency","amount":100,"from":"USD","to":"KES"}
+{"tool":"unit_convert","value":10,"from":"km","to":"mi"}
+
+EXAMPLES OF CORRECT BEHAVIOR:
+User: "ls" → {"tool":"bash","cmd":"ls -la workspace/"}
+User: "run ls -la" → {"tool":"bash","cmd":"ls -la"}
+User: "kick @user" → {"tool":"wa_kick","number":"254712345678","group":"GROUP_JID"}
+User: "install express" → {"tool":"install","packages":["express"],"path":"workspace/myapp"}
+User: "clone https://github.com/x/y to workspace/cloud" → {"tool":"bash","cmd":"git clone https://github.com/x/y workspace/cloud"}
+User: "what is my server IP?" → {"tool":"recall","key":"server_ip"}
+User: "deploy bera ai for 254712345678" → {"tool":"berahost","action":"deploy","botId":2,"envVars":{"OWNER_NUMBER":"254712345678"}}
+User: "what is 2+2?" → Plain text: "2 + 2 = 4"
+User: "how are you?" → Plain text: "I'm doing great! Ready to help with anything."
 `
 
-// ── Tool executor function (simplified version for the main loop)
-// Note: The full executeToolCall function with all 46 tools is defined above
-// but we need to make sure it's accessible. For brevity, we'll keep the existing implementation.
+// ─────────────────────────────────────────────────────────────────────────────
+// PARSE TOOL CALLS — extract JSON from any AI response
+// ─────────────────────────────────────────────────────────────────────────────
+const parseToolCalls = (text) => {
+    if (!text) return null
+    const t = text.trim()
+
+    // Strip markdown code fences
+    const stripped = t
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```\s*$/i, '')
+        .trim()
+
+    // Try pure JSON array
+    if (stripped.startsWith('[')) {
+        try {
+            const parsed = JSON.parse(stripped)
+            if (Array.isArray(parsed) && parsed.length && parsed[0]?.tool) return parsed
+        } catch {}
+    }
+
+    // Try pure JSON object
+    if (stripped.startsWith('{')) {
+        try {
+            const parsed = JSON.parse(stripped)
+            if (parsed?.tool) return [parsed]
+        } catch {}
+    }
+
+    // Extract JSON embedded anywhere in text (Gemini adds explanations around JSON)
+    const matches = []
+    // Match balanced JSON objects and arrays
+    const tryExtract = (src) => {
+        for (let i = 0; i < src.length; i++) {
+            if (src[i] !== '{' && src[i] !== '[') continue
+            const open = src[i], close = open === '{' ? '}' : ']'
+            let depth = 0, j = i
+            for (; j < src.length; j++) {
+                if (src[j] === open) depth++
+                else if (src[j] === close) { depth--; if (depth === 0) break }
+            }
+            const chunk = src.slice(i, j + 1)
+            try {
+                const parsed = JSON.parse(chunk)
+                if (Array.isArray(parsed)) {
+                    const tools = parsed.filter(p => p?.tool)
+                    if (tools.length) { tools.forEach(tc => matches.push(tc)); return }
+                } else if (parsed?.tool) {
+                    matches.push(parsed)
+                    return
+                }
+            } catch {}
+        }
+    }
+    tryExtract(t)
+    return matches.length ? matches : null
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN AGENT LOOP
+// EXECUTE TOOL CALL — actually runs tools
+// ─────────────────────────────────────────────────────────────────────────────
+const nodeFs = require('fs')
+const nodeFsP = require('fs').promises
+const nodePath = require('path')
+const WS_ROOT = nodePath.resolve('./workspace')
+
+const safeWsPath = (p) => {
+    if (!p) return null
+    const resolved = nodePath.resolve(p.startsWith('/') ? p : nodePath.join('./', p))
+    // Allow any path (the agent has full access to the server)
+    return resolved
+}
+
+const executeToolCall = async (tc, chatId, conn, m) => {
+    const t = tc.tool
+
+    // ── bash ──────────────────────────────────────────────────────────────────
+    if (t === 'bash') {
+        if (!tc.cmd) return 'ERROR: no cmd provided'
+        const blocked = [/printenv\s*$/, /export\s+-p\s*$/, /cat\s+\.env\s*$/]
+        if (blocked.some(p => p.test((tc.cmd||'').trim()))) return 'BLOCKED: sensitive command.'
+        const r = await runBash(tc.cmd, tc.timeout || 30000)
+        return r.output || 'done (no output)'
+    }
+
+    // ── runcode ───────────────────────────────────────────────────────────────
+    if (t === 'runcode') {
+        const lang = (tc.lang || 'node').toLowerCase()
+        const code = tc.code || ''
+        const tmpFile = `/tmp/beracode_${Date.now()}.${lang === 'python' ? 'py' : lang === 'bash' ? 'sh' : 'js'}`
+        nodeFs.writeFileSync(tmpFile, code)
+        const cmd = lang === 'python' ? `python3 "${tmpFile}"` : lang === 'bash' ? `bash "${tmpFile}"` : `node "${tmpFile}"`
+        const r = await runBash(cmd, tc.timeout || 30000)
+        try { nodeFs.unlinkSync(tmpFile) } catch {}
+        return r.output || 'done (no output)'
+    }
+
+    // ── install ───────────────────────────────────────────────────────────────
+    if (t === 'install') {
+        const pkgs = Array.isArray(tc.packages) ? tc.packages.join(' ') : (tc.packages || '')
+        const dir = tc.path || '.'
+        const mgr = tc.manager || 'npm'
+        if (!pkgs) return 'ERROR: no packages listed'
+        const mkdirRes = await runBash(`mkdir -p "${dir}"`, 5000)
+        const cmd = mgr === 'pip' ? `pip install ${pkgs}` : mgr === 'yarn' ? `cd "${dir}" && yarn add ${pkgs}` : `cd "${dir}" && npm install ${pkgs}`
+        const r = await runBash(cmd, 120000)
+        return r.output || 'installed'
+    }
+
+    // ── writefile ─────────────────────────────────────────────────────────────
+    if (t === 'writefile') {
+        const p = safeWsPath(tc.path)
+        if (!p) return 'ERROR: invalid path'
+        nodeFs.mkdirSync(nodePath.dirname(p), { recursive: true })
+        await nodeFsP.writeFile(p, tc.content || '', 'utf8')
+        return `written: ${p} (${(tc.content||'').length} bytes)`
+    }
+
+    // ── readfile ──────────────────────────────────────────────────────────────
+    if (t === 'readfile') {
+        const p = safeWsPath(tc.path)
+        if (!p) return 'ERROR: invalid path'
+        if (!nodeFs.existsSync(p)) return `not found: ${p}`
+        return (await nodeFsP.readFile(p, 'utf8')).slice(0, 6000)
+    }
+
+    // ── listfiles ─────────────────────────────────────────────────────────────
+    if (t === 'listfiles') {
+        const p = safeWsPath(tc.path || 'workspace/')
+        const r = await runBash(`ls -la "${p}" 2>&1 | head -50`, 5000)
+        return r.output || 'empty'
+    }
+
+    // ── mkdir ─────────────────────────────────────────────────────────────────
+    if (t === 'mkdir') {
+        const p = safeWsPath(tc.path)
+        if (!p) return 'ERROR: invalid path'
+        nodeFs.mkdirSync(p, { recursive: true })
+        return `created: ${p}`
+    }
+
+    // ── deletefile ────────────────────────────────────────────────────────────
+    if (t === 'deletefile') {
+        const p = safeWsPath(tc.path)
+        if (!p) return 'ERROR: invalid path'
+        if (!nodeFs.existsSync(p)) return `not found: ${p}`
+        const stat = nodeFs.statSync(p)
+        if (stat.isDirectory()) {
+            await runBash(`rm -rf "${p}"`, 10000)
+        } else {
+            await nodeFsP.unlink(p)
+        }
+        return `deleted: ${p}`
+    }
+
+    // ── zipfolder ─────────────────────────────────────────────────────────────
+    if (t === 'zipfolder') {
+        const src = safeWsPath(tc.path)
+        const out = safeWsPath(tc.output || (tc.path + '.zip'))
+        const r = await runBash(`zip -r "${out}" "${src}" 2>&1`, 30000)
+        return r.output || `zipped to ${out}`
+    }
+
+    // ── search ────────────────────────────────────────────────────────────────
+    if (t === 'search') {
+        const res = await webSearch(tc.q || tc.query || '')
+        if (!res.success || !res.results?.length) return 'No results found'
+        return res.results.map((r, i) => `${i+1}. ${r.title}\n${r.snippet}\n${r.url}`).join('\n\n')
+    }
+
+    // ── scrape ────────────────────────────────────────────────────────────────
+    if (t === 'scrape') {
+        const r = await scrapeUrl(tc.url || '')
+        return r.success ? r.text : `failed: ${r.error}`
+    }
+
+    // ── http ──────────────────────────────────────────────────────────────────
+    if (t === 'http') {
+        try {
+            const cfg = {
+                method: tc.method || 'GET',
+                url: tc.url,
+                headers: tc.headers || {},
+                timeout: 20000,
+                validateStatus: () => true
+            }
+            if (tc.body || tc.data) cfg.data = tc.body || tc.data
+            if (tc.params) cfg.params = tc.params
+            const axios2 = require('axios')
+            const r = await axios2(cfg)
+            const body = typeof r.data === 'object' ? JSON.stringify(r.data, null, 2) : String(r.data)
+            return `HTTP ${r.status}\n${body.slice(0, 3000)}`
+        } catch (e) {
+            return `HTTP error: ${e.message}`
+        }
+    }
+
+    // ── screenshot ────────────────────────────────────────────────────────────
+    if (t === 'screenshot') {
+        try {
+            const axios2 = require('axios')
+            const r = await axios2.get(`${GIFTED}/api/search/screenshot`, {
+                params: { url: tc.url, apikey: GIFTED_KEY },
+                timeout: 25000
+            })
+            const img = r.data?.result?.url || r.data?.result || r.data?.url
+            if (img && conn && m) {
+                await conn.sendMessage(chatId, { image: { url: img }, caption: `📸 ${tc.url}` }, { quoted: m }).catch(()=>{})
+                return `screenshot sent: ${img}`
+            }
+            return img ? `screenshot: ${img}` : 'screenshot failed'
+        } catch (e) { return `screenshot failed: ${e.message}` }
+    }
+
+    // ── system ────────────────────────────────────────────────────────────────
+    if (t === 'system') {
+        const info = await richServerStats()
+        return JSON.stringify(info, null, 2)
+    }
+
+    // ── memory: remember ──────────────────────────────────────────────────────
+    if (t === 'remember') {
+        if (!tc.key || !tc.value) return 'ERROR: need key and value'
+        saveMemory(chatId, tc.key, String(tc.value))
+        return `remembered: ${tc.key} = ${tc.value}`
+    }
+
+    // ── memory: recall ────────────────────────────────────────────────────────
+    if (t === 'recall') {
+        if (!tc.key) return JSON.stringify(getMemory(chatId))
+        const val = getMemory(chatId)[tc.key]
+        return val !== undefined ? `${tc.key}: ${val}` : `not found: ${tc.key}`
+    }
+
+    // ── memory: recall_all ────────────────────────────────────────────────────
+    if (t === 'recall_all') {
+        const mem = getMemory(chatId)
+        const keys = Object.keys(mem)
+        if (!keys.length) return 'Memory is empty'
+        return keys.map(k => `${k}: ${mem[k]}`).join('\n')
+    }
+
+    // ── memory: forget ────────────────────────────────────────────────────────
+    if (t === 'forget') {
+        deleteMemory(chatId, tc.key)
+        return `forgotten: ${tc.key || 'all memory'}`
+    }
+
+    // ── WhatsApp: wa_kick ─────────────────────────────────────────────────────
+    if (t === 'wa_kick') {
+        if (!conn || !m) return 'ERROR: no connection'
+        const group = tc.group || chatId
+        if (!group?.endsWith('@g.us')) return 'ERROR: must be used in a group'
+        const num = String(tc.number || '').replace(/[^0-9]/g, '')
+        if (!num) return 'ERROR: no number provided'
+        const jid = num.includes('@') ? tc.number : `${num}@s.whatsapp.net`
+        try {
+            await conn.groupParticipantsUpdate(group, [jid], 'remove')
+            return `kicked: ${num}`
+        } catch (e) { return `kick failed: ${e.message}` }
+    }
+
+    // ── WhatsApp: wa_promote ──────────────────────────────────────────────────
+    if (t === 'wa_promote') {
+        if (!conn || !m) return 'ERROR: no connection'
+        const group = tc.group || chatId
+        const num = String(tc.number || '').replace(/[^0-9]/g, '')
+        const jid = `${num}@s.whatsapp.net`
+        try {
+            await conn.groupParticipantsUpdate(group, [jid], 'promote')
+            return `promoted: ${num}`
+        } catch (e) { return `promote failed: ${e.message}` }
+    }
+
+    // ── WhatsApp: wa_demote ───────────────────────────────────────────────────
+    if (t === 'wa_demote') {
+        if (!conn || !m) return 'ERROR: no connection'
+        const group = tc.group || chatId
+        const num = String(tc.number || '').replace(/[^0-9]/g, '')
+        const jid = `${num}@s.whatsapp.net`
+        try {
+            await conn.groupParticipantsUpdate(group, [jid], 'demote')
+            return `demoted: ${num}`
+        } catch (e) { return `demote failed: ${e.message}` }
+    }
+
+    // ── WhatsApp: wa_send ─────────────────────────────────────────────────────
+    if (t === 'wa_send') {
+        if (!conn) return 'ERROR: no connection'
+        const to = tc.number || chatId
+        try {
+            await conn.sendMessage(to, { text: tc.message || '' })
+            return `sent to ${to}`
+        } catch (e) { return `send failed: ${e.message}` }
+    }
+
+    // ── WhatsApp: wa_react ────────────────────────────────────────────────────
+    if (t === 'wa_react') {
+        if (!conn || !m) return 'ERROR: no connection'
+        try {
+            await conn.sendMessage(chatId, { react: { text: tc.emoji || '👍', key: m.key } })
+            return `reacted: ${tc.emoji}`
+        } catch (e) { return `react failed: ${e.message}` }
+    }
+
+    // ── berahost ──────────────────────────────────────────────────────────────
+    if (t === 'berahost') {
+        const bhLib = require('./berahost')
+        const action = tc.action || 'list'
+        try {
+            switch (action) {
+                case 'list': {
+                    const deps = await bhLib.listDeployments()
+                    return JSON.stringify(deps, null, 2).slice(0, 2000)
+                }
+                case 'status': {
+                    const d = await bhLib.getDeployment(tc.id)
+                    return JSON.stringify(d, null, 2).slice(0, 1500)
+                }
+                case 'start': { await bhLib.startDeployment(tc.id); return `started #${tc.id}` }
+                case 'stop': { await bhLib.stopDeployment(tc.id); return `stopped #${tc.id}` }
+                case 'logs': {
+                    const logs = await bhLib.getLogs(tc.id)
+                    return (Array.isArray(logs) ? logs : logs.logs || []).slice(-20).map(l => l.logLine).join('\n')
+                }
+                case 'deploy': {
+                    const d = await bhLib.createDeployment(tc.botId, tc.envVars || {})
+                    return `deployed: id=${d.id} status=${d.status}`
+                }
+                case 'coins': {
+                    const c = await bhLib.getCoins()
+                    return `coins: ${c.coins} | streak: ${c.streak} | canClaim: ${c.canClaimToday}`
+                }
+                case 'bots': {
+                    const bots = await bhLib.getBots()
+                    return bots.map(b => `[${b.id}] ${b.name} — needs: ${Object.keys(b.requiredVars||{}).join(', ')}`).join('\n')
+                }
+                default: return `unknown berahost action: ${action}`
+            }
+        } catch (e) { return `berahost error: ${e.message}` }
+    }
+
+    // ── deploy_vercel ─────────────────────────────────────────────────────────
+    if (t === 'deploy_vercel') {
+        const folder = tc.folder || 'workspace/'
+        const token = tc.token || global.db?.data?.settings?.vercelToken || process.env.VERCEL_TOKEN || ''
+        if (!token) return 'ERROR: Vercel token not set. Use .setvercel <token>'
+        const r = await runBash(`cd "${folder}" && npx vercel --token "${token}" --yes 2>&1`, 120000)
+        return r.output || 'deployment attempted'
+    }
+
+    // ── deploy_railway ────────────────────────────────────────────────────────
+    if (t === 'deploy_railway') {
+        const folder = tc.folder || 'workspace/'
+        const r = await runBash(`cd "${folder}" && npx @railway/cli up 2>&1`, 120000)
+        return r.output || 'deployment attempted'
+    }
+
+    // ── db ────────────────────────────────────────────────────────────────────
+    if (t === 'db') {
+        const file = safeWsPath(tc.file || 'workspace/data.sqlite')
+        const sql = tc.sql || ''
+        if (!sql) return 'ERROR: no SQL'
+        const cmd = `node -e "
+const db=require('better-sqlite3')('${file}');
+try {
+  const action='${tc.action||'query'}';
+  if(action==='query'){const rows=db.prepare(${JSON.stringify(sql)}).all();console.log(JSON.stringify(rows,null,2))}
+  else{db.prepare(${JSON.stringify(sql)}).run();console.log('done')}
+  db.close()
+} catch(e){console.error(e.message);db.close()}" 2>&1`
+        const r = await runBash(cmd, 15000)
+        return r.output || 'done'
+    }
+
+    // ── cron ──────────────────────────────────────────────────────────────────
+    if (t === 'cron') {
+        if (global._cronJobs === undefined) global._cronJobs = {}
+        const action = tc.action || 'list'
+        if (action === 'list') {
+            const jobs = Object.entries(global._cronJobs || {})
+            if (!jobs.length) return 'No cron jobs active'
+            return jobs.map(([id, j]) => `#${id}: ${j.schedule} — ${j.task}`).join('\n')
+        }
+        if (action === 'add') {
+            const id = tc.id || `cron_${Date.now()}`
+            const schedule = tc.schedule
+            const task = tc.task
+            if (!schedule || !task) return 'ERROR: need schedule and task'
+            // Store for display (actual execution requires node-cron)
+            global._cronJobs[id] = { schedule, task, chat: chatId, createdAt: new Date().toISOString() }
+            // Try to use node-cron if available
+            try {
+                const cron = require('node-cron')
+                if (!cron.validate(schedule)) return `ERROR: invalid cron expression: ${schedule}`
+                if (global._cronTasks === undefined) global._cronTasks = {}
+                global._cronTasks[id] = cron.schedule(schedule, async () => {
+                    try {
+                        if (conn) await conn.sendMessage(chatId, { text: `⏰ *Cron [${id}]:* ${task}` })
+                    } catch {}
+                })
+            } catch {}
+            return `✅ Cron #${id} scheduled: "${schedule}" — ${task}`
+        }
+        if (action === 'cancel') {
+            const id = tc.id
+            if (!id) return 'ERROR: need id'
+            try { if (global._cronTasks?.[id]) { global._cronTasks[id].stop(); delete global._cronTasks[id] } } catch {}
+            delete global._cronJobs?.[id]
+            return `cancelled cron: ${id}`
+        }
+        return 'unknown cron action'
+    }
+
+    // ── monitor ───────────────────────────────────────────────────────────────
+    if (t === 'monitor') {
+        if (!global._monitors) global._monitors = {}
+        const action = tc.action || 'list'
+        if (action === 'add') {
+            const id = tc.id || tc.url
+            const url = tc.url
+            const interval = (tc.interval || 300) * 1000
+            if (!url) return 'ERROR: need url'
+            global._monitors[id] = { url, interval, chat: chatId, lastStatus: null }
+            const check = async () => {
+                try {
+                    const axios2 = require('axios')
+                    const r = await axios2.get(url, { timeout: 10000, validateStatus: () => true })
+                    const up = r.status < 400
+                    const prev = global._monitors[id]?.lastStatus
+                    if (prev !== null && prev !== up && conn) {
+                        await conn.sendMessage(chatId, { text: up ? `✅ *${url}* is back UP (${r.status})` : `🔴 *${url}* is DOWN (${r.status})` }).catch(()=>{})
+                    }
+                    if (global._monitors[id]) global._monitors[id].lastStatus = up
+                } catch (e) {
+                    if (global._monitors[id]?.lastStatus !== false && conn) {
+                        await conn.sendMessage(chatId, { text: `🔴 *${url}* is DOWN — ${e.message}` }).catch(()=>{})
+                    }
+                    if (global._monitors[id]) global._monitors[id].lastStatus = false
+                }
+            }
+            if (!global._monitorIntervals) global._monitorIntervals = {}
+            check()
+            global._monitorIntervals[id] = setInterval(check, interval)
+            return `✅ Monitoring ${url} every ${tc.interval||300}s`
+        }
+        if (action === 'list') {
+            const entries = Object.entries(global._monitors || {})
+            if (!entries.length) return 'No monitors active'
+            return entries.map(([id, m]) => `• ${id}: ${m.url} (${m.lastStatus === true ? '✅ up' : m.lastStatus === false ? '🔴 down' : '⏳ checking'})`).join('\n')
+        }
+        if (action === 'remove' || action === 'stop') {
+            const id = tc.id || tc.url
+            try { if (global._monitorIntervals?.[id]) { clearInterval(global._monitorIntervals[id]); delete global._monitorIntervals[id] } } catch {}
+            delete global._monitors?.[id]
+            return `stopped monitoring: ${id}`
+        }
+        return 'unknown monitor action'
+    }
+
+    // ── calc ──────────────────────────────────────────────────────────────────
+    if (t === 'calc') {
+        try {
+            const expr = (tc.expr || '').replace(/[^0-9+\-*/.()^ ]/g, '').slice(0, 200)
+            const fn = new Function('return ' + expr.replace(/\^/g, '**'))
+            return String(fn())
+        } catch (e) { return `calc error: ${e.message}` }
+    }
+
+    // ── currency ──────────────────────────────────────────────────────────────
+    if (t === 'currency') {
+        try {
+            const axios2 = require('axios')
+            const r = await axios2.get(`https://api.exchangerate.host/convert?from=${tc.from}&to=${tc.to}&amount=${tc.amount}`, { timeout: 10000 })
+            const result = r.data?.result
+            if (result) return `${tc.amount} ${tc.from} = ${result.toFixed(2)} ${tc.to}`
+            return 'currency conversion failed'
+        } catch (e) { return `currency error: ${e.message}` }
+    }
+
+    // ── unit_convert ──────────────────────────────────────────────────────────
+    if (t === 'unit_convert') {
+        const conversions = {
+            'km_mi': 0.621371, 'mi_km': 1.60934, 'kg_lb': 2.20462, 'lb_kg': 0.453592,
+            'c_f': v => v * 9/5 + 32, 'f_c': v => (v - 32) * 5/9,
+            'm_ft': 3.28084, 'ft_m': 0.3048, 'l_gal': 0.264172, 'gal_l': 3.78541
+        }
+        const key = `${tc.from}_${tc.to}`.toLowerCase()
+        const conv = conversions[key]
+        if (!conv) return `unknown conversion: ${tc.from} to ${tc.to}`
+        const result = typeof conv === 'function' ? conv(tc.value) : tc.value * conv
+        return `${tc.value} ${tc.from} = ${result.toFixed(4)} ${tc.to}`
+    }
+
+    // ── qrgen ─────────────────────────────────────────────────────────────────
+    if (t === 'qrgen') {
+        try {
+            const axios2 = require('axios')
+            const url = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(tc.text || '')}`
+            if (conn && m) {
+                await conn.sendMessage(chatId, { image: { url }, caption: `🔲 QR: ${tc.text}` }, { quoted: m }).catch(()=>{})
+                return 'QR code sent'
+            }
+            return `QR URL: ${url}`
+        } catch (e) { return `qr error: ${e.message}` }
+    }
+
+    // ── tts ───────────────────────────────────────────────────────────────────
+    if (t === 'tts') {
+        try {
+            const text = encodeURIComponent((tc.text || '').slice(0, 200))
+            const lang = tc.lang || 'en'
+            const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${text}&tl=${lang}&client=tw-ob`
+            if (conn && m) {
+                await conn.sendMessage(chatId, { audio: { url }, mimetype: 'audio/mpeg', ptt: false }, { quoted: m }).catch(()=>{})
+                return 'TTS audio sent'
+            }
+            return `TTS URL: ${url}`
+        } catch (e) { return `tts error: ${e.message}` }
+    }
+
+    return `unknown tool: ${t}`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN AGENT LOOP — fixed, actually executes tools
 // ─────────────────────────────────────────────────────────────────────────────
 const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
-    try { 
+    try {
         const pd = await preDispatch(text)
-        if (pd && pd.reply) { 
-            pushHistory(chat,'user',text)
-            pushHistory(chat,'assistant',pd.reply)
-            return pd 
+        if (pd && pd.reply) {
+            pushHistory(chat, 'user', text)
+            pushHistory(chat, 'assistant', pd.reply)
+            return pd
         }
     } catch {}
 
-    // Rate limiting (non-owner)
+    // Rate limit non-owners
     if (global.db?.data && !opts.isOwner) {
-        const now = Date.now(), db = global.db.data
+        const now = Date.now()
+        const db = global.db.data
         if (!db.users) db.users = {}
         if (!db.users[chat]) db.users[chat] = {}
         const u = db.users[chat]
-        u.agentCalls = (u.agentCalls||[]).filter(t => now-t < 3600000)
-        if (u.agentCalls.length >= 10) return { success:false, reply:'⏳ Rate limit: 10 agent tasks/hour. Try later.' }
+        u.agentCalls = (u.agentCalls || []).filter(ts => now - ts < 3600000)
+        if (u.agentCalls.length >= 10) return { success: false, reply: '⏳ Rate limit: 10 tasks/hour.' }
         u.agentCalls.push(now)
-        await global.db.write().catch(()=>{})
+        await global.db.write().catch(() => {})
     }
 
     pushHistory(chat, 'user', text)
 
-    // Build context
+    // Build context with memory + workspace
     const mem = getMemory(chat)
-    const memStr = Object.keys(mem).length ? '\n\n🧠 User Memory:\n'+Object.entries(mem).map(([k,v])=>`${k}: ${v}`).join('\n') : ''
+    const memStr = Object.keys(mem).length
+        ? '\n\nUser Memory:\n' + Object.entries(mem).map(([k, v]) => `${k}: ${v}`).join('\n')
+        : ''
     let wsCtx = ''
-    try { const r=await runBash('ls -la workspace/ 2>/dev/null | head -20',3000); wsCtx='\n\n📁 Workspace:\n'+(r.output?.slice(0,400)||'empty') } catch {}
+    try {
+        const r = await runBash('ls workspace/ 2>/dev/null | head -20', 3000)
+        if (r.output && r.output.trim()) wsCtx = '\n\nWorkspace files:\n' + r.output.trim()
+    } catch {}
+
+    // Extract mentioned participants if in group (for kick/promote tools)
+    let mentionCtx = ''
+    try {
+        const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
+        if (mentioned.length) mentionCtx = '\n\nMentioned users: ' + mentioned.join(', ')
+    } catch {}
+
+    // Inject group JID context
+    const groupCtx = (m?.isGroup && chat?.endsWith('@g.us')) ? `\n\nCurrent group JID: ${chat}` : ''
 
     const messages = [
-        { role:'system', content: SYSTEM_PROMPT + memStr + wsCtx },
-        ...getHistory(chat).slice(-14)
+        { role: 'system', content: SYSTEM_PROMPT + memStr + wsCtx + mentionCtx + groupCtx },
+        ...getHistory(chat).slice(-12)
     ]
 
-    const loopCap = opts.maxLoops || 25
-    const toolCounts = {}
-    let totalCalls = 0
-    let progCount = 0
+    const loopCap = opts.maxLoops || 20
+    let stepCount = 0
+    let lastProgressMsg = null
 
-    const sendProg = async (toolName) => {
-        progCount++
-        if (conn && m && (progCount <= 2 || progCount % 3 === 0)) {
-            await conn.sendMessage(chat, { text:`⚙️ *Working...* (step ${progCount})\n_${toolName}_` }).catch(()=>{})
+    const sendProgress = async (toolName) => {
+        stepCount++
+        if (!conn || !m) return
+        if (stepCount <= 3 || stepCount % 4 === 0) {
+            try {
+                const sent = await conn.sendMessage(chat, {
+                    text: `⚙️ *Working...* (step ${stepCount})\n_Using: ${toolName}_`
+                })
+                lastProgressMsg = sent?.key
+            } catch {}
         }
     }
 
     for (let loop = 0; loop < loopCap; loop++) {
         let aiReply
-        try { aiReply = await callAI(messages, 60000) } catch { aiReply = localFallback(text) }
+        try { aiReply = await callAI(messages, 60000) } catch {}
         if (!aiReply) aiReply = localFallback(text)
 
-        // Check for tool calls in the response (simplified - the full executor is in the file)
-        // For now, if no tool pattern found, return as text
-        if (!aiReply.includes('"tool"')) {
+        // Try to parse tool calls from AI response
+        const toolCalls = parseToolCalls(aiReply)
+
+        if (!toolCalls || !toolCalls.length) {
+            // No tool calls → return as plain text
             pushHistory(chat, 'assistant', aiReply)
+            // Clean up any "working" progress message
             return { success: true, reply: aiReply }
         }
 
-        pushHistory(chat, 'assistant', aiReply)
-        messages.push({ role:'assistant', content: aiReply })
-        messages.push({ role:'user', content: 'Continue. If done, give final reply.' })
+        // Execute all tool calls (parallel where possible but sequential for simplicity)
+        messages.push({ role: 'assistant', content: aiReply })
+
+        const toolResults = []
+        for (const tc of toolCalls) {
+            await sendProgress(tc.tool)
+            try {
+                const result = await executeToolCall(tc, chat, conn, m)
+                toolResults.push({ tool: tc.tool, result: String(result).slice(0, 2000) })
+            } catch (e) {
+                toolResults.push({ tool: tc.tool, result: `ERROR: ${e.message}` })
+            }
+        }
+
+        // Feed tool results back to AI
+        const resultsText = toolResults.map(r =>
+            `[Tool: ${r.tool}]\n${r.result}`
+        ).join('\n\n---\n\n')
+
+        messages.push({
+            role: 'user',
+            content: `Tool results:\n${resultsText}\n\nIf the task is complete, respond with your final answer in plain text. If you need to do more steps, output another JSON tool call.`
+        })
     }
 
-    return { success: false, reply: '⚠️ Task too complex.' }
+    return { success: false, reply: '⚠️ Task took too many steps. Try breaking it into smaller parts.' }
 }
 
-// ── Simple reply ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SIMPLE REPLY (chatbot mode, no tools)
+// ─────────────────────────────────────────────────────────────────────────────
 const generateSimpleReply = async (text, chat) => {
     pushHistory(chat, 'user', text)
-    const messages = [{ role:'system', content: SYSTEM_PROMPT }, ...getHistory(chat).slice(-6)]
+    const messages = [
+        { role: 'system', content: 'You are Bera AI — a friendly, smart WhatsApp assistant built by Bera Tech. Answer helpfully and concisely.' },
+        ...getHistory(chat).slice(-6)
+    ]
     try {
         const reply = await callAI(messages, 20000)
-        if (reply && reply.length > 1) { pushHistory(chat,'assistant',reply); return { success:true, reply } }
-        return { success:false, reply:'Bera AI is busy, try again.' }
-    } catch (e) { return { success:false, reply:'AI error: '+e.message } }
+        if (reply && reply.length > 1) {
+            pushHistory(chat, 'assistant', reply)
+            return { success: true, reply }
+        }
+        return { success: false, reply: 'Bera AI is busy, try again.' }
+    } catch (e) {
+        return { success: false, reply: 'AI error: ' + e.message }
+    }
 }
 
 const runShell = runBash
