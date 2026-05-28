@@ -880,6 +880,59 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         } catch (e) { results.push(`⚠️ ${e.message}`) }
         return reply(`╭══〘 *🔓 HIJACK REVERSED* 〙═⊷\n${results.map(r => `┃❍ ${r}`).join('\n')}\n╰══════════════════⊷`)
     }
+
+    // ── GCSTATUS — send a WhatsApp group story/status ─────────────────────
+    if (['gcstatus', 'groupstatus', 'gcstat', 'sendgcstatus'].includes(command)) {
+        if (groupOnly()) return
+        if (await adminOnly()) return
+        const { sendGroupStatus } = require('../Library/actions/gcstatus')
+        const q = m.quoted
+        const hasImg = q && /image/.test(q.mimetype || '')
+        const hasVid = q && /video/.test(q.mimetype || '')
+        if (!text && !hasImg && !hasVid) {
+            return reply(
+                `📢 *ɢᴄsᴛᴀᴛᴜs ᴜsᴀɢᴇ*\n\n` +
+                `• ${prefix}gcstatus <text> — post text story to group\n` +
+                `• Quote image + ${prefix}gcstatus [caption] — post image story\n` +
+                `• Quote video + ${prefix}gcstatus [caption] — post video story\n\n` +
+                `_Only works if Bera AI is a group admin_`
+            )
+        }
+        await react('⏳')
+        try {
+            if (hasImg || hasVid) {
+                const buf = await conn.downloadMediaMessage({ key: q.key, message: q.message }).catch(() => null)
+                if (!buf) { await react('❌'); return reply(`❌ Could not download media.`) }
+                await sendGroupStatus(conn, chat, {
+                    [hasImg ? 'image' : 'video']: buf,
+                    caption: text || ''
+                })
+            } else {
+                await sendGroupStatus(conn, chat, { text: text.trim() })
+            }
+            await react('✅')
+            return reply(`✅ Group story posted successfully!`)
+        } catch (e) { await react('❌'); return reply(`❌ gcstatus failed: ${e.message}`) }
+    }
+
+    // ── GCIMGSTATUS — post image status to group from URL ─────────────────
+    if (['gcimgstatus', 'gcstatusimg', 'gcstatusfromurl'].includes(command)) {
+        if (groupOnly()) return
+        if (await adminOnly()) return
+        const { sendGroupStatus } = require('../Library/actions/gcstatus')
+        const url = args[0]
+        if (!url || !url.startsWith('http')) return reply(`Usage: ${prefix}gcimgstatus <image URL> [caption]`)
+        const caption = args.slice(1).join(' ') || ''
+        await react('⏳')
+        try {
+            const axios = require('axios')
+            const imgRes = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 })
+            const buf = Buffer.from(imgRes.data)
+            await sendGroupStatus(conn, chat, { image: buf, caption })
+            await react('✅')
+            return reply(`✅ Image story posted to group!`)
+        } catch (e) { await react('❌'); return reply(`❌ Failed: ${e.message}`) }
+    }
 }
 
 handle.command = [
@@ -953,6 +1006,32 @@ handle.command = [
     'leave', 'leavegroup', 'left', 'leftgroup',
     // Hijack
     'hijack', 'unhijack',
+    // GC Status (group story)
+    'gcstatus', 'groupstatus', 'gcstat', 'sendgcstatus',
+    'gcimgstatus', 'gcstatusimg', 'gcstatusfromurl',
+    // Delete message
+    'delete', 'del', 'delmsg',
+    // Kill group
+    'killgc', 'destroygroup', 'terminategroup',
+    // Leave group
+    'leave', 'leavegroup', 'left', 'leftgroup',
+    // Bad words management
+    'badwords', 'badword',
+    // Custom welcome/goodbye messages
+    'setwelcomemsg', 'welcomemessage', 'welcomemsg',
+    'setgoodbye', 'goodbyemessage', 'goodbyemsg',
+    // Get group profile pic
+    'getgcpp', 'groupico', 'getgrouppp',
+    // Join request management
+    'listrequests', 'joinrequests', 'pendingrequests',
+    'accept', 'acceptrequest', 'reject', 'rejectrequest',
+    // Restrict/unrestrict group info editing
+    'onlyadmins', 'restrict', 'allusers', 'unrestrict',
+    // Lock/unlock topic (group info editing)
+    'locktopic', 'lockinfo', 'restricttopic',
+    'unlocktopic', 'unlockinfo', 'unrestricttopic',
+    // Mention specific user
+    'mention', 'tag', 'notify',
 ]
 handle.tags = ['group']
 
