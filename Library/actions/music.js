@@ -1,8 +1,7 @@
 const axios = require('axios')
 
 const GIFTED     = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
-const ENCODED_KEY = encodeURIComponent(GIFTED_KEY)
+const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'  // pass raw to axios params — axios encodes it correctly
 const SILVATECH   = 'https://api.silvatech.co.ke'
 
 // ── URL extractor ─────────────────────────────────────────────────────────────
@@ -24,7 +23,7 @@ const searchYoutube = async (query) => {
     // Primary: Gifted YTS
     try {
         const res = await axios.get(`${GIFTED}/api/search/yts`, {
-            params: { query, apikey: ENCODED_KEY },
+            params: { query, apikey: GIFTED_KEY },
             timeout: 12000
         })
         const results = res.data?.results
@@ -65,7 +64,7 @@ const downloadAudio = async (videoUrl) => {
     // 1. Gifted savetubemp3 (primary)
     try {
         const res = await axios.get(`${GIFTED}/api/download/savetubemp3`, {
-            params: { url: videoUrl, apikey: ENCODED_KEY },
+            params: { url: videoUrl, apikey: GIFTED_KEY },
             timeout: 45000
         })
         const data = res.data
@@ -78,7 +77,7 @@ const downloadAudio = async (videoUrl) => {
     // 2. Gifted ytmp3 128kbps
     try {
         const res = await axios.get(`${GIFTED}/api/download/ytmp3`, {
-            params: { url: videoUrl, apikey: ENCODED_KEY, quality: '128kbps' },
+            params: { url: videoUrl, apikey: GIFTED_KEY, quality: '128kbps' },
             timeout: 45000
         })
         const data = res.data
@@ -147,7 +146,7 @@ const downloadVideo = async (videoUrl) => {
     for (const ep of endpoints) {
         try {
             const res = await axios.get(`${GIFTED}${ep}`, {
-                params: { url: videoUrl, apikey: ENCODED_KEY },
+                params: { url: videoUrl, apikey: GIFTED_KEY },
                 timeout: 60000
             })
             const data = res.data
