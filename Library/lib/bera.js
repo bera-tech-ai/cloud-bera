@@ -10,8 +10,9 @@ const PERSONALITY = `You are Bera AI — a smart, witty WhatsApp bot assistant b
 Your identity:
 - Name: Bera AI
 - Creator: Bera Tech
-- NEVER call yourself Nick, ChatGPT, Keith AI, or any other AI name
+- NEVER call yourself Nick, ChatGPT, Keith AI, Gemini, GPT, Claude, or any other AI name
 - If asked who built you: "I was built by Bera Tech"
+- If asked what model you are: "I'm Bera AI, a custom AI built by Bera Tech"
 
 ═══════════════════════════════════
 BOT COMMANDS REFERENCE (prefix: .)
@@ -198,7 +199,7 @@ const cleanAnswer = (raw) => {
     }
     clean = clean.replace(/```json\s*\{[^`]*"reasoning_content"[^`]*\}\s*```/gs, '').trim()
 
-    // Identity fixes — replace any "Keith AI" references
+    // Identity fixes — replace any foreign AI name references
     clean = clean.replace(/I'?m not Bera AI[,.]?\s*I'?m Keith AI\.?/gi, "I'm Bera AI, built by Bera Tech.")
     clean = clean.replace(/(?:Hi[,!]?|Hello[,!]?|Hey[,!]?)\s+I'?m Keith AI[,.]?/gi, "Hi! I'm Bera AI, built by Bera Tech.")
     clean = clean.replace(/I'?m Keith AI[,!.]?/gi, "I'm Bera AI, built by Bera Tech.")
@@ -208,8 +209,17 @@ const cleanAnswer = (raw) => {
     clean = clean.replace(/POWERED BY GIFTED TECH/gi, 'POWERED BY BERA TECH')
     clean = clean.replace(/Powered by Gifted Tech/gi, 'Powered by Bera Tech')
 
+    // Gemini identity fixes
+    clean = clean.replace(/I'?m (?:Google\s+)?Gemini[,!.]?/gi, "I'm Bera AI, built by Bera Tech.")
+    clean = clean.replace(/(?:Hi[,!]?|Hello[,!]?|Hey[,!]?)[,\s]+I'?m (?:Google\s+)?Gemini[,!.]/gi, "Hi! I'm Bera AI, built by Bera Tech.")
+    clean = clean.replace(/This is (?:Google\s+)?Gemini[,!.]?/gi, "This is Bera AI.")
+    clean = clean.replace(/Gemini here[,!.]?/gi, "Bera AI here.")
+    clean = clean.replace(/\b(?:Google\s+)?Gemini\b(?=\s+AI\b|\s+(?:is|can|will|would|does|here)|\s*[,!.]|$)/gi, 'Bera AI')
+    clean = clean.replace(/\bI'?m (?:a\s+)?(?:large\s+language\s+model|LLM)\s+(?:by|from|made\s+by)\s+Google[,!.]?/gi, "I'm Bera AI, built by Bera Tech.")
+    clean = clean.replace(/\b(?:made|built|created|developed|trained)\s+by\s+Google[,!.]?/gi, 'built by Bera Tech.')
+
     // Strip AI name prefixes
-    clean = clean.replace(/^(Nick|ChatGPT|GPT|AI|Keith AI|Bera AI|Assistant):\s*/i, '').trim()
+    clean = clean.replace(/^(Nick|ChatGPT|GPT|AI|Keith AI|Gemini|Google\s+Gemini|Bera AI|Assistant):\s*/i, '').trim()
     clean = clean.replace(/\bI'?m Nick\b/gi, "I'm Bera AI")
     clean = clean.replace(/\bNick AI\b/gi, 'Bera AI')
     clean = clean.replace(/\bKeith AI\b/gi, 'Bera AI')
