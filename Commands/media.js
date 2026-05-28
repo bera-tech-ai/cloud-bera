@@ -57,31 +57,38 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
     }
 
     // ── play / song / music ───────────────────────────────────────────────────
-    if (command === 'play' || command === 'song' || command === 'music') {
-        if (!text) return reply(`❌ Usage: ${prefix}play <song name>\nExample: ${prefix}play Kendrick Lamar Not Like Us`)
-        await react(conn, m, '🎵')
-        await reply(`⏳ Searching for *${text}*...`)
+    if (command === 'play' || command === 'song' || command === 'music' || command === 'play2') {
+        if (!text) return reply(`🎵 *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nUsage: ${prefix}play [song name]\nExample: ${prefix}play faded`)
+        await react(conn, m, '🎧')
+        await reply(`⏳ *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nSearching: *${text}*\nGive me a moment...`)
         const res = await searchAndDownload(text)
         if (!res.success) {
             await react(conn, m, '❌')
-            return reply(`❌ Couldn't find that song: ${res.error}`)
+            return reply(`❌ *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nTrack "${text}" not found. Try a different song or check spelling.`)
         }
         if (typeof res.audioUrl !== 'string' || !res.audioUrl.startsWith('http')) {
             await react(conn, m, '❌')
-            return reply(`❌ Got an invalid audio link. Try a different song name.`)
+            return reply(`⚠️ *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nMusic service is napping. Try again in a moment.`)
         }
-        await react(conn, m, '✅')
+        await reply(`🎵 *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nTitle: ${res.title || text}\nDuration: ${res.duration || 'N/A'}\n\nDownloading audio...`)
+        const hasThumbnail = res.thumbnail && typeof res.thumbnail === 'string' && res.thumbnail.startsWith('http')
         await conn.sendMessage(chat, {
             audio: { url: res.audioUrl },
-            mimetype: 'audio/mp4',
+            mimetype: 'audio/mpeg',
             ptt: false,
-            fileName: `${res.title || text}.mp3`
+            fileName: `${res.title || text}.mp3`,
+            contextInfo: hasThumbnail ? {
+                externalAdReply: {
+                    thumbnailUrl: res.thumbnail,
+                    title: res.title || text,
+                    body: `${res.channel ? res.channel + ' • ' : ''}⏱️ ${res.duration || 'N/A'}`,
+                    sourceUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(res.title || text)}`,
+                    renderLargerThumbnail: true,
+                    mediaType: 1
+                }
+            } : undefined
         }, { quoted: m })
-        const infoLine = `🎵 *${res.title || text}*${res.channel ? `\n📺 ${res.channel}` : ''}${res.duration ? ` · ${res.duration}` : ''}`
-        if (res.thumbnail && typeof res.thumbnail === 'string' && res.thumbnail.startsWith('http')) {
-            return conn.sendMessage(chat, { image: { url: res.thumbnail }, caption: infoLine })
-        }
-        return conn.sendMessage(chat, { text: infoLine })
+        await react(conn, m, '✅')
     }
 
     // ── imagine / draw / gen ──────────────────────────────────────────────────
@@ -221,7 +228,7 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
 
 handle.command = [
     'translate', 'tl', 'tr',
-    'play', 'song', 'music',
+    'play', 'play2', 'song', 'music',
     'imagine', 'draw', 'gen', 'generate',
     'see', 'vision', 'describe',
     'search', 'google', 'web',
