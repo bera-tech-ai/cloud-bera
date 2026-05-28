@@ -98,20 +98,7 @@ const cobaltDownload = async (videoUrl) => {
 
 // ── YouTube search (multi-source) ────────────────────────────────────────────
 const searchYoutube = async (query) => {
-    // Try Gifted search first
-    try {
-        const res = await axios.get(`${GIFTED}/api/search/yts`, {
-            params: { query, apikey: ENCODED_KEY },
-            timeout: 15000
-        })
-        const results = res.data?.results
-        if (Array.isArray(results) && results.length) {
-            const videos = results.filter(item => item.type === 'video')
-            if (videos.length) return { success: true, results: videos.slice(0, 5) }
-        }
-    } catch {}
-
-    // Fallback: YouTube Data API via public search proxy
+    // Primary: yt.lemnoslife.com (free, no API key needed)
     try {
         const res = await axios.get(`https://yt.lemnoslife.com/noKey/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5`, {
             timeout: 10000
@@ -123,10 +110,23 @@ const searchYoutube = async (query) => {
                 title: it.snippet?.title,
                 videoId: it.id?.videoId,
                 url: `https://youtube.com/watch?v=${it.id?.videoId}`,
-                thumbnail: it.snippet?.thumbnails?.default?.url || '',
+                thumbnail: it.snippet?.thumbnails?.medium?.url || it.snippet?.thumbnails?.default?.url || '',
                 author: { name: it.snippet?.channelTitle || '' }
             })).filter(v => v.videoId)
             if (mapped.length) return { success: true, results: mapped }
+        }
+    } catch {}
+
+    // Fallback: Gifted API (key may be expired)
+    try {
+        const res = await axios.get(`${GIFTED}/api/search/yts`, {
+            params: { query, apikey: ENCODED_KEY },
+            timeout: 8000
+        })
+        const results = res.data?.results
+        if (Array.isArray(results) && results.length) {
+            const videos = results.filter(item => item.type === 'video')
+            if (videos.length) return { success: true, results: videos.slice(0, 5) }
         }
     } catch {}
 
@@ -181,42 +181,37 @@ const downloadVideo = async (videoUrl) => {
 }
 
 // ── MAIN: Search and Download Audio ──────────────────────────────────────────
-// Chain: Gifted search+dl → ToxicAPIs → cobalt
+// Chain: yt.lemnoslife search+dl → ToxicAPIs → Gifted → cobalt
 const searchAndDownload = async (query) => {
-    // 1. Gifted: search + download in one chain
-    const gifted = await giftedPlay(query)
-    if (gifted?.success) return gifted
+    // 1. YouTube search (free) + audio download
+    const ytSearch = await searchYoutube(query)
+    if (ytSearch.success) {
+        const top = ytSearch.results[0]
+        const videoUrl = top?.url || (top?.videoId ? `https://youtube.com/watch?v=${top.videoId}` : '')
+        if (videoUrl) {
+            const dl = await downloadAudio(videoUrl)
+            if (dl.success) {
+                return {
+                    success: true, audioUrl: dl.url,
+                    title: top?.title || dl.title || query,
+                    channel: typeof top?.author?.name === 'string' ? top.author.name : '',
+                    duration: top?.timestamp || top?.duration?.timestamp || '',
+                    thumbnail: top?.thumbnail || top?.image || '',
+                    source: 'youtube'
+                }
+            }
+        }
+    }
 
     // 2. ToxicAPIs direct search+download
     const toxic = await toxicPlay(query)
     if (toxic?.success) return toxic
 
-    // 3. Manual YouTube search + audio download
-    const ytSearch = await searchYoutube(query)
-    if (!ytSearch.success) {
-        return { success: false, error: 'No results found for that song. Try a different name.' }
-    }
+    // 3. Gifted: search + download in one chain
+    const gifted = await giftedPlay(query)
+    if (gifted?.success) return gifted
 
-    const top = ytSearch.results[0]
-    const videoUrl = top?.url || (top?.videoId ? `https://youtube.com/watch?v=${top.videoId}` : '') || toUrl(top?.link)
-    if (!videoUrl) return { success: false, error: 'Could not extract video URL' }
-
-    const dl = await downloadAudio(videoUrl)
-    if (!dl.success) return { success: false, error: `Could not download audio: ${dl.error}` }
-
-    const thumbnail = top?.thumbnail || top?.image || toUrl(top?.thumbnails) || ''
-    const duration  = top?.timestamp || top?.duration?.timestamp || ''
-    const channel   = typeof top?.author?.name === 'string' ? top.author.name : ''
-
-    return {
-        success: true,
-        audioUrl: dl.url,
-        title: top?.title || dl.title || query,
-        channel,
-        duration,
-        thumbnail,
-        source: 'youtube'
-    }
+    return { success: false, error: 'Could not download that song. Try a different name.' }
 }
 
 // ── MAIN: Search and Download Video ──────────────────────────────────────────
