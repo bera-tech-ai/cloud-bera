@@ -49,15 +49,20 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         if (isOwner) return true
         const meta = await getGroupMeta()
         if (!meta) return false
-        // sender may also be in LID or phone form depending on Baileys version
-        const senderNum = (sender || '').split('@')[0]
+        // sender may appear in phone JID, LID, or @s.whatsapp.net form
+        const senderRaw = (sender || '').replace(/:[0-9]+@/, '@')
+        const senderNum = senderRaw.split('@')[0].replace(/[^0-9]/g, '')
         const p = meta.participants.find(p => {
-            if (p.id === sender || p.lid === sender || p.jid === sender) return true
-            const pNum = (p.id || '').split('@')[0]
-            const pLidNum = (p.lid || '').split('@')[0]
-            return senderNum && (pNum === senderNum || pLidNum === senderNum)
+            const pId  = (p.id  || '').replace(/:[0-9]+@/, '@')
+            const pLid = (p.lid || '').replace(/:[0-9]+@/, '@')
+            const pJid = (p.jid || '').replace(/:[0-9]+@/, '@')
+            if (pId === senderRaw || pLid === senderRaw || pJid === senderRaw) return true
+            const pNum = pId.split('@')[0].replace(/[^0-9]/g, '')
+            const pLidNum = pLid.split('@')[0].replace(/[^0-9]/g, '')
+            return senderNum.length > 5 && (pNum === senderNum || pLidNum === senderNum)
         })
-        return p?.admin === 'admin' || p?.admin === 'superadmin'
+        if (!p) return false
+        return p?.admin === 'admin' || p?.admin === 'superadmin' || !!p?.admin
     }
 
     const getTarget = () => {
