@@ -420,44 +420,84 @@ const githubTokenRegen = async (tokenInDB) => {
 const PLAN_PROMPT = `You are Bera AI's action planner. Given a user task, return ONLY strict JSON — no markdown.
 
 Available actions:
+SYSTEM & SHELL:
 - shell          → args: { cmd }
 - file_read      → args: { path }
 - file_write     → args: { path, content }
 - js_eval        → args: { code }
-- npm_install    → args: { packages, cwd }   ← ALWAYS use after create_project or when packages needed
+- system_info    → args: {}
+- port_check     → args: { port }
+- file_search    → args: { pattern, directory, ext }
+- file_diff      → args: { file1, file2 }
+- env_manage     → args: { action("list"|"get"|"set"|"delete"), key, value }
+- password_gen   → args: { length, noSymbols }
+- json_tools     → args: { action("format"|"minify"|"validate"|"keys"), json }
+
+CODE EXECUTION (any language via Piston API):
+- run_code       → args: { code, lang, stdin }   ← lang: js, python, php, ruby, go, rust, c, cpp, java, kotlin, swift, lua, perl, r, haskell, ts, bash, etc.
+- npm_install    → args: { packages, cwd }
+- code_gen       → args: { description, language }   ← AI writes code for you
+- code_review    → args: { code, context }
+- code_explain   → args: { code, fileName }
+- bug_finder     → args: { code, fileName }
+- npm_stats      → args: { package }
+
+WEB SCRAPING & BROWSING:
+- web_scrape     → args: { url }   ← full structured scrape (title, text, links, images, tables, JSON-LD)
+- extract_links  → args: { url, filter }   ← get all links, optionally filtered
+- extract_table  → args: { url }   ← parse HTML tables to structured JSON
+- extract_data   → args: { url }   ← get JSON-LD, Open Graph, meta tags
+- extract_emails → args: { url }   ← find all email addresses on page
+- extract_phones → args: { url }   ← find all phone numbers on page
+- find_text      → args: { url, query }   ← search for keyword on a page
+- bulk_scrape    → args: { urls }   ← scrape multiple URLs (array)
+- regex_extract  → args: { url, pattern, flags }   ← regex match on page content
+- fetch_json     → args: { url, headers }   ← fetch and pretty-print JSON API
+- api_test       → args: { method, url, body, headers }   ← test any API endpoint
+- screenshot     → args: { url }   ← screenshot a website
+- page_monitor   → args: { url, previousHash }   ← detect if page content changed
+
+NETWORKING:
+- http_request   → args: { method, url, data, headers }
+- url_check      → args: { urls }   ← check if URLs are up (array or space-separated)
+- dns_check      → args: { host }
+- ssl_check      → args: { domain }
+- ping           → args: { host }
+- whois          → args: { domain }
+- ip_lookup      → args: { ip }
+
+PROJECT MANAGEMENT:
+- create_project → args: { name, type, port, description }   ← creates in /tmp/projects/<name>
+- workspace_save → args: { projectDir, repoName, description, isPrivate }   ← save to GitHub
 - pm2_start      → args: { script, name }
 - pm2_stop       → args: { name }
 - pm2_restart    → args: { name }
 - pm2_logs       → args: { name, lines }
 - pm2_list       → args: {}
-- create_project → args: { name, type, port, description }   ← creates project in /tmp/projects/<name>
-- workspace_save → args: { projectDir, repoName, description, isPrivate }   ← saves project to GitHub (not same as save_note)
 - git_clone      → args: { url, folder }
 - git_push       → args: { folder, message }
 - git_status     → args: { folder }
-- http_request   → args: { method, url, data, headers }
-- system_info    → args: {}
-- port_check     → args: { port }
-- docker_manage  → args: { action, name }
-- code_review    → args: { code, context }
-- code_explain   → args: { code, fileName }
-- bug_finder     → args: { code, fileName }
-- npm_stats      → args: { package }
 - github_token   → args: {}
+- docker_manage  → args: { action, name }
 - berahost_deploy→ args: { botName, repoUrl, ram, disk, cpu }
 - berahost_list  → args: {}
 - berahost_power → args: { serverId, action }
+
+AI:
 - search         → args: { query }
 - image_gen      → args: { prompt }
 - music          → args: { query }
 
 RULES:
-- "save to workspace" or "save on workspace" means workspace_save (GitHub), NOT the save_note command
-- When creating a project, always include npm_install step with cwd=/tmp/projects/<name>, then pm2_start
-- When "save"/"workspace"/"github" appear with a project, add workspace_save step
+- "save to workspace" or "save on workspace" = workspace_save (GitHub), NOT save_note
+- When creating a project: create_project → npm_install (cwd=/tmp/projects/<name>) → pm2_start
+- When user says "scrape", "extract", "get data from" a URL → use web_scrape or extract_*
+- For any programming language task → use run_code with the right lang
+- For "write code for X" → use code_gen then run_code
+- urls arg in bulk_scrape must be an array: ["url1","url2"]
 
-Return format (ONLY JSON):
-{"plan":"one line summary","steps":[{"action":"shell","args":{"cmd":"ls"},"desc":"List files"}]}
+Return format (ONLY JSON, no markdown):
+{"plan":"one line summary","steps":[{"action":"web_scrape","args":{"url":"https://example.com"},"desc":"Scrape example.com"}]}
 
 Task: `
 
@@ -584,6 +624,138 @@ const executeStep = async (step, conn, chat, m) => {
                 const results = r.data?.results || r.data || []
                 return { success: true, output: Array.isArray(results) ? results.slice(0,3).map(x=>`• ${x.title}: ${x.body||x.snippet||''}`).join('\n') : String(results).slice(0,500), desc }
             }
+
+            // ── Code execution (any language via Piston) ────────────────────
+            case 'run_code': {
+                const { runCode, formatRunResult } = require('./coderunner')
+                const r = await runCode(args.code || '', args.lang || 'javascript', args.stdin || '', 20000)
+                return { success: r.success, output: formatRunResult(r), desc }
+            }
+            case 'code_gen': {
+                const r = await codeGen(args.description || args.task || '', args.language || 'javascript')
+                return { success: r.success, output: r.text || r.error, desc }
+            }
+
+            // ── Web scraping ────────────────────────────────────────────────
+            case 'web_scrape': {
+                const sc = require('./scraper')
+                const r = await sc.scrapePage(args.url)
+                if (!r.success) return { success: false, output: `❌ Scrape failed: ${r.error}`, desc }
+                const out = [
+                    `🌐 *${r.title || r.url}*`,
+                    `📄 Text (${r.text.length} chars): ${r.text.slice(0, 600)}...`,
+                    `🔗 Links: ${r.linksCount} found`,
+                    `🖼️ Images: ${r.imagesCount} | 📊 Tables: ${r.tablesCount}`,
+                    r.meta.description ? `📝 Description: ${r.meta.description.slice(0, 200)}` : '',
+                    r.headings.length ? `📑 Headings: ${r.headings.slice(0,5).map(h=>`H${h.level}: ${h.text}`).join(' | ')}` : '',
+                ].filter(Boolean).join('\n')
+                return { success: true, output: out, rawData: r, desc }
+            }
+            case 'extract_links': {
+                const sc = require('./scraper')
+                const r = await sc.extractLinks(args.url, args.filter || '')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                const preview = r.links.slice(0, 20).map(l => `• ${l.text || '(no text)'}: ${l.href}`).join('\n')
+                return { success: true, output: `🔗 Found ${r.total} links${args.filter ? ` (filtered by "${args.filter}")` : ''}:\n\n${preview}`, desc }
+            }
+            case 'extract_table': {
+                const sc = require('./scraper')
+                const r = await sc.extractTables(args.url)
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                if (!r.count) return { success: true, output: '📊 No tables found on this page.', desc }
+                const preview = r.tables.map((t, i) =>
+                    `📊 Table ${i+1} (${t.rowCount} rows):\nHeaders: ${t.headers.join(' | ')}\nRow 1: ${(t.rows[0] || []).join(' | ')}`
+                ).join('\n\n')
+                return { success: true, output: preview, rawData: r, desc }
+            }
+            case 'extract_data': {
+                const sc = require('./scraper')
+                const r = await sc.extractStructuredData(args.url)
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                const ogStr = Object.entries(r.og || {}).map(([k,v]) => `og:${k}=${v}`).join('\n') || '(none)'
+                const metaStr = Object.entries(r.meta || {}).filter(([k]) => !k.startsWith('og:')).slice(0,8).map(([k,v]) => `${k}: ${v}`).join('\n') || '(none)'
+                const schemaTypes = (r.jsonld || []).map(s => s['@type'] || '?').join(', ') || '(none)'
+                return { success: true, output: `🔍 Structured data for ${r.title || r.url}\n\n📌 Open Graph:\n${ogStr}\n\n🏷️ Meta:\n${metaStr}\n\n📦 JSON-LD types: ${schemaTypes}`, desc }
+            }
+            case 'extract_emails': {
+                const sc = require('./scraper')
+                const r = await sc.extractEmails(args.url)
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return { success: true, output: r.count ? `📧 Found ${r.count} email(s):\n${r.emails.join('\n')}` : '📧 No emails found.', desc }
+            }
+            case 'extract_phones': {
+                const sc = require('./scraper')
+                const r = await sc.extractPhones(args.url)
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return { success: true, output: r.count ? `📞 Found ${r.count} phone(s):\n${r.phones.join('\n')}` : '📞 No phones found.', desc }
+            }
+            case 'find_text': {
+                const sc = require('./scraper')
+                const r = await sc.findText(args.url, args.query || '')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return { success: true, output: r.found ? `🔎 "${args.query}" found ${r.matches.length} time(s):\n\n${r.matches.join('\n\n')}` : `🔎 "${args.query}" not found on this page.`, desc }
+            }
+            case 'bulk_scrape': {
+                const sc = require('./scraper')
+                const urls = Array.isArray(args.urls) ? args.urls : String(args.urls).split(/[\s,]+/).filter(u => u.startsWith('http'))
+                const r = await sc.bulkScrape(urls.slice(0, 10))
+                const summary = r.results.map((res, i) => res.success
+                    ? `✅ ${res.url.slice(0,50)}: "${res.title}" (${res.text.length} chars)`
+                    : `❌ ${res.url.slice(0,50)}: ${res.error}`
+                ).join('\n')
+                return { success: true, output: `📦 Bulk scrape (${r.count} URLs):\n\n${summary}`, desc }
+            }
+            case 'regex_extract': {
+                const sc = require('./scraper')
+                const r = await sc.regexExtract(args.url, args.pattern, args.flags || 'gi')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return { success: true, output: `🔍 Regex /${args.pattern}/ → ${r.count} match(es):\n\n${r.matches.slice(0,20).join('\n')}`, desc }
+            }
+            case 'fetch_json': {
+                const sc = require('./scraper')
+                const r = await sc.fetchJson(args.url, args.headers || {})
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return { success: true, output: `📡 JSON from ${args.url}\nType: ${r.type}\n\n${r.data}`, desc }
+            }
+            case 'api_test': {
+                const sc = require('./scraper')
+                const r = await sc.apiTest(args.method || 'GET', args.url, args.body || null, args.headers || {})
+                if (!r.success) return { success: false, output: `❌ API test failed: ${r.error}`, desc }
+                const icon = r.ok ? '✅' : '⚠️'
+                return { success: true, output: `${icon} ${args.method?.toUpperCase() || 'GET'} ${args.url}\nStatus: ${r.status} | Time: ${r.ms}ms\n\n📦 Response:\n${r.body}`, desc }
+            }
+            case 'screenshot': {
+                const { takeScreenshot } = require('./browser')
+                const r = await takeScreenshot(args.url)
+                if (!r.success) return { success: false, output: `❌ Screenshot failed: ${r.error}`, desc }
+                return { success: true, output: `📸 Screenshot captured`, buffer: r.buffer, mimetype: r.mimetype, isMedia: true, desc }
+            }
+            case 'page_monitor': {
+                const sc = require('./scraper')
+                const r = await sc.checkPageChange(args.url, args.previousHash || '')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return { success: true, output: `👁️ ${args.url}\nContent hash: ${r.hash}\nChanged: ${r.changed ? '⚠️ YES' : '✅ No'}\nLength: ${r.contentLength} chars`, desc }
+            }
+
+            // ── Networking ──────────────────────────────────────────────────
+            case 'url_check': {
+                const urlList = Array.isArray(args.urls) ? args.urls : String(args.urls || '').split(/[\s,]+/).filter(u => u.startsWith('http'))
+                const r = await urlCheck(urlList)
+                return { success: r.success, output: r.output, desc }
+            }
+            case 'dns_check': { const r = await dnsCheck(args.host); return { success: r.success, output: r.output, desc } }
+            case 'ssl_check': { const r = await sslCheck(args.domain); return { success: r.success, output: r.output, desc } }
+            case 'ping':      { const r = await pingHost(args.host); return { success: r.success, output: r.output, desc } }
+            case 'whois':     { const r = await whoisLookup(args.domain); return { success: r.success, output: r.output, desc } }
+            case 'ip_lookup': { const r = await ipLookup(args.ip); return { success: r.success, output: r.output, desc } }
+
+            // ── Dev tools ───────────────────────────────────────────────────
+            case 'env_manage':   { const r = await envManager(args.action, args.key, args.value); return { success: r.success, output: r.output || r.error, desc } }
+            case 'file_search':  { const r = await fileSearch(args.pattern, args.directory || '.', args.ext || ''); return { success: r.success, output: r.output, desc } }
+            case 'file_diff':    { const r = await fileDiff(args.file1, args.file2); return { success: r.success, output: r.output, desc } }
+            case 'json_tools':   { const r = jsonTools(args.action, args.json); return { success: r.success, output: r.output, desc } }
+            case 'password_gen': { const r = passwordGen(args.length || 16, { noSymbols: args.noSymbols }); return { success: r.success, output: `🔑 Password: \`${r.password}\`\n${r.strength}`, desc } }
+
             default: return { success: false, output: `Unknown action: ${action}`, desc }
         }
     } catch (e) {
