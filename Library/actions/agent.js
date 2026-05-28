@@ -488,13 +488,48 @@ AI:
 - image_gen      → args: { prompt }
 - music          → args: { query }
 
+APP BUILDER (Replit-style, full multi-file projects):
+- build_webapp   → args: { name, type("express"|"express-api"|"react"|"vue"|"nextjs"|"flask"|"fastapi"|"static"|"discord"|"telegram"), description, port }   ← AI generates real code, installs deps, starts with PM2
+- generate_api   → args: { description, port }   ← describe your API → get a working REST API running
+- auto_fix       → args: { projectDir }   ← detect & self-fix build errors (up to 3 attempts)
+
+DATA & ANALYSIS:
+- analyze_data   → args: { data, question }   ← CSV or JSON → stats, patterns, AI insights
+- markdown_tools → args: { action("to_html"|"generate"|"table"), input }   ← markdown utilities
+
+DEEP WEB:
+- crawl_site     → args: { url, maxDepth, maxPages }   ← crawl entire website, follow links
+- compare_apis   → args: { urls, method }   ← benchmark multiple APIs side-by-side
+- load_test      → args: { url, requests, concurrency, method }   ← stress-test any endpoint
+
+SECURITY & CRYPTO:
+- jwt_tools      → args: { action("encode"|"decode"|"verify"|"apikey"|"hash"|"base64encode"|"base64decode"), payload, secret, expiresIn }
+- password_gen   → args: { length, noSymbols }
+
+DATABASE (SQLite):
+- sqlite_manage  → args: { action("create"|"schema"|"tables"|"insert"|"query"|"run"|"drop"|"info"|"seed"), dbPath, query, data }
+
+GITHUB (full management):
+- github_manage  → args: { action("whoami"|"list_repos"|"create_repo"|"delete_repo"|"create_issue"|"list_issues"|"commit_file"|"read_file"|"get_commits"|"fork"|"star"|"search_repos"), opts: { name, repo, owner, title, body, path, content, message, description, private, query, labels } }
+
+DOCS & TESTING:
+- generate_docs  → args: { code, language, style("markdown"|"jsdoc"|"html") }   ← auto-generate documentation
+- generate_tests → args: { code, language, framework("jest"|"mocha"|"pytest") }   ← write unit tests
+
 RULES:
 - "save to workspace" or "save on workspace" = workspace_save (GitHub), NOT save_note
-- When creating a project: create_project → npm_install (cwd=/tmp/projects/<name>) → pm2_start
+- "build me a <type> app" = build_webapp with the right type
+- "create an API for X" = generate_api
+- "scrape the whole site" = crawl_site, single page = web_scrape
 - When user says "scrape", "extract", "get data from" a URL → use web_scrape or extract_*
 - For any programming language task → use run_code with the right lang
 - For "write code for X" → use code_gen then run_code
+- For "analyze this data/CSV/JSON" → use analyze_data
+- For JWT/token operations → use jwt_tools
+- For SQLite database operations → use sqlite_manage
+- For GitHub management → use github_manage (not workspace_save)
 - urls arg in bulk_scrape must be an array: ["url1","url2"]
+- build_webapp type must be one of: express, express-api, react, vue, nextjs, flask, fastapi, static, discord, telegram
 
 Return format (ONLY JSON, no markdown):
 {"plan":"one line summary","steps":[{"action":"web_scrape","args":{"url":"https://example.com"},"desc":"Scrape example.com"}]}
@@ -755,6 +790,133 @@ const executeStep = async (step, conn, chat, m) => {
             case 'file_diff':    { const r = await fileDiff(args.file1, args.file2); return { success: r.success, output: r.output, desc } }
             case 'json_tools':   { const r = jsonTools(args.action, args.json); return { success: r.success, output: r.output, desc } }
             case 'password_gen': { const r = passwordGen(args.length || 16, { noSymbols: args.noSymbols }); return { success: r.success, output: `🔑 Password: \`${r.password}\`\n${r.strength}`, desc } }
+
+            // ── Supertools — App Builder ────────────────────────────────────
+            case 'build_webapp': {
+                const st = require('./supertools')
+                const r = await st.buildWebApp(args.name, args.type || 'express', args.description || '', args.port || null)
+                if (!r.success) return { success: false, output: `❌ Build failed`, desc }
+                return {
+                    success: true,
+                    output: `🚀 *${r.name}* (${r.type}) built!\n📁 ${r.dir}\n🔌 Port: ${r.port}\n📄 Main: ${r.mainFile}\n\n${r.summary}`,
+                    desc
+                }
+            }
+            case 'generate_api': {
+                const st = require('./supertools')
+                const r = await st.generateAPI(args.description || args.desc || '', args.port || 4000)
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return {
+                    success: true,
+                    output: `⚡ REST API generated!\n📁 ${r.dir}\n🔌 Port: ${r.port}\n${r.running ? '✅ Running with PM2' : '⚠️ Not started'}\n\nCode preview:\n\`\`\`js\n${(r.code || '').slice(0, 500)}\n\`\`\``,
+                    desc
+                }
+            }
+            case 'auto_fix': {
+                const st = require('./supertools')
+                const r = await st.autoFixBuild(args.projectDir || args.dir || '/tmp/projects')
+                const out = r.success
+                    ? `✅ Build ${r.fixed ? 'auto-fixed in' : 'OK —'} ${r.attempts} attempt(s)`
+                    : `⚠️ Could not fully fix after ${r.attempts} attempt(s):\n${r.lastError}`
+                return { success: r.success, output: out, desc }
+            }
+
+            // ── Supertools — Data ───────────────────────────────────────────
+            case 'analyze_data': {
+                const st = require('./supertools')
+                const r = await st.analyzeData(args.data || args.csv || args.json || '', args.question || '')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return {
+                    success: true,
+                    output: `📊 *Data Analysis*\nType: ${r.dataType} | Rows: ${r.rows} | Columns: ${r.columns}\nColumns: ${(r.columnNames || []).join(', ')}\n\n${r.statSummary}\n\n💡 *Insights:*\n${r.insights}`,
+                    desc
+                }
+            }
+            case 'markdown_tools': {
+                const st = require('./supertools')
+                const r = await st.markdownTools(args.action || 'generate', args.input || '')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                const out = r.html || r.markdown || r.table || 'Done'
+                return { success: true, output: out.slice(0, 3000), desc }
+            }
+
+            // ── Supertools — Deep Web ───────────────────────────────────────
+            case 'crawl_site': {
+                const st = require('./supertools')
+                const r = await st.crawlSite(args.url, args.maxDepth || 2, args.maxPages || 20)
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                const pageList = r.pages.slice(0, 15).map(p =>
+                    `${p.ok ? '✅' : '❌'} [D${p.depth}] *${p.title}*\n   ${p.url.slice(0, 70)}`
+                ).join('\n')
+                return {
+                    success: true,
+                    output: `🕷️ *Site Crawl: ${r.baseUrl}*\nPages found: ${r.pagesFound} | Success: ${r.pagesSuccess} | Failed: ${r.pagesFailed}\n\n${pageList}`,
+                    desc
+                }
+            }
+            case 'compare_apis': {
+                const st = require('./supertools')
+                const urls = Array.isArray(args.urls) ? args.urls : String(args.urls || '').split(/[\s,]+/).filter(u => u.startsWith('http'))
+                const r = await st.compareAPIs(urls, args.method || 'GET', args.body || null)
+                return {
+                    success: r.success,
+                    output: `📊 *API Comparison* (${r.count} endpoints)\n\n${r.summary}\n\n${r.fastest}`,
+                    desc
+                }
+            }
+            case 'load_test': {
+                const st = require('./supertools')
+                const r = await st.loadTest(args.url, args.requests || 20, args.concurrency || 5, args.method || 'GET', args.body || null)
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return {
+                    success: true,
+                    output: `🔥 *Load Test: ${r.url}*\n\n📋 Results:\n• Total: ${r.totalRequests} requests\n• ✅ Success: ${r.successful} (${r.successRate})\n• ❌ Failed: ${r.failed}\n• ⚡ RPS: ${r.rps}\n• ⏱️ Total: ${r.totalTimeMs}ms\n\n📈 Latency:\n• Avg: ${r.latency.avg}ms\n• P50: ${r.latency.p50}ms\n• P90: ${r.latency.p90}ms\n• P99: ${r.latency.p99}ms\n• Min/Max: ${r.latency.min}/${r.latency.max}ms\n\n🔢 Status codes: ${JSON.stringify(r.statusCodes)}`,
+                    desc
+                }
+            }
+
+            // ── Supertools — Security ───────────────────────────────────────
+            case 'jwt_tools': {
+                const st = require('./supertools')
+                const r = st.jwtTools(args.action || 'encode', args.payload || {}, args.secret || 'bera-secret', args.expiresIn || '24h')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                const act = args.action || 'encode'
+                if (act === 'encode' || act === 'sign')
+                    return { success: true, output: `🔐 *JWT Token*\n\`\`\`\n${r.token}\n\`\`\`\nExpires: ${r.expiresIn}`, desc }
+                if (act === 'decode' || act === 'verify')
+                    return { success: true, output: `🔓 *JWT Decoded*\nExpired: ${r.expired ? '⚠️ YES' : '✅ No'}\nExpires: ${r.expiresAt || 'N/A'}\nSig valid: ${r.signatureValid === null ? 'not checked' : r.signatureValid ? '✅' : '❌'}\n\nPayload:\n${JSON.stringify(r.payload, null, 2)}`, desc }
+                if (act === 'apikey')
+                    return { success: true, output: `🔑 *API Key*\n\`${r.apiKey}\`\nHash: \`${r.hash.slice(0, 20)}...\``, desc }
+                if (act === 'hash')
+                    return { success: true, output: `#️⃣ *Hashes for: "${r.input.slice(0, 30)}"*\nMD5: \`${r.md5}\`\nSHA1: \`${r.sha1}\`\nSHA256: \`${r.sha256}\``, desc }
+                return { success: true, output: JSON.stringify(r, null, 2).slice(0, 1000), desc }
+            }
+
+            // ── Supertools — Database ───────────────────────────────────────
+            case 'sqlite_manage': {
+                const st = require('./supertools')
+                const r = await st.sqliteManage(args.action || 'info', args.dbPath || 'bera.db', args.query || '', args.data || {})
+                return { success: r.success, output: r.output || r.error || 'Done', desc }
+            }
+
+            // ── Supertools — GitHub ─────────────────────────────────────────
+            case 'github_manage': {
+                const st = require('./supertools')
+                const r = await st.githubManage(args.action || 'whoami', args.opts || args)
+                return { success: r.success, output: r.output || r.error, desc }
+            }
+
+            // ── Supertools — Docs & Tests ───────────────────────────────────
+            case 'generate_docs': {
+                const st = require('./supertools')
+                const r = await st.generateDocs(args.code || '', args.language || 'javascript', args.style || 'markdown')
+                return { success: r.success, output: (r.docs || r.error || '').slice(0, 3000), desc }
+            }
+            case 'generate_tests': {
+                const st = require('./supertools')
+                const r = await st.generateTests(args.code || '', args.language || 'javascript', args.framework || 'jest')
+                return { success: r.success, output: (r.tests || r.error || '').slice(0, 3000), desc }
+            }
 
             default: return { success: false, output: `Unknown action: ${action}`, desc }
         }
