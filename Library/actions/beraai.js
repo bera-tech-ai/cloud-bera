@@ -81,7 +81,7 @@ const systemInfo = async () => {
 }
 
 // ── Multi-model AI caller with automatic fallback ─────────────────────────────
-const AI_MODELS = ['openai', 'mistral', 'deepseek', 'llama', 'unity', 'phi', 'bidder', 'mireille']
+const AI_MODELS = ['mistral', 'deepseek', 'llama', 'unity', 'phi', 'bidder', 'mireille', 'openai']
 let _modelIdx = 0
 
 const isPollinationsError = (text) => {
@@ -89,17 +89,33 @@ const isPollinationsError = (text) => {
     const t = text.trim()
     if (t.startsWith('{') && t.includes('"error"')) return true
     if (t.startsWith('{') && t.includes('"status"') && t.includes('404')) return true
+    // Detect OpenAI-style assistant message objects with no usable plain text
+    if (t.startsWith('{') && t.includes('"role"')) {
+        try {
+            const obj = JSON.parse(t)
+            if (obj.role === 'assistant') {
+                if (!obj.content || obj.content === '') return true
+                if (Array.isArray(obj.tool_calls)) return true
+            }
+        } catch {}
+    }
     return false
 }
 
 const parseAiText = (raw) => {
     if (!raw || typeof raw !== 'string') return null
     const t = raw.trim()
-    if (t.startsWith('{') && t.includes('"content"')) {
+    if (t.startsWith('{')) {
         try {
             const obj = JSON.parse(t)
+            // Standard content field
             if (obj.content && typeof obj.content === 'string' && obj.content.length > 1) {
                 return obj.content.trim()
+            }
+            // OpenAI-style with reasoning but no content — extract reasoning as response
+            if (obj.role === 'assistant' && obj.reasoning && typeof obj.reasoning === 'string' && obj.reasoning.length > 10) {
+                const lines = obj.reasoning.split('\n').filter(l => l.trim().length > 0)
+                return lines.slice(-3).join(' ').trim().slice(0, 800)
             }
         } catch {}
     }
@@ -228,16 +244,19 @@ const localFallback = (userText) => {
 
 // ── One attempt through ALL providers ────────────────────────────────────────
 const _tryAllProviders = async (messages, lastUser, historyMsgs, systemContent, timeoutMs) => {
+    // Try Pollinations first — free, no key required, fastest
+    const poll = await callPollinations(messages, Math.min(timeoutMs, 20000))
+    if (poll) return poll
+    // Then Xwolf as backup
     if (lastUser) {
-        const gt = await callGiftedTech(lastUser, historyMsgs, Math.min(timeoutMs, 10000), systemContent)
-        if (gt) return gt
-    }
-    if (lastUser) {
-        const xw = await callXwolf(lastUser, Math.min(timeoutMs, 10000), systemContent)
+        const xw = await callXwolf(lastUser, Math.min(timeoutMs, 8000), systemContent)
         if (xw) return xw
     }
-    const poll = await callPollinations(messages, Math.min(timeoutMs, 25000))
-    if (poll) return poll
+    // Try Gifted last — key may be expired but worth one attempt
+    if (lastUser) {
+        const gt = await callGiftedTech(lastUser, historyMsgs, Math.min(timeoutMs, 8000), systemContent)
+        if (gt) return gt
+    }
     return null
 }
 
