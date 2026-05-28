@@ -1,6 +1,6 @@
 const axios = require('axios')
 
-const GT = 'https://api.giftedtech.co.ke'
+const GT = 'https://api.gifted.co.ke'
 const KEY = 'gifted'
 
 const gt = (path, params = {}) =>
