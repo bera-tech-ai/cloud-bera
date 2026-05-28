@@ -3,7 +3,7 @@ const { exec } = require('child_process')
 const fs   = require('fs')
 const path = require('path')
 
-// ── Gifted API (primary) ───────────────────────────────────────────────────────
+// ── Gifted API ─────────────────────────────────────────────────────────────────
 const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
@@ -11,22 +11,24 @@ const callGiftedAI = async (systemPrompt, userMsg) => {
     try {
         const q = systemPrompt ? `${systemPrompt}\n\n${userMsg}` : userMsg
         const res = await axios.get(`${GIFTED}/api/ai/gemini`, {
-            params: { 
-                apikey: GIFTED_KEY,
-                q: q.slice(0, 4000)
-            },
-            timeout: 45000
+            params: { apikey: GIFTED_KEY, q: q.slice(0, 4000) },
+            timeout: 8000
         })
         const text = res.data?.result || res.data?.response || res.data?.answer ||
                      (typeof res.data === 'string' ? res.data : null)
         if (!text || text === 'Request failed with status code 403') return { success: false, error: 'No response from Gifted' }
-        return { success: true, text: String(text).trim() }
+        const trimmed = String(text).trim()
+        // Reject raw JSON/error responses
+        if (trimmed.startsWith('{') && (trimmed.includes('"error"') || trimmed.includes('"status":500') || trimmed.includes('"success":false'))) {
+            return { success: false, error: 'Gifted returned error JSON' }
+        }
+        return { success: true, text: trimmed }
     } catch (e) {
         return { success: false, error: e.message }
     }
 }
 
-// ── Xwolf fallback (if available) ──────────────────────────────────────────────
+// ── Xwolf fallback ──────────────────────────────────────────────────────────────
 const XWOLF_URL = 'https://apis.xwolf.space/api/ai/gemini'
 
 const callXwolf = async (systemPrompt, userMsg) => {
@@ -34,7 +36,7 @@ const callXwolf = async (systemPrompt, userMsg) => {
         const q = systemPrompt ? `${systemPrompt}\n\n${userMsg}` : userMsg
         const res = await axios.get(XWOLF_URL, {
             params: { q: q.slice(0, 6000) },
-            timeout: 45000
+            timeout: 12000
         })
         const text = res.data?.result || res.data?.response || res.data?.answer ||
                      (typeof res.data === 'string' ? res.data : null)
@@ -45,16 +47,50 @@ const callXwolf = async (systemPrompt, userMsg) => {
     }
 }
 
+// ── Pollinations fallback (free, no key) ────────────────────────────────────────
+const callPollinationsAgent = async (systemPrompt, userMsg) => {
+    try {
+        const messages = []
+        if (systemPrompt) messages.push({ role: 'system', content: systemPrompt.slice(0, 3000) })
+        messages.push({ role: 'user', content: userMsg.slice(0, 3000) })
+        const body = JSON.stringify({ model: 'mistral', messages, seed: Math.floor(Math.random() * 99999) })
+        const reply = await new Promise((resolve, reject) => {
+            const req = require('https').request({
+                hostname: 'text.pollinations.ai', path: '/', method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'User-Agent': 'BeraAI/3.0' }
+            }, res => {
+                let d = ''
+                res.on('data', c => d += c)
+                res.on('end', () => {
+                    if (res.statusCode >= 400) return resolve(null)
+                    const t = d.trim()
+                    if (!t || t.startsWith('{')) return resolve(null)
+                    resolve(t)
+                })
+            })
+            req.on('error', () => resolve(null))
+            req.setTimeout(18000, () => { req.destroy(); resolve(null) })
+            req.write(body); req.end()
+        })
+        if (reply && reply.length > 2) return { success: true, text: reply }
+    } catch {}
+    return { success: false, error: 'Pollinations unavailable' }
+}
+
 // ── Primary AI caller with fallback ───────────────────────────────────────────
 const callAI = async (systemPrompt, userMsg) => {
-    // Try Gifted first
-    const gifted = await callGiftedAI(systemPrompt, userMsg)
-    if (gifted.success) return gifted
-    
-    // Fallback to Xwolf
+    // Try Xwolf first (reliable, no expired key)
     const xwolf = await callXwolf(systemPrompt, userMsg)
     if (xwolf.success) return xwolf
-    
+
+    // Try Pollinations (completely free)
+    const poll = await callPollinationsAgent(systemPrompt, userMsg)
+    if (poll.success) return poll
+
+    // Last resort: Gifted (key may be expired)
+    const gifted = await callGiftedAI(systemPrompt, userMsg)
+    if (gifted.success) return gifted
+
     return { success: false, error: 'All AI providers failed' }
 }
 
