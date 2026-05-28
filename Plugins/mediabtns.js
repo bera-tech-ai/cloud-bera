@@ -40,40 +40,44 @@ const ytInfo = async (url) => {
     } catch { return null }
 }
 
-// Search YouTube using Gifted API - FIXED with proper parameter
+// Search YouTube — uses free public APIs, no key required
 const searchYoutube = async (query) => {
+    // Primary: yt.lemnoslife.com public proxy (no API key needed)
     try {
-        // URL-encode the API key (comma becomes %2C)
-        const encodedKey = encodeURIComponent(GIFTED_KEY)
-        
-        const res = await axios.get(`${GIFTED}/api/search/yts`, {
-            params: { 
-                apikey: encodedKey,
-                query: query  // Use 'query' parameter, NOT 'q'
-            },
+        const res = await axios.get(`https://yt.lemnoslife.com/noKey/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5`, {
             timeout: 10000
         })
-        
-        const data = res.data
-        
-        // Check if response is successful
-        if (data?.status === 200 && data?.success === true) {
-            const results = data?.results || []
-            if (Array.isArray(results) && results.length) {
-                // Filter to only video results
-                const videos = results.filter(r => r.type === 'video')
-                if (videos.length) {
-                    console.log('[YTSearch] Found:', videos[0].title)
-                    return videos[0]
+        const items = res.data?.items
+        if (Array.isArray(items) && items.length) {
+            const video = items.find(it => it.id?.videoId)
+            if (video) {
+                return {
+                    type: 'video',
+                    title: video.snippet?.title || query,
+                    videoId: video.id.videoId,
+                    url: `https://youtube.com/watch?v=${video.id.videoId}`,
+                    thumbnail: video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url || '',
+                    author: { name: video.snippet?.channelTitle || '' }
                 }
             }
         }
-        console.error('[YTSearch] No videos found for:', query)
-        return null
-    } catch (e) {
-        console.error('[YTSearch] Error:', e.response?.status, e.response?.data || e.message)
-        return null
-    }
+    } catch {}
+
+    // Fallback: Gifted API (key may be expired)
+    try {
+        const encodedKey = encodeURIComponent(GIFTED_KEY)
+        const res = await axios.get(`${GIFTED}/api/search/yts`, {
+            params: { apikey: encodedKey, query },
+            timeout: 8000
+        })
+        const data = res.data
+        if (data?.success === true) {
+            const videos = (data?.results || []).filter(r => r.type === 'video')
+            if (videos.length) return videos[0]
+        }
+    } catch {}
+
+    return null
 }
 
 handle.all = async (m, { conn, command, args, prefix, reply, sender } = {}) => {
