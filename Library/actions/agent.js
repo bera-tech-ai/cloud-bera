@@ -8,24 +8,26 @@ const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
 const callGiftedAI = async (systemPrompt, userMsg) => {
-    try {
-        const q = systemPrompt ? `${systemPrompt}\n\n${userMsg}` : userMsg
-        const res = await axios.get(`${GIFTED}/api/ai/gemini`, {
-            params: { apikey: GIFTED_KEY, q: q.slice(0, 4000) },
-            timeout: 8000
-        })
-        const text = res.data?.result || res.data?.response || res.data?.answer ||
-                     (typeof res.data === 'string' ? res.data : null)
-        if (!text || text === 'Request failed with status code 403') return { success: false, error: 'No response from Gifted' }
-        const trimmed = String(text).trim()
-        // Reject raw JSON/error responses
-        if (trimmed.startsWith('{') && (trimmed.includes('"error"') || trimmed.includes('"status":500') || trimmed.includes('"success":false'))) {
-            return { success: false, error: 'Gifted returned error JSON' }
-        }
-        return { success: true, text: trimmed }
-    } catch (e) {
-        return { success: false, error: e.message }
+    const q = (systemPrompt ? systemPrompt + '\n\n' : '') + userMsg
+    const endpoints = [
+        `${GIFTED}/api/ai/gemini`,
+        `${GIFTED}/api/ai/gpt4o`,
+    ]
+    for (const url of endpoints) {
+        try {
+            const res = await axios.get(url, {
+                params: { apikey: GIFTED_KEY, q: q.slice(0, 4000) },
+                timeout: 15000
+            })
+            const text = res.data?.result || res.data?.response || res.data?.answer ||
+                         (typeof res.data === 'string' ? res.data : null)
+            if (!text || text === 'Request failed with status code 403') continue
+            const trimmed = String(text).trim()
+            if (trimmed.startsWith('{') && (trimmed.includes('"error"') || trimmed.includes('"success":false'))) continue
+            return { success: true, text: trimmed }
+        } catch { continue }
     }
+    return { success: false, error: 'Gifted AI unavailable' }
 }
 
 // ── Xwolf fallback ──────────────────────────────────────────────────────────────
@@ -79,17 +81,17 @@ const callPollinationsAgent = async (systemPrompt, userMsg) => {
 
 // ── Primary AI caller with fallback ───────────────────────────────────────────
 const callAI = async (systemPrompt, userMsg) => {
-    // Try Xwolf first (reliable, no expired key)
+    // Gifted first — gemini + gpt4o confirmed working
+    const gifted = await callGiftedAI(systemPrompt, userMsg)
+    if (gifted.success) return gifted
+
+    // Xwolf as second option
     const xwolf = await callXwolf(systemPrompt, userMsg)
     if (xwolf.success) return xwolf
 
-    // Try Pollinations (completely free)
+    // Pollinations last resort (free, no key)
     const poll = await callPollinationsAgent(systemPrompt, userMsg)
     if (poll.success) return poll
-
-    // Last resort: Gifted (key may be expired)
-    const gifted = await callGiftedAI(systemPrompt, userMsg)
-    if (gifted.success) return gifted
 
     return { success: false, error: 'All AI providers failed' }
 }
