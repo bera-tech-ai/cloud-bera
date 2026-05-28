@@ -108,6 +108,12 @@ const parseAiText = (raw) => {
     if (t.startsWith('{')) {
         try {
             const obj = JSON.parse(t)
+            // OpenAI choices array (Pollinations format)
+            if (obj.choices && Array.isArray(obj.choices) && obj.choices[0]) {
+                const c = obj.choices[0]
+                const content = c.message?.content || c.text || c.delta?.content
+                if (content && typeof content === 'string' && content.length > 1) return content.trim()
+            }
             // Standard content field
             if (obj.content && typeof obj.content === 'string' && obj.content.length > 1) {
                 return obj.content.trim()
@@ -161,12 +167,14 @@ const callGiftedTech = async (userText, historyMessages, timeoutMs, systemPrompt
         .map(m => (m.role === 'user' ? 'User' : 'Bera AI') + ': ' + String(m.content || '').slice(0, 200))
         .join('\n')
 
+    // Gifted uses a GET param — keep q under ~3000 chars so the user message always gets through
     const identity = systemPrompt && systemPrompt.length > 100
-        ? systemPrompt.slice(0, 6000)
+        ? systemPrompt.slice(0, 1500)
         : 'You are Bera AI, a smart WhatsApp assistant built by Bera Tech. Always say your name is Bera AI.'
-    const userPart = String(userText || '').slice(0, 800)
-    const q = histCtx
-        ? identity + '\n\nConversation:\n' + histCtx + '\nUser: ' + userPart + '\nBera AI:'
+    const userPart = String(userText || '').slice(0, 600)
+    const histPart = histCtx.slice(0, 400)
+    const q = histPart
+        ? identity + '\n\nConversation:\n' + histPart + '\nUser: ' + userPart + '\nBera AI:'
         : identity + '\n\nUser: ' + userPart + '\nBera AI:'
 
     const GT_CHAT_ENDPOINTS = [
@@ -278,7 +286,7 @@ const callAI = async (messages, timeoutMs) => {
     const r3 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
     if (r3) return r3
 
-    return localFallback(lastUser)
+    return null  // Let caller decide — avoids fallback string masquerading as a valid AI reply
 }
 
 // ── Conversation history ──────────────────────────────────────────────────────
@@ -1752,10 +1760,20 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
     const loopCap = opts.maxLoops || 25
     let stepCount = 0
 
+    // Immediately acknowledge so the user knows work has started
+    if (conn && m) {
+        conn.sendMessage(chat, { react: { text: '⚙️', key: m.key } }).catch(() => {})
+        conn.sendMessage(chat, { text: '⚙️ *Got it! Working on it...*\n_Thinking..._' }).catch(() => {})
+    }
+
     for (let loop = 0; loop < loopCap; loop++) {
         let aiReply
         try { aiReply = await callAI(messages, 60000) } catch {}
-        if (!aiReply) aiReply = localFallback(text)
+        if (!aiReply) {
+            // All providers failed — give user a proper message
+            const fb = localFallback(text)
+            return { success: false, reply: fb }
+        }
 
         const toolCalls = parseToolCalls(aiReply)
 
