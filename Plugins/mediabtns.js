@@ -40,9 +40,22 @@ const ytInfo = async (url) => {
     } catch { return null }
 }
 
-// Search YouTube — uses free public APIs, no key required
+// Search YouTube — Gifted primary (confirmed working), yt.lemnoslife fallback
 const searchYoutube = async (query) => {
-    // Primary: yt.lemnoslife.com public proxy (no API key needed)
+    // Primary: Gifted YTS
+    try {
+        const res = await axios.get(`${GIFTED}/api/search/yts`, {
+            params: { apikey: GIFTED_KEY, query },
+            timeout: 12000
+        })
+        const data = res.data
+        if (data?.success === true || Array.isArray(data?.results)) {
+            const videos = (data?.results || []).filter(r => r.type === 'video')
+            if (videos.length) return videos[0]
+        }
+    } catch {}
+
+    // Fallback: yt.lemnoslife.com (no API key needed)
     try {
         const res = await axios.get(`https://yt.lemnoslife.com/noKey/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5`, {
             timeout: 10000
@@ -60,20 +73,6 @@ const searchYoutube = async (query) => {
                     author: { name: video.snippet?.channelTitle || '' }
                 }
             }
-        }
-    } catch {}
-
-    // Fallback: Gifted API (key may be expired)
-    try {
-        const encodedKey = encodeURIComponent(GIFTED_KEY)
-        const res = await axios.get(`${GIFTED}/api/search/yts`, {
-            params: { apikey: encodedKey, query },
-            timeout: 8000
-        })
-        const data = res.data
-        if (data?.success === true) {
-            const videos = (data?.results || []).filter(r => r.type === 'video')
-            if (videos.length) return videos[0]
         }
     } catch {}
 
