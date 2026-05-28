@@ -424,13 +424,14 @@ Available actions:
 - file_read      → args: { path }
 - file_write     → args: { path, content }
 - js_eval        → args: { code }
-- npm_install    → args: { packages, cwd }
+- npm_install    → args: { packages, cwd }   ← ALWAYS use after create_project or when packages needed
 - pm2_start      → args: { script, name }
 - pm2_stop       → args: { name }
 - pm2_restart    → args: { name }
 - pm2_logs       → args: { name, lines }
 - pm2_list       → args: {}
-- create_project → args: { name, type, port, description }
+- create_project → args: { name, type, port, description }   ← creates project in /tmp/projects/<name>
+- workspace_save → args: { projectDir, repoName, description, isPrivate }   ← saves project to GitHub (not same as save_note)
 - git_clone      → args: { url, folder }
 - git_push       → args: { folder, message }
 - git_status     → args: { folder }
@@ -449,6 +450,11 @@ Available actions:
 - search         → args: { query }
 - image_gen      → args: { prompt }
 - music          → args: { query }
+
+RULES:
+- "save to workspace" or "save on workspace" means workspace_save (GitHub), NOT the save_note command
+- When creating a project, always include npm_install step with cwd=/tmp/projects/<name>, then pm2_start
+- When "save"/"workspace"/"github" appear with a project, add workspace_save step
 
 Return format (ONLY JSON):
 {"plan":"one line summary","steps":[{"action":"shell","args":{"cmd":"ls"},"desc":"List files"}]}
@@ -503,6 +509,26 @@ const executeStep = async (step, conn, chat, m) => {
             case 'create_project': {
                 const r = await createProject(args.name, args.type||'express', args.port||3000, args.description||'')
                 return { success: r.success, output: r.steps.map(s=>`${s.ok?'✅':'❌'} ${s.step}`).join(' | '), desc }
+            }
+            case 'workspace_save': {
+                try {
+                    const gh = require('./github')
+                    const repoName = (args.repoName || path.basename(args.projectDir || 'workspace')).replace(/[^a-zA-Z0-9-_.]/g, '-')
+                    const createRes = await gh.createRepo(repoName, args.description || '', !!args.isPrivate)
+                    if (!createRes.success && !createRes.html_url) return { success: false, output: `❌ Could not create GitHub repo: ${createRes.message || createRes.error || JSON.stringify(createRes)}`, desc }
+                    const repoUrl = createRes.clone_url || createRes.html_url || `https://github.com/${createRes.full_name}`
+                    const htmlUrl = createRes.html_url || repoUrl
+                    const token = gh.getToken()
+                    const authUrl = token ? repoUrl.replace('https://', `https://${token}@`) : repoUrl
+                    const pushCmd = `cd "${args.projectDir}" && git init && git add . && git commit -m "Initial commit via Bera AI" 2>&1 && git remote remove origin 2>/dev/null; git remote add origin "${authUrl}" && git branch -M main && git push -u origin main 2>&1`
+                    const pushRes = await runShell(pushCmd, 60000)
+                    const out = pushRes.success || (pushRes.output || '').includes('main')
+                        ? `✅ Saved to GitHub!\n🔗 ${htmlUrl}\n📁 Repo: ${repoName}`
+                        : `⚠️ Repo created at ${htmlUrl} but push had issues:\n${(pushRes.output || pushRes.error || '').slice(0, 300)}`
+                    return { success: true, output: out, desc }
+                } catch (e) {
+                    return { success: false, output: `❌ workspace_save failed: ${e.message}`, desc }
+                }
             }
             case 'git_clone':      return { ...await runShell(`git clone ${args.url} ${args.folder||''} 2>&1`, 60000), desc }
             case 'git_push':       return { ...await runShell(`cd ${args.folder} && git add . && git commit -m "${args.message||'update'}" && git push 2>&1`, 30000), desc }
