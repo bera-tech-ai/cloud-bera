@@ -3,6 +3,7 @@ const axios = require('axios')
 const GIFTED     = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 const ENCODED_KEY = encodeURIComponent(GIFTED_KEY)
+const SILVATECH   = 'https://api.silvatech.co.ke'
 
 // ── URL extractor ─────────────────────────────────────────────────────────────
 const toUrl = (v) => {
@@ -16,48 +17,101 @@ const toUrl = (v) => {
     return ''
 }
 
-// ── API 1: Gifted play search (primary) ────────────────────────────────────────
-const giftedPlay = async (query) => {
-    const endpoints = [
-        `${GIFTED}/api/download/ytmp3`,
-        `${GIFTED}/api/download/dlmp3`,
-    ]
-    // First search for the video
+// ── YouTube search ────────────────────────────────────────────────────────────
+// Primary: Gifted YTS (confirmed working)
+// Fallback: yt.lemnoslife.com (no key)
+const searchYoutube = async (query) => {
+    // Primary: Gifted YTS
     try {
-        const searchRes = await axios.get(`${GIFTED}/api/search/yts`, {
+        const res = await axios.get(`${GIFTED}/api/search/yts`, {
             params: { query, apikey: ENCODED_KEY },
-            timeout: 15000
+            timeout: 12000
         })
-        const results = searchRes.data?.results
-        const videos = Array.isArray(results) ? results.filter(i => i.type === 'video') : []
-        if (!videos.length) return null
-        const top = videos[0]
-        const videoUrl = top?.url || (top?.videoId ? `https://youtube.com/watch?v=${top.videoId}` : '') || toUrl(top?.link)
-        if (!videoUrl) return null
-        for (const ep of endpoints) {
-            try {
-                const dlRes = await axios.get(ep, {
-                    params: { url: videoUrl, apikey: ENCODED_KEY },
-                    timeout: 45000
-                })
-                const data = dlRes.data
-                if (data?.status === false || data?.success === false) continue
-                const audioUrl = toUrl(data?.result) || toUrl(data?.url) || toUrl(data?.audio) || toUrl(data?.download) || toUrl(data?.mp3)
-                if (audioUrl) return {
-                    success: true, audioUrl,
-                    title: top?.title || data?.result?.title || data?.title || query,
-                    channel: typeof top?.author?.name === 'string' ? top.author.name : '',
-                    duration: top?.timestamp || top?.duration?.timestamp || '',
-                    thumbnail: top?.thumbnail || top?.image || '',
-                    source: 'gifted'
-                }
-            } catch { continue }
+        const results = res.data?.results
+        if (Array.isArray(results) && results.length) {
+            const videos = results.filter(item => item.type === 'video')
+            if (videos.length) return { success: true, results: videos.slice(0, 5) }
         }
     } catch {}
-    return null
+
+    // Fallback: yt.lemnoslife.com (free, no key)
+    try {
+        const res = await axios.get(`https://yt.lemnoslife.com/noKey/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5`, {
+            timeout: 10000
+        })
+        const items = res.data?.items
+        if (Array.isArray(items) && items.length) {
+            const mapped = items.map(it => ({
+                type: 'video',
+                title: it.snippet?.title,
+                videoId: it.id?.videoId,
+                url: `https://youtube.com/watch?v=${it.id?.videoId}`,
+                thumbnail: it.snippet?.thumbnails?.medium?.url || it.snippet?.thumbnails?.default?.url || '',
+                author: { name: it.snippet?.channelTitle || '' }
+            })).filter(v => v.videoId)
+            if (mapped.length) return { success: true, results: mapped }
+        }
+    } catch {}
+
+    return { success: false, error: 'YouTube search failed on all sources' }
 }
 
-// ── API 2: ToxicAPIs (backup) ──────────────────────────────────────────────────
+// ── Audio Download ────────────────────────────────────────────────────────────
+// Primary 1: Gifted savetubemp3
+// Primary 2: Gifted ytmp3 (128kbps)
+// Fallback:  Silvatech ytmp3
+// Last resort: Cobalt
+const downloadAudio = async (videoUrl) => {
+    // 1. Gifted savetubemp3 (primary)
+    try {
+        const res = await axios.get(`${GIFTED}/api/download/savetubemp3`, {
+            params: { url: videoUrl, apikey: ENCODED_KEY },
+            timeout: 45000
+        })
+        const data = res.data
+        if (data?.status !== false && data?.success !== false) {
+            const audioUrl = toUrl(data?.result) || toUrl(data?.url) || toUrl(data?.audio) || toUrl(data?.download) || toUrl(data?.mp3)
+            if (audioUrl) return { success: true, url: audioUrl, title: data?.result?.title || data?.title || '' }
+        }
+    } catch {}
+
+    // 2. Gifted ytmp3 128kbps
+    try {
+        const res = await axios.get(`${GIFTED}/api/download/ytmp3`, {
+            params: { url: videoUrl, apikey: ENCODED_KEY, quality: '128kbps' },
+            timeout: 45000
+        })
+        const data = res.data
+        if (data?.status !== false && data?.success !== false) {
+            const audioUrl = toUrl(data?.result) || toUrl(data?.url) || toUrl(data?.audio) || toUrl(data?.download) || toUrl(data?.mp3)
+            if (audioUrl) return { success: true, url: audioUrl, title: data?.result?.title || data?.title || '' }
+        }
+    } catch {}
+
+    // 3. Silvatech fallback
+    try {
+        const res = await axios.get(`${SILVATECH}/download/ytmp3`, {
+            params: { url: videoUrl },
+            timeout: 30000
+        })
+        const data = res.data
+        const audioUrl = toUrl(data?.download) || toUrl(data?.url) || toUrl(data?.audio) || toUrl(data?.result) || toUrl(data?.mp3)
+        if (audioUrl) return { success: true, url: audioUrl, title: data?.title || '' }
+    } catch {}
+
+    // 4. Cobalt last resort
+    try {
+        const res = await axios.post('https://cobalt.tools/api/json', {
+            url: videoUrl, vCodec: 'h264', vQuality: '720', aFormat: 'mp3', isAudioOnly: true
+        }, { headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, timeout: 30000 })
+        const url = res.data?.url
+        if (url) return { success: true, url, title: '' }
+    } catch {}
+
+    return { success: false, error: 'Audio download failed on all sources' }
+}
+
+// ── ToxicAPIs direct play (search+download in one) ────────────────────────────
 const toxicPlay = async (query) => {
     const APIS = [
         { url: 'https://apiz.xhclinton.me/api/play', params: { apikey: 'toxicapis', q: query } },
@@ -84,90 +138,16 @@ const toxicPlay = async (query) => {
     return null
 }
 
-// ── API 3: Cobalt.tools (open-source, no key needed) ───────────────────────────
-const cobaltDownload = async (videoUrl) => {
-    try {
-        const res = await axios.post('https://cobalt.tools/api/json', {
-            url: videoUrl, vCodec: 'h264', vQuality: '720', aFormat: 'mp3', isAudioOnly: true
-        }, { headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, timeout: 30000 })
-        const url = res.data?.url
-        if (url) return { success: true, url }
-    } catch {}
-    return null
-}
-
-// ── YouTube search (multi-source) ────────────────────────────────────────────
-const searchYoutube = async (query) => {
-    // Primary: yt.lemnoslife.com (free, no API key needed)
-    try {
-        const res = await axios.get(`https://yt.lemnoslife.com/noKey/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5`, {
-            timeout: 10000
-        })
-        const items = res.data?.items
-        if (Array.isArray(items) && items.length) {
-            const mapped = items.map(it => ({
-                type: 'video',
-                title: it.snippet?.title,
-                videoId: it.id?.videoId,
-                url: `https://youtube.com/watch?v=${it.id?.videoId}`,
-                thumbnail: it.snippet?.thumbnails?.medium?.url || it.snippet?.thumbnails?.default?.url || '',
-                author: { name: it.snippet?.channelTitle || '' }
-            })).filter(v => v.videoId)
-            if (mapped.length) return { success: true, results: mapped }
-        }
-    } catch {}
-
-    // Fallback: Gifted API (key may be expired)
-    try {
-        const res = await axios.get(`${GIFTED}/api/search/yts`, {
-            params: { query, apikey: ENCODED_KEY },
-            timeout: 8000
-        })
-        const results = res.data?.results
-        if (Array.isArray(results) && results.length) {
-            const videos = results.filter(item => item.type === 'video')
-            if (videos.length) return { success: true, results: videos.slice(0, 5) }
-        }
-    } catch {}
-
-    return { success: false, error: 'YouTube search failed on all sources' }
-}
-
-// ── YouTube Audio Download (multi-source) ────────────────────────────────────
-const downloadAudio = async (videoUrl) => {
-    const giftedEndpoints = [
-        { path: '/api/download/ytmp3', param: 'url' },
-        { path: '/api/download/dlmp3', param: 'url' },
-    ]
-    for (const ep of giftedEndpoints) {
-        try {
-            const res = await axios.get(`${GIFTED}${ep.path}`, {
-                params: { [ep.param]: videoUrl, apikey: ENCODED_KEY },
-                timeout: 45000
-            })
-            const data = res.data
-            if (data?.status === false || data?.success === false) continue
-            const audioUrl = toUrl(data?.result) || toUrl(data?.url) ||
-                toUrl(data?.audio) || toUrl(data?.download) || toUrl(data?.mp3)
-            if (audioUrl) return { success: true, url: audioUrl, title: data?.result?.title || data?.title || '' }
-        } catch { continue }
-    }
-    // Try cobalt as last resort
-    const cobalt = await cobaltDownload(videoUrl)
-    if (cobalt?.success) return { success: true, url: cobalt.url, title: '' }
-    return { success: false, error: 'Audio download failed on all sources' }
-}
-
-// ── YouTube Video Download via Gifted ─────────────────────────────────────────
+// ── YouTube Video Download ─────────────────────────────────────────────────────
 const downloadVideo = async (videoUrl) => {
     const endpoints = [
-        { path: '/api/download/ytmp4', param: 'url' },
-        { path: '/api/download/dlmp4', param: 'url' },
+        '/api/download/ytmp4',
+        '/api/download/dlmp4',
     ]
     for (const ep of endpoints) {
         try {
-            const res = await axios.get(`${GIFTED}${ep.path}`, {
-                params: { [ep.param]: videoUrl, apikey: ENCODED_KEY },
+            const res = await axios.get(`${GIFTED}${ep}`, {
+                params: { url: videoUrl, apikey: ENCODED_KEY },
                 timeout: 60000
             })
             const data = res.data
@@ -181,13 +161,13 @@ const downloadVideo = async (videoUrl) => {
 }
 
 // ── MAIN: Search and Download Audio ──────────────────────────────────────────
-// Chain: yt.lemnoslife search+dl → ToxicAPIs → Gifted → cobalt
+// Chain: Gifted search + download → ToxicAPIs → silvatech direct
 const searchAndDownload = async (query) => {
-    // 1. YouTube search (free) + audio download
+    // 1. Gifted: search then download (primary path)
     const ytSearch = await searchYoutube(query)
     if (ytSearch.success) {
         const top = ytSearch.results[0]
-        const videoUrl = top?.url || (top?.videoId ? `https://youtube.com/watch?v=${top.videoId}` : '')
+        const videoUrl = top?.url || (top?.videoId ? `https://youtube.com/watch?v=${top.videoId}` : '') || toUrl(top?.link)
         if (videoUrl) {
             const dl = await downloadAudio(videoUrl)
             if (dl.success) {
@@ -197,7 +177,7 @@ const searchAndDownload = async (query) => {
                     channel: typeof top?.author?.name === 'string' ? top.author.name : '',
                     duration: top?.timestamp || top?.duration?.timestamp || '',
                     thumbnail: top?.thumbnail || top?.image || '',
-                    source: 'youtube'
+                    source: 'gifted'
                 }
             }
         }
@@ -207,11 +187,7 @@ const searchAndDownload = async (query) => {
     const toxic = await toxicPlay(query)
     if (toxic?.success) return toxic
 
-    // 3. Gifted: search + download in one chain
-    const gifted = await giftedPlay(query)
-    if (gifted?.success) return gifted
-
-    return { success: false, error: 'Could not download that song. Try a different name.' }
+    return { success: false, error: 'Could not download that song. Try a different name or use .play' }
 }
 
 // ── MAIN: Search and Download Video ──────────────────────────────────────────
