@@ -171,8 +171,8 @@ const callGiftedTech = async (userText, historyMessages, timeoutMs, systemPrompt
 
     const GT_CHAT_ENDPOINTS = [
         `${GIFTED}/api/ai/gemini`,
+        `${GIFTED}/api/ai/gpt4o`,
         `${GIFTED}/api/ai/gpt`,
-        `${GIFTED}/api/ai/ai`,
         `${GIFTED}/api/ai/chatgpt`,
     ]
 
@@ -244,19 +244,19 @@ const localFallback = (userText) => {
 
 // ── One attempt through ALL providers ────────────────────────────────────────
 const _tryAllProviders = async (messages, lastUser, historyMsgs, systemContent, timeoutMs) => {
-    // Try Pollinations first — free, no key required, fastest
-    const poll = await callPollinations(messages, Math.min(timeoutMs, 20000))
-    if (poll) return poll
-    // Then Xwolf as backup
+    // Try Gifted first — gemini + gpt4o endpoints confirmed working
     if (lastUser) {
-        const xw = await callXwolf(lastUser, Math.min(timeoutMs, 8000), systemContent)
-        if (xw) return xw
-    }
-    // Try Gifted last — key may be expired but worth one attempt
-    if (lastUser) {
-        const gt = await callGiftedTech(lastUser, historyMsgs, Math.min(timeoutMs, 8000), systemContent)
+        const gt = await callGiftedTech(lastUser, historyMsgs, Math.min(timeoutMs, 15000), systemContent)
         if (gt) return gt
     }
+    // Xwolf as second option
+    if (lastUser) {
+        const xw = await callXwolf(lastUser, Math.min(timeoutMs, 10000), systemContent)
+        if (xw) return xw
+    }
+    // Pollinations as last resort (free, no key)
+    const poll = await callPollinations(messages, Math.min(timeoutMs, 20000))
+    if (poll) return poll
     return null
 }
 
