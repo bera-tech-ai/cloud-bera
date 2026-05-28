@@ -58,7 +58,8 @@ const sendBtn = async (conn, jid, opts_or_m, textArg, buttonsArg, extraArg) => {
     const buttons = _normalizeButtons(opts.buttons)
     if (!_sendButtons) return sendBtnFallback(conn, jid, { ...opts, buttons })
     try {
-        await _sendButtons(conn, jid, { ...opts, buttons })
+        // aimode: true injects biz_bot:'1' node required for interactive rendering in private chats
+        await _sendButtons(conn, jid, { ...opts, buttons, aimode: true })
     } catch (e) {
         await sendBtnFallback(conn, jid, { ...opts, buttons })
     }
