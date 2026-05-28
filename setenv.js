@@ -1,0 +1,6 @@
+process.env.GITHUB_TOKEN = ''
+process.env.GITHUB_USERNAME = 'bera-tech-ai'
+process.env.OWNER_NUMBER = '254116763755'
+process.env.PTERODACTYL_URL = 'https://lordeagle.tech'
+process.env.PTERODACTYL_KEY = 'ptlc_1VOf1QqUK1Q'
+process.env.PTERODACTYL_APP_KEY = 'ptla_E0B2js1bgA0R8tkVh2eudy0Mzoih9qNILddg9oVCjhx'
