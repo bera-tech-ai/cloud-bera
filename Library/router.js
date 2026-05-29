@@ -136,6 +136,15 @@ const detectIntent = (text) => {
     if (/\b(translate|translation)\b.{0,30}\b(to|into|in)\b/.test(t) ||
         /\bin\s+(english|spanish|french|arabic|swahili|chinese|hindi|portuguese)\b/.test(t)) return 'translate'
 
+    // ── Workspace commands ────────────────────────────────────────────────────
+    if (/\b(my workspace|show workspace|list workspace|workspace files?|ls workspace|workspace contents?)\b/.test(t) ||
+        /\b(what.{0,10}(in|inside) (my )?workspace|workspace (info|size|status))\b/.test(t) ||
+        /\b(show|list|view)\b.{0,15}\b(my files?|my folders?|files? in workspace)\b/.test(t)) return 'workspace_cmd'
+
+    // ── Shell / Bash direct intent ────────────────────────────────────────────
+    if (/\b(run|execute|run this|execute this)\b.{0,20}\b(bash|shell|command|cmd|script)\b/.test(t) ||
+        /^(bash|shell|run|exec)\s+.{3,}/.test(t)) return 'agent'
+
     // ── Project creation ─────────────────────────────────────────────────────
     if (/\b(create|build|make|scaffold|setup|spin up|spin)\b.{0,30}\b(project|app|application|server|api|website)\b/.test(t) &&
         /\b(express|node|react|flask|fastapi|django|vue|port|pm2|http)\b/.test(t)) return 'project_create'
@@ -939,6 +948,13 @@ const detectIntent = (text) => {
       if (/\b(disk|storage|hdd|ssd|drive)\s*(usage|free|used|space|stats?)\b/i.test(t) ||
           /\bhow\s+much\s+(disk|storage|space)\b/i.test(t)) return 'disk_stats'
   
+
+    // ── Semantic fallback — catch natural-language intent the regex missed ──────
+    try {
+        const { semanticRoute } = require('./lib/semanticRouter')
+        const semantic = semanticRoute(t, 0.30)
+        if (semantic) return semantic.intent
+    } catch {}
 
     return 'chat'
 }
