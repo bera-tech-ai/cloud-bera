@@ -4,9 +4,9 @@ const { exec, execSync } = require('child_process')
 const fs = require('fs')
 
 const GIFTED        = 'https://api.gifted.co.ke'
-const GIFTED_KEY    = '_0u5aff45,_0l1876s8qc'   // download/media key
-const GIFTED_SEARCH = 'gifted'                    // search endpoints use 'gifted' key
-const SILVATECH  = 'https://api.silvatech.co.ke'
+const GIFTED_KEY    = '_0u5aff45,_0l1876s8qc'
+const GIFTED_SEARCH = 'gifted'
+const SILVATECH     = 'https://api.silvatech.co.ke'
 
 // ── URL extractor ─────────────────────────────────────────────────────────────
 const toUrl = (v) => {
@@ -29,20 +29,19 @@ const getVideoId = (url) => {
 
 // ── YouTube search ─────────────────────────────────────────────────────────────
 const searchYoutube = async (query) => {
-    // 1a. Gifted YTS with 'gifted' search key (correct key for search endpoints)
+    // 1a. Gifted YTS with search key
     try {
         const res = await axios.get(`${GIFTED}/api/search/yts`, {
             params: { query, apikey: GIFTED_SEARCH }, timeout: 12000
         })
         const results = res.data?.results || res.data?.data || res.data?.videos
         if (Array.isArray(results) && results.length) {
-            // Accept any item — type might be absent or different
             const videos = results.filter(item => item.videoId || item.id || item.url)
             if (videos.length) return { success: true, results: videos.slice(0, 5) }
         }
     } catch {}
 
-    // 1b. Gifted YTS with alternate key (fallback)
+    // 1b. Gifted YTS with alternate key
     try {
         const res = await axios.get(`${GIFTED}/api/search/yts`, {
             params: { query, apikey: GIFTED_KEY }, timeout: 12000
@@ -74,8 +73,12 @@ const searchYoutube = async (query) => {
         }
     } catch {}
 
-    // 3. Invidious search (open-source YT frontend)
-    const INVIDIOUS = ['https://invidious.snopyta.org', 'https://invidious.tiekoetter.com']
+    // 3. Invidious search
+    const INVIDIOUS = [
+        'https://invidious.snopyta.org',
+        'https://invidious.tiekoetter.com',
+        'https://vid.puffyan.us',
+    ]
     for (const inv of INVIDIOUS) {
         try {
             const res = await axios.get(`${inv}/api/v1/search?q=${encodeURIComponent(query)}&type=video`, { timeout: 8000 })
@@ -100,54 +103,7 @@ const searchYoutube = async (query) => {
     return { success: false, error: 'YouTube search failed on all sources' }
 }
 
-// ── Cobalt.tools v7+ public instances ─────────────────────────────────────────
-const downloadViaCobalt = async (videoUrl) => {
-    const COBALT_INSTANCES = [
-        'https://cobalt.api.timelessnesses.me',
-        'https://cobalt.api.lostluma.dev',
-        'https://cobalt.api.itsrius.dev',
-        'https://cobalt.api.bludda.de',
-        'https://cobalt.api.nico.ninja',
-    ]
-    for (const instance of COBALT_INSTANCES) {
-        try {
-            const res = await axios.post(instance,
-                { url: videoUrl, downloadMode: 'audio', audioFormat: 'mp3', audioBitrate: '128' },
-                {
-                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                    timeout: 25000
-                }
-            )
-            const url = res.data?.url
-            if (url?.startsWith('http')) return { success: true, url, title: '' }
-        } catch {}
-    }
-    return null
-}
-
-// ── y2mate.guru (POST-based, popular) ─────────────────────────────────────────
-const downloadViaY2mate = async (videoUrl) => {
-    try {
-        const r1 = await axios.post('https://www.y2mate.com/mates/analyzeV2/ajax',
-            `k_query=${encodeURIComponent(videoUrl)}&k_page=home&hl=en&q_auto=0`,
-            { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' }, timeout: 15000 }
-        )
-        const vid = r1.data?.vid
-        const mp3Links = r1.data?.links?.mp3 || {}
-        const firstKey = Object.values(mp3Links)[0]?.k
-        if (!vid || !firstKey) return null
-
-        const r2 = await axios.post('https://www.y2mate.com/mates/convertV2/index',
-            `vid=${vid}&k=${encodeURIComponent(firstKey)}`,
-            { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' }, timeout: 30000 }
-        )
-        const dlUrl = r2.data?.dlink
-        if (dlUrl?.startsWith('http')) return { success: true, url: dlUrl, title: '' }
-    } catch {}
-    return null
-}
-
-// ── yt-dlp shell download (most reliable — returns buffer) ────────────────────
+// ── yt-dlp shell download (most reliable) ─────────────────────────────────────
 const downloadViaYtdlp = async (videoUrl, audioOnly = true) => {
     const hasYtdlp = (() => {
         try { execSync('which yt-dlp 2>/dev/null', { timeout: 3000 }); return true } catch { return false }
@@ -169,7 +125,6 @@ const downloadViaYtdlp = async (videoUrl, audioOnly = true) => {
                     fs.unlinkSync(realFile)
                     resolve({ success: true, buffer, title: '', ext })
                 } else {
-                    // search for any matching file
                     const dir = '/tmp'
                     const base = outFile.split('/').pop().replace('%(ext)s', '')
                     const match = fs.readdirSync(dir).find(f => f.startsWith(base))
@@ -187,12 +142,39 @@ const downloadViaYtdlp = async (videoUrl, audioOnly = true) => {
     })
 }
 
+// ── Cobalt.tools v7+ public instances ─────────────────────────────────────────
+const downloadViaCobalt = async (videoUrl) => {
+    const COBALT_INSTANCES = [
+        'https://cobalt.api.timelessnesses.me',
+        'https://cobalt.api.lostluma.dev',
+        'https://cobalt.api.itsrius.dev',
+        'https://cobalt.api.bludda.de',
+        'https://cobalt.api.nico.ninja',
+        'https://co.wuk.sh',
+    ]
+    for (const instance of COBALT_INSTANCES) {
+        try {
+            const res = await axios.post(instance,
+                { url: videoUrl, downloadMode: 'audio', audioFormat: 'mp3', audioBitrate: '128' },
+                {
+                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    timeout: 25000
+                }
+            )
+            const url = res.data?.url
+            if (url?.startsWith('http')) return { success: true, url, title: '' }
+        } catch {}
+    }
+    return null
+}
+
 // ── Gifted primary download chain ─────────────────────────────────────────────
 const downloadAudioGifted = async (videoUrl) => {
     const endpoints = [
         `/api/download/savetubemp3`,
         `/api/download/ytmp3`,
         `/api/download/yt`,
+        `/api/download/ytdl`,
     ]
     for (const ep of endpoints) {
         try {
@@ -220,6 +202,52 @@ const downloadAudioSilvatech = async (videoUrl) => {
         const audioUrl = toUrl(data?.download) || toUrl(data?.url) || toUrl(data?.audio) ||
                          toUrl(data?.result) || toUrl(data?.mp3)
         if (audioUrl) return { success: true, url: audioUrl, title: data?.title || '' }
+    } catch {}
+    return null
+}
+
+// ── Ocean Saver (free, no key) ────────────────────────────────────────────────
+const downloadViaOceanSaver = async (videoUrl) => {
+    try {
+        const res = await axios.get(
+            `https://p.oceansaver.in/ajax/download.php?copyright=0&format=mp3&url=${encodeURIComponent(videoUrl)}`,
+            { timeout: 30000 }
+        )
+        const data = res.data
+        if (data?.success !== 1) return null
+        const progressUrl = data?.progress_url
+        if (!progressUrl) return null
+        // Poll for download URL
+        for (let i = 0; i < 10; i++) {
+            await new Promise(r => setTimeout(r, 3000))
+            try {
+                const prog = await axios.get(progressUrl, { timeout: 10000 })
+                if (prog.data?.download_url) {
+                    return { success: true, url: prog.data.download_url, title: data?.title || '' }
+                }
+            } catch {}
+        }
+    } catch {}
+    return null
+}
+
+// ── ZYnk API (reliable free MP3 downloader) ───────────────────────────────────
+const downloadViaZynk = async (videoUrl) => {
+    const videoId = getVideoId(videoUrl)
+    if (!videoId) return null
+    try {
+        const res = await axios.get(
+            `https://api.fabdl.com/youtube/get?url=${encodeURIComponent(videoUrl)}`,
+            { timeout: 25000 }
+        )
+        const data = res.data?.result
+        if (!data?.id) return null
+        const dt = await axios.get(
+            `https://api.fabdl.com/youtube/mp3/${data.id}`,
+            { timeout: 25000 }
+        )
+        const dlUrl = dt.data?.result?.download_url
+        if (dlUrl?.startsWith('http')) return { success: true, url: dlUrl, title: data.title || '' }
     } catch {}
     return null
 }
@@ -253,78 +281,113 @@ const toxicPlay = async (query) => {
     return null
 }
 
+// ── JioSaavn search (alternative free audio source) ──────────────────────────
+const downloadViaJioSaavn = async (query) => {
+    try {
+        const search = await axios.get(
+            `https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=1`,
+            { timeout: 12000 }
+        )
+        const song = search.data?.data?.results?.[0]
+        if (!song) return null
+        const dlUrl = song.downloadUrl?.find(d => d.quality === '320kbps' || d.quality === '160kbps')?.url ||
+                      song.downloadUrl?.[song.downloadUrl.length - 1]?.url
+        if (!dlUrl) return null
+        return {
+            success: true,
+            audioUrl: dlUrl,
+            title: song.name || query,
+            channel: song.artists?.primary?.[0]?.name || '',
+            duration: song.duration ? `${Math.floor(song.duration / 60)}:${String(song.duration % 60).padStart(2, '0')}` : '',
+            thumbnail: song.image?.find(i => i.quality === '500x500')?.url || song.image?.[0]?.url || '',
+            source: 'jiosaavn'
+        }
+    } catch {}
+    return null
+}
+
+// ── y2mate.com ─────────────────────────────────────────────────────────────────
+const downloadViaY2mate = async (videoUrl) => {
+    try {
+        const r1 = await axios.post('https://www.y2mate.com/mates/analyzeV2/ajax',
+            `k_query=${encodeURIComponent(videoUrl)}&k_page=home&hl=en&q_auto=0`,
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' }, timeout: 15000 }
+        )
+        const vid = r1.data?.vid
+        const mp3Links = r1.data?.links?.mp3 || {}
+        const firstKey = Object.values(mp3Links)[0]?.k
+        if (!vid || !firstKey) return null
+
+        const r2 = await axios.post('https://www.y2mate.com/mates/convertV2/index',
+            `vid=${vid}&k=${encodeURIComponent(firstKey)}`,
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' }, timeout: 30000 }
+        )
+        const dlUrl = r2.data?.dlink
+        if (dlUrl?.startsWith('http')) return { success: true, url: dlUrl, title: '' }
+    } catch {}
+    return null
+}
+
 // ── MAIN: Search and Download Audio ──────────────────────────────────────────
 // Returns: { success, audioUrl?, audioBuffer?, title, channel, duration, thumbnail }
 const searchAndDownload = async (query) => {
-    // 1. Search YouTube for the video
+    // 1. Try JioSaavn first for music queries (fast, high quality, no YT needed)
+    const saavn = await downloadViaJioSaavn(query)
+    if (saavn?.success) return saavn
+
+    // 2. Search YouTube for the video
     const ytSearch = await searchYoutube(query)
     const top = ytSearch.success ? ytSearch.results[0] : null
     const videoUrl = top?.url || (top?.videoId ? `https://youtube.com/watch?v=${top.videoId}` : null) || toUrl(top?.link)
 
     if (videoUrl) {
-        // 2a. Gifted savetubemp3 / ytmp3
-        const gifted = await downloadAudioGifted(videoUrl)
-        if (gifted?.success) {
-            return {
-                success: true, audioUrl: gifted.url,
-                title: top?.title || gifted.title || query,
-                channel: typeof top?.author?.name === 'string' ? top.author.name : '',
-                duration: top?.timestamp || top?.duration?.timestamp || '',
-                thumbnail: top?.thumbnail || top?.image || '',
-                source: 'gifted'
-            }
+        const meta = {
+            title: top?.title || query,
+            channel: typeof top?.author?.name === 'string' ? top.author.name : '',
+            duration: top?.timestamp || top?.duration?.timestamp || '',
+            thumbnail: top?.thumbnail || top?.image || '',
         }
 
-        // 2b. Silvatech
-        const silva = await downloadAudioSilvatech(videoUrl)
-        if (silva?.success) {
-            return {
-                success: true, audioUrl: silva.url,
-                title: top?.title || silva.title || query,
-                channel: typeof top?.author?.name === 'string' ? top.author.name : '',
-                duration: top?.timestamp || '',
-                thumbnail: top?.thumbnail || '',
-                source: 'silvatech'
-            }
-        }
-
-        // 2c. Cobalt v7 (multiple instances)
-        const cobalt = await downloadViaCobalt(videoUrl)
-        if (cobalt?.success) {
-            return {
-                success: true, audioUrl: cobalt.url,
-                title: top?.title || query,
-                channel: typeof top?.author?.name === 'string' ? top.author.name : '',
-                duration: top?.timestamp || '',
-                thumbnail: top?.thumbnail || '',
-                source: 'cobalt'
-            }
-        }
-
-        // 2d. y2mate.com
-        const y2 = await downloadViaY2mate(videoUrl)
-        if (y2?.success) {
-            return {
-                success: true, audioUrl: y2.url,
-                title: top?.title || query,
-                channel: typeof top?.author?.name === 'string' ? top.author.name : '',
-                duration: top?.timestamp || '',
-                thumbnail: top?.thumbnail || '',
-                source: 'y2mate'
-            }
-        }
-
-        // 2e. yt-dlp shell (downloads file → returns buffer)
+        // 2a. yt-dlp shell (most reliable if available)
         const ytdlp = await downloadViaYtdlp(videoUrl, true)
         if (ytdlp?.success) {
-            return {
-                success: true, audioBuffer: ytdlp.buffer,
-                title: top?.title || query,
-                channel: typeof top?.author?.name === 'string' ? top.author.name : '',
-                duration: top?.timestamp || '',
-                thumbnail: top?.thumbnail || '',
-                source: 'ytdlp'
-            }
+            return { success: true, audioBuffer: ytdlp.buffer, ...meta, source: 'ytdlp' }
+        }
+
+        // 2b. Gifted savetubemp3 / ytmp3
+        const gifted = await downloadAudioGifted(videoUrl)
+        if (gifted?.success) {
+            return { success: true, audioUrl: gifted.url, ...meta, title: meta.title || gifted.title, source: 'gifted' }
+        }
+
+        // 2c. Zynk/FabDL
+        const zynk = await downloadViaZynk(videoUrl)
+        if (zynk?.success) {
+            return { success: true, audioUrl: zynk.url, ...meta, title: meta.title || zynk.title, source: 'zynk' }
+        }
+
+        // 2d. Silvatech
+        const silva = await downloadAudioSilvatech(videoUrl)
+        if (silva?.success) {
+            return { success: true, audioUrl: silva.url, ...meta, title: meta.title || silva.title, source: 'silvatech' }
+        }
+
+        // 2e. Cobalt v7 (multiple instances)
+        const cobalt = await downloadViaCobalt(videoUrl)
+        if (cobalt?.success) {
+            return { success: true, audioUrl: cobalt.url, ...meta, source: 'cobalt' }
+        }
+
+        // 2f. y2mate
+        const y2 = await downloadViaY2mate(videoUrl)
+        if (y2?.success) {
+            return { success: true, audioUrl: y2.url, ...meta, source: 'y2mate' }
+        }
+
+        // 2g. Ocean Saver
+        const ocean = await downloadViaOceanSaver(videoUrl)
+        if (ocean?.success) {
+            return { success: true, audioUrl: ocean.url, ...meta, title: meta.title || ocean.title, source: 'oceansaver' }
         }
     }
 
@@ -341,12 +404,16 @@ const searchAndDownload = async (query) => {
         }
     }
 
-    return { success: false, error: 'Could not download that song. Try a different name.' }
+    return { success: false, error: 'Could not download that song. Try a different name or artist.' }
 }
 
 // ── YouTube Video Download ─────────────────────────────────────────────────────
 const downloadVideo = async (videoUrl) => {
-    // 1. Gifted ytmp4
+    // 1. yt-dlp (best if available)
+    const ytdlp = await downloadViaYtdlp(videoUrl, false)
+    if (ytdlp?.success) return ytdlp
+
+    // 2. Gifted ytmp4
     for (const ep of ['/api/download/ytmp4', '/api/download/dlmp4']) {
         try {
             const res = await axios.get(`${GIFTED}${ep}`, {
@@ -360,7 +427,7 @@ const downloadVideo = async (videoUrl) => {
         } catch {}
     }
 
-    // 2. Cobalt v7 video
+    // 3. Cobalt v7 video
     const COBALT_INSTANCES = [
         'https://cobalt.api.timelessnesses.me',
         'https://cobalt.api.lostluma.dev',
@@ -375,10 +442,6 @@ const downloadVideo = async (videoUrl) => {
             if (url?.startsWith('http')) return { success: true, url, title: '' }
         } catch {}
     }
-
-    // 3. yt-dlp
-    const ytdlp = await downloadViaYtdlp(videoUrl, false)
-    if (ytdlp?.success) return ytdlp
 
     return { success: false, error: 'Video download failed' }
 }
