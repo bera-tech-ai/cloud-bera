@@ -712,11 +712,35 @@ IMAGE & MEDIA GENERATION
 {"tool":"send_media","url":"https://example.com/img.jpg","caption":"Check this out","type":"image"}
 
 ══════════════════════════════════════════════
-WHATSAPP GROUP MANAGEMENT
+WHATSAPP GROUP MANAGEMENT  ← VERY IMPORTANT — READ CAREFULLY
 ══════════════════════════════════════════════
-{"tool":"wa_kick","number":"254712345678","group":"GROUP_JID"}
-{"tool":"wa_promote","number":"254712345678","group":"GROUP_JID"}
-{"tool":"wa_demote","number":"254712345678","group":"GROUP_JID"}
+CRITICAL: The bot IS ALREADY an admin in most groups. NEVER say "I need to be an admin" or "I don't have permission". Just call the tool directly. The tool will handle errors if they occur.
+
+GROUP SETTINGS (open/close/lock/unlock):
+{"tool":"wa_group_setting","action":"close"} → lock group — ONLY admins can send (aka mute/close/lock)
+{"tool":"wa_group_setting","action":"open"} → open group — EVERYONE can send messages (aka unmute/unlock)
+{"tool":"wa_group_setting","action":"restrict"} → only admins can edit group info/description/icon
+{"tool":"wa_group_setting","action":"unrestrict"} → anyone can edit group info
+
+GROUP INFO & IDENTITY:
+{"tool":"wa_group_info"} → get group name, description, member count, admins list
+{"tool":"wa_group_subject","name":"New Group Name"} → rename/change group name/subject
+{"tool":"wa_group_desc","description":"New description here"} → change group description
+{"tool":"wa_group_invite"} → get the group invite link
+
+MEMBER MANAGEMENT:
+{"tool":"wa_kick","number":"254712345678"} → remove member from group
+{"tool":"wa_promote","number":"254712345678"} → make member an admin
+{"tool":"wa_demote","number":"254712345678"} → remove admin rights
+{"tool":"wa_add","number":"254712345678"} → add someone to the group
+
+INTENT EXAMPLES:
+"close the group" / "lock the group" / "mute the group" → {"tool":"wa_group_setting","action":"close"}
+"open the group" / "unlock" / "unmute" → {"tool":"wa_group_setting","action":"open"}
+"rename group to X" → {"tool":"wa_group_subject","name":"X"}
+"kick @user" → {"tool":"wa_kick","number":"<their number>"}
+"get invite link" → {"tool":"wa_group_invite"}
+"how many members?" → {"tool":"wa_group_info"}
 
 ══════════════════════════════════════════════
 MEMORY & NOTES
@@ -1278,27 +1302,56 @@ const executeToolCall = async (tc, chatId, conn, m) => {
 
     // ── tts — FIXED: Google TTS with proper User-Agent ────────────────────────
     if (t === 'tts') {
-        const text = (tc.text || '').slice(0, 200)
+        const rawText = (tc.text || '').slice(0, 700)
         const lang = tc.lang || tc.voice || 'en'
-        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`
-        if (!conn || !m) return `TTS URL: ${ttsUrl}`
+        if (!rawText) return '❌ TTS: no text provided'
+        if (!conn || !m) return `TTS: "${rawText}" (lang: ${lang})`
+
+        // Multi-provider TTS with reliable fallbacks
+        const tryTTS = async (url, opts = {}) => {
+            try {
+                const r = await axios2.get(url, {
+                    responseType: 'arraybuffer',
+                    timeout: 20000,
+                    headers: { 'User-Agent': 'Mozilla/5.0', ...opts.headers }
+                })
+                const buf = Buffer.from(r.data)
+                if (buf.length > 1000) return buf // must be a real audio file
+            } catch {}
+            return null
+        }
+
+        // 1. Microsoft Edge TTS via free Deno proxy (best quality, no limits)
+        const VOICE_MAP = { en: 'en-US-AriaNeural', sw: 'sw-KE-ZuriNeural', fr: 'fr-FR-DeniseNeural', ar: 'ar-EG-SalmaNeural', hi: 'hi-IN-SwaraNeural', de: 'de-DE-KatjaNeural', es: 'es-ES-ElviraNeural', pt: 'pt-BR-FranciscaNeural', zh: 'zh-CN-XiaoxiaoNeural' }
+        const voice = tc.voice_name || VOICE_MAP[lang] || `${lang}-Default`
+        let buf = await tryTTS(`https://tts.deno.dev/?t=${encodeURIComponent(rawText)}&v=${encodeURIComponent(voice)}`)
+
+        // 2. StreamElements Brian voice (reliable, good quality)
+        if (!buf) buf = await tryTTS(`https://api.streamelements.com/kappa/v2/speech?voice=${tc.se_voice || 'Brian'}&text=${encodeURIComponent(rawText.slice(0,400))}`)
+
+        // 3. Google Translate TTS (limited but usually works for short text)
+        if (!buf) {
+            const chunks = rawText.match(/.{1,180}/g) || [rawText]
+            const parts = []
+            for (const chunk of chunks.slice(0, 3)) {
+                const p = await tryTTS(`https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=${lang}&client=tw-ob`, { headers: { Referer: 'https://translate.google.com/' } })
+                if (p) parts.push(p)
+            }
+            if (parts.length) buf = Buffer.concat(parts)
+        }
+
+        // 4. VoiceRSS (free tier, decent quality)
+        if (!buf) buf = await tryTTS(`https://api.voicerss.org/?key=11f53b18b5094a2483f26fa09a28b74c&hl=${lang}&src=${encodeURIComponent(rawText.slice(0,300))}&f=16khz_16bit_stereo&c=MP3`)
+
+        if (!buf) return `❌ TTS failed: all voice providers unavailable. Try again in a moment.`
+
         try {
-            // Fetch audio with proper headers to avoid 403, then send as buffer
-            const r = await axios2.get(ttsUrl, {
-                responseType: 'arraybuffer',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Referer': 'https://translate.google.com/',
-                    'Accept': 'audio/mpeg, audio/*, */*'
-                },
-                timeout: 15000
-            })
             await conn.sendMessage(chatId,
-                { audio: Buffer.from(r.data), mimetype: 'audio/mpeg', ptt: tc.ptt !== false },
+                { audio: buf, mimetype: 'audio/mpeg', ptt: tc.ptt !== false, waveform: [0,25,50,75,100,75,50,25,0] },
                 { quoted: m }
-            ).catch(() => {})
-            return `🔊 TTS sent: "${text}"`
-        } catch (e) { return `TTS failed: ${e.message}` }
+            )
+            return `🔊 Voice note sent: _"${rawText.slice(0, 80)}${rawText.length > 80 ? '…' : ''}"_`
+        } catch (e) { return `❌ TTS send failed: ${e.message}` }
     }
 
     // ── translate_text ────────────────────────────────────────────────────────
@@ -1686,16 +1739,126 @@ try {
         return 'unknown monitor action'
     }
 
+    // ── wa_group_setting — open/close/restrict/unrestrict ────────────────────
+    if (t === 'wa_group_setting') {
+        if (!conn) return 'ERROR: no connection'
+        const group = tc.group || chatId
+        if (!group?.endsWith('@g.us')) return '❌ This must be used inside a WhatsApp group.'
+        const action = (tc.action || tc.setting || '').toLowerCase()
+        let setting
+        if (['close','lock','mute','locked','announcement'].includes(action)) {
+            setting = 'announcement'
+        } else if (['open','unlock','unmute','not_announcement','unlocked','everyone'].includes(action)) {
+            setting = 'not_announcement'
+        } else if (['restrict','only_admins_edit','restricted'].includes(action)) {
+            setting = 'locked'
+        } else if (['unrestrict','unlocked','everyone_edit','everyone_can_edit'].includes(action)) {
+            setting = 'unlocked'
+        } else {
+            return `❌ Unknown action: "${action}". Use: open, close, restrict, or unrestrict`
+        }
+        const labels = {
+            announcement: '🔇 Group closed — only admins can send messages.',
+            not_announcement: '🔊 Group opened — everyone can send messages.',
+            locked: '🔒 Group info locked — only admins can edit name/description.',
+            unlocked: '🔓 Group info unlocked — anyone can edit.'
+        }
+        try {
+            await conn.groupSettingUpdate(group, setting)
+            return labels[setting] || '✅ Group setting updated.'
+        } catch (e) {
+            return `❌ Failed: ${e.message}\n\nMake sure the bot is an admin in this group.`
+        }
+    }
+
+    // ── wa_group_info ─────────────────────────────────────────────────────────
+    if (t === 'wa_group_info') {
+        if (!conn) return 'ERROR: no connection'
+        const group = tc.group || chatId
+        if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
+        try {
+            const meta = await conn.groupMetadata(group)
+            const admins = meta.participants.filter(p => p.admin).map(p => `+${p.id.split('@')[0]}`)
+            return [
+                `📋 *Group Info:*`,
+                `*Name:* ${meta.subject || 'Unknown'}`,
+                `*Description:* ${meta.desc || 'None'}`,
+                `*Members:* ${meta.participants.length}`,
+                `*Admins:* ${admins.length} — ${admins.slice(0,5).join(', ')}${admins.length > 5 ? ` +${admins.length-5} more` : ''}`,
+                `*Created:* ${meta.creation ? new Date(meta.creation*1000).toDateString() : 'Unknown'}`,
+                `*Restricted:* ${meta.announce ? 'Yes (only admins can send)' : 'No'}`,
+            ].join('\n')
+        } catch (e) { return `❌ Could not get group info: ${e.message}` }
+    }
+
+    // ── wa_group_subject ──────────────────────────────────────────────────────
+    if (t === 'wa_group_subject') {
+        if (!conn) return 'ERROR: no connection'
+        const group = tc.group || chatId
+        const name = tc.name || tc.subject || tc.title || ''
+        if (!name) return '❌ Provide a new group name: {"tool":"wa_group_subject","name":"New Name"}'
+        if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
+        try {
+            await conn.groupUpdateSubject(group, name)
+            return `✅ Group renamed to: *${name}*`
+        } catch (e) { return `❌ Rename failed: ${e.message}` }
+    }
+
+    // ── wa_group_desc ─────────────────────────────────────────────────────────
+    if (t === 'wa_group_desc') {
+        if (!conn) return 'ERROR: no connection'
+        const group = tc.group || chatId
+        const desc = tc.description || tc.desc || tc.text || ''
+        if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
+        try {
+            await conn.groupUpdateDescription(group, desc)
+            return `✅ Group description updated.`
+        } catch (e) { return `❌ Failed: ${e.message}` }
+    }
+
+    // ── wa_group_invite ───────────────────────────────────────────────────────
+    if (t === 'wa_group_invite') {
+        if (!conn) return 'ERROR: no connection'
+        const group = tc.group || chatId
+        if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
+        try {
+            const code = await conn.groupInviteCode(group)
+            const link = `https://chat.whatsapp.com/${code}`
+            if (m) await conn.sendMessage(chatId, { text: `🔗 *Group Invite Link:*\n${link}` }, { quoted: m }).catch(() => {})
+            return `🔗 Invite link: ${link}`
+        } catch (e) { return `❌ Could not get invite link: ${e.message}` }
+    }
+
+    // ── wa_add ────────────────────────────────────────────────────────────────
+    if (t === 'wa_add') {
+        if (!conn) return 'ERROR: no connection'
+        const group = tc.group || chatId
+        const num = String(tc.number || '').replace(/[^0-9]/g, '')
+        if (!num) return '❌ No number provided.'
+        if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
+        const jid = `${num}@s.whatsapp.net`
+        try {
+            const r = await conn.groupParticipantsUpdate(group, [jid], 'add')
+            const status = r?.[0]?.status
+            if (status === 200 || status === '200') return `✅ Added +${num} to the group.`
+            if (status === 403) return `❌ +${num} has privacy settings that prevent being added. Send them the invite link instead.`
+            if (status === 408) return `❌ +${num} is not on WhatsApp.`
+            return `✅ Add request sent to +${num}. Status: ${status}`
+        } catch (e) { return `❌ Add failed: ${e.message}` }
+    }
+
     // ── wa_kick ───────────────────────────────────────────────────────────────
     if (t === 'wa_kick') {
         if (!conn) return 'ERROR: no connection'
         const group = tc.group || chatId
-        if (!group?.endsWith('@g.us')) return 'ERROR: must be used in a group'
+        if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
         const num = String(tc.number || '').replace(/[^0-9]/g, '')
         if (!num) return 'ERROR: no number'
         const jid = num.includes('@') ? tc.number : `${num}@s.whatsapp.net`
-        try { await conn.groupParticipantsUpdate(group, [jid], 'remove'); return `kicked: ${num}` }
-        catch (e) { return `kick failed: ${e.message}` }
+        try {
+            await conn.groupParticipantsUpdate(group, [jid], 'remove')
+            return `✅ Kicked +${num} from the group.`
+        } catch (e) { return `❌ Kick failed: ${e.message}` }
     }
 
     // ── wa_promote ────────────────────────────────────────────────────────────
@@ -1703,8 +1866,10 @@ try {
         if (!conn) return 'ERROR: no connection'
         const num = String(tc.number || '').replace(/[^0-9]/g, '')
         const jid = `${num}@s.whatsapp.net`
-        try { await conn.groupParticipantsUpdate(tc.group || chatId, [jid], 'promote'); return `promoted: ${num}` }
-        catch (e) { return `promote failed: ${e.message}` }
+        try {
+            await conn.groupParticipantsUpdate(tc.group || chatId, [jid], 'promote')
+            return `✅ Promoted +${num} to admin.`
+        } catch (e) { return `❌ Promote failed: ${e.message}` }
     }
 
     // ── wa_demote ─────────────────────────────────────────────────────────────
@@ -1712,8 +1877,10 @@ try {
         if (!conn) return 'ERROR: no connection'
         const num = String(tc.number || '').replace(/[^0-9]/g, '')
         const jid = `${num}@s.whatsapp.net`
-        try { await conn.groupParticipantsUpdate(tc.group || chatId, [jid], 'demote'); return `demoted: ${num}` }
-        catch (e) { return `demote failed: ${e.message}` }
+        try {
+            await conn.groupParticipantsUpdate(tc.group || chatId, [jid], 'demote')
+            return `✅ Removed admin from +${num}.`
+        } catch (e) { return `❌ Demote failed: ${e.message}` }
     }
 
     // ── wa_send ───────────────────────────────────────────────────────────────
