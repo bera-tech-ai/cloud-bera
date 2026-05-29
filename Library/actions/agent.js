@@ -16,48 +16,38 @@ const resolveAgentPath = (argPath, userId) => {
     return wsResolve(userId || 'shared', p)
 }
 
-// ── Puter AI (primary — fast, free, no key required) ────────────────────────
-const callPuterAI = async (systemPrompt, userMsg) => {
+// ── Groq AI (primary — ultra-fast, < 1 second responses) ────────────────────
+const GROQ_API_KEY = process.env.GROQ_API_KEY
+const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
+
+const callGroqAI = async (systemPrompt, userMsg) => {
     const messages = []
     if (systemPrompt) messages.push({ role: 'system', content: systemPrompt.slice(0, 4000) })
     messages.push({ role: 'user', content: userMsg.slice(0, 6000) })
 
-    const models = [
-        'claude-3-5-sonnet',
-        'gpt-4o',
-        'gpt-4o-mini',
-        'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
-        'google/gemini-flash-1.5',
-    ]
-
-    for (const model of models) {
+    for (const model of GROQ_MODELS) {
         try {
-            const res = await axios.post('https://api.puter.com/drivers/call', {
-                interface: 'puter-chat-completion',
-                test_mode: false,
-                method: 'complete',
-                args: { model, messages }
+            const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+                model,
+                messages,
+                max_tokens: 2048,
+                temperature: 0.7
             }, {
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Origin': 'https://puter.com',
-                    'Referer': 'https://puter.com/',
+                    'Authorization': `Bearer ${GROQ_API_KEY}`,
+                    'Content-Type': 'application/json'
                 },
-                timeout: 28000
+                timeout: 10000
             })
-            const result = res.data?.result
-            const text =
-                result?.message?.content?.[0]?.text ||
-                (typeof result?.message?.content === 'string' ? result.message.content : null) ||
-                result?.text || result?.content || result?.reply ||
-                res.data?.message?.content?.[0]?.text ||
-                (typeof res.data?.message?.content === 'string' ? res.data.message.content : null)
+            const text = res.data?.choices?.[0]?.message?.content
             if (text && String(text).trim().length > 2) {
-                return { success: true, text: String(text).trim(), model: `puter:${model}` }
+                return { success: true, text: String(text).trim(), model: `groq:${model}` }
             }
-        } catch {}
+        } catch (e) {
+            if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 1000))
+        }
     }
-    return { success: false, error: 'Puter AI unavailable' }
+    return { success: false, error: 'Groq AI unavailable' }
 }
 
 // ── Gifted API (fallback 1) ──────────────────────────────────────────────────
@@ -138,11 +128,11 @@ const callPollinationsAgent = async (systemPrompt, userMsg) => {
     return { success: false, error: 'Pollinations unavailable' }
 }
 
-// ── Primary AI caller — Puter first, then fallbacks ───────────────────────────
+// ── Primary AI caller — Groq first, then fallbacks ───────────────────────────
 const callAI = async (systemPrompt, userMsg) => {
-    // 1. Puter AI — primary (fast, high quality, multiple models)
-    const puter = await callPuterAI(systemPrompt, userMsg)
-    if (puter.success) return puter
+    // 1. Groq AI — primary (ultra-fast, < 1 second)
+    const groq = await callGroqAI(systemPrompt, userMsg)
+    if (groq.success) return groq
 
     // 2. Gifted — gemini + gpt4o confirmed working
     const gifted = await callGiftedAI(systemPrompt, userMsg)
@@ -1347,7 +1337,7 @@ const runAgentParallel = async (steps, conn, chat, m, opts = {}, onStepDone) => 
 
 module.exports = {
     planTask, executeStep, executeWithRetry, runAgentParallel, summarizeResults,
-    callAI, callPuterAI, callGiftedAI, callXwolf, callPollinations, runShell,
+    callAI, callGroqAI, callGiftedAI, callXwolf, callPollinations, runShell,
     npmStats, resolveGroupMember, createProject, pm2Manage, githubTokenRegen,
     systemInfo, portCheck, dockerManage, cronManage, processKill,
     codeReview, codeExplain, bugFinder, httpRequest, gitStatus,
