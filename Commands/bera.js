@@ -2405,6 +2405,378 @@ const handleWrapper = async (m, ctx) => {
         return reply(result)
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  .replit — full Replit-like environment on WhatsApp
+    //  Sub-commands: new, list, run, stop, restart, logs, install, uninstall,
+    //                env, tree, info, delete, git, deploy, search, templates
+    // ══════════════════════════════════════════════════════════════════════
+    if (command === 'replit' || command === 'rpl') {
+        const R = require('../Library/actions/replit')
+        const args  = (text || '').trim().split(/\s+/)
+        const sub   = (args[0] || '').toLowerCase()
+        const react = (emoji) => conn.sendMessage(m.chat, { react: { text: emoji, key: m.key } }).catch(() => {})
+
+        // ── help / no sub-command ────────────────────────────────────────
+        if (!sub || sub === 'help') {
+            return reply(
+                `🖥️ *Bera Replit — Cloud Dev on WhatsApp*\n\n` +
+                `*Projects:*\n` +
+                `• ${prefix}replit new <template> <name> — scaffold project\n` +
+                `• ${prefix}replit list — your projects\n` +
+                `• ${prefix}replit info <name> — project details\n` +
+                `• ${prefix}replit delete <name> — delete project\n\n` +
+                `*Run & Logs:*\n` +
+                `• ${prefix}replit run <name> — start with PM2\n` +
+                `• ${prefix}replit stop <name> — stop process\n` +
+                `• ${prefix}replit restart <name> — restart\n` +
+                `• ${prefix}replit logs <name> [lines] — view logs\n` +
+                `• ${prefix}replit ps — running processes\n\n` +
+                `*Packages:*\n` +
+                `• ${prefix}replit install <pkgs> [project] — npm/pip install\n` +
+                `• ${prefix}replit uninstall <pkgs> [project] — remove\n` +
+                `• ${prefix}replit search <query> — search npm packages\n\n` +
+                `*Env / Secrets:*\n` +
+                `• ${prefix}replit env <project> set KEY=value\n` +
+                `• ${prefix}replit env <project> list\n` +
+                `• ${prefix}replit env <project> del KEY\n\n` +
+                `*Files:*\n` +
+                `• ${prefix}replit tree [project] — file tree\n` +
+                `• ${prefix}replit grep <project> <pattern> — search in files\n\n` +
+                `*Git:*\n` +
+                `• ${prefix}replit git <project> init|status|diff|pull\n` +
+                `• ${prefix}replit git <project> branch [name]\n\n` +
+                `*Deploy:*\n` +
+                `• ${prefix}replit deploy <name> — deployment guide\n\n` +
+                `• ${prefix}replit templates — list all ${Object.keys(R.TEMPLATES).length} templates\n` +
+                `\n_Use ${prefix}shell for interactive terminal_`
+            )
+        }
+
+        // ── templates ────────────────────────────────────────────────────
+        if (sub === 'templates' || sub === 'tpl') {
+            return reply(R.listTemplates())
+        }
+
+        // ── list projects ────────────────────────────────────────────────
+        if (sub === 'list' || sub === 'ls' || sub === 'projects') {
+            const projects = R.getProjectList(sender)
+            if (!projects.length) return reply(`📂 No projects yet.\n\nCreate one: ${prefix}replit new express-api my-first-api`)
+            const lines = projects.map((p, i) => `${i+1}. *${p.name}* (${p.lang})`)
+            return reply(`📂 *Your Projects (${projects.length})*\n\n${lines.join('\n')}\n\n_${prefix}replit info <name> for details_`)
+        }
+
+        // ── new project ──────────────────────────────────────────────────
+        if (sub === 'new' || sub === 'create' || sub === 'init') {
+            const template    = args[1] || 'express-api'
+            const projectName = args[2] || args[1] || `project-${Date.now().toString(36)}`
+
+            if (!args[1]) return reply(
+                `❌ Usage: ${prefix}replit new <template> <name>\n\n` +
+                `Example: ${prefix}replit new express-api my-backend\n\n` +
+                `Templates: ${Object.keys(R.TEMPLATES).join(', ')}`
+            )
+
+            await react('⏳')
+            await reply(`🏗️ Scaffolding *${projectName}* from template *${template}*...\n_(installing dependencies, this may take 30–60s)_`)
+
+            const result = await R.createProject(sender, projectName, template)
+            if (!result.success) {
+                await react('❌')
+                return reply(`❌ *Failed:* ${result.error}`)
+            }
+
+            await react('✅')
+            return reply(
+                `✅ *Project Created!*\n\n` +
+                `📁 *${result.name}*\n` +
+                `🧩 Template: ${result.template}\n` +
+                `🔧 Language: ${result.lang}\n` +
+                (result.port ? `🌐 Port: ${result.port}\n` : '') +
+                `📄 Main: ${result.main}\n\n` +
+                `*Files:*\n${result.files.map(f => `  📄 ${f}`).join('\n')}\n\n` +
+                (result.install ? `${result.install}\n\n` : '') +
+                `*Next steps:*\n` +
+                `• ${prefix}replit run ${result.name} — start it\n` +
+                `• ${prefix}replit tree ${result.name} — view files\n` +
+                `• ${prefix}replit env ${result.name} set KEY=value — add secrets`
+            )
+        }
+
+        // ── run / start ───────────────────────────────────────────────────
+        if (sub === 'run' || sub === 'start') {
+            const name = args[1]
+            if (!name) return reply(`❌ Usage: ${prefix}replit run <project-name>`)
+            await react('▶️')
+            const result = await R.startProject(sender, name)
+            if (!result.success) {
+                await react('❌')
+                return reply(`❌ *Start failed:*\n\n${result.output || result.error}`)
+            }
+            await react('✅')
+            return reply(
+                `▶️ *${name} started!*\n\n` +
+                `${result.output}\n\n` +
+                (result.port ? `🌐 Port: ${result.port}\n` : '') +
+                `\n• ${prefix}replit logs ${name} — view logs\n` +
+                `• ${prefix}replit stop ${name} — stop it`
+            )
+        }
+
+        // ── stop ──────────────────────────────────────────────────────────
+        if (sub === 'stop') {
+            const name = args[1]
+            if (!name) return reply(`❌ Usage: ${prefix}replit stop <project-name>`)
+            await react('⏹️')
+            const result = await R.stopProject(sender, name)
+            return reply(result.success ? `⏹️ *${name}* stopped.` : `⚠️ ${result.output}`)
+        }
+
+        // ── restart ───────────────────────────────────────────────────────
+        if (sub === 'restart') {
+            const name = args[1]
+            if (!name) return reply(`❌ Usage: ${prefix}replit restart <project-name>`)
+            await react('🔄')
+            const result = await R.restartProject(sender, name)
+            return reply(result.success ? `🔄 *${name}* restarted.` : `⚠️ ${result.output}`)
+        }
+
+        // ── logs ──────────────────────────────────────────────────────────
+        if (sub === 'logs' || sub === 'log') {
+            const name  = args[1]
+            const lines = parseInt(args[2]) || 40
+            if (!name) return reply(`❌ Usage: ${prefix}replit logs <project-name> [lines]`)
+            await react('📋')
+            const result = await R.getProjectLogs(sender, name, lines)
+            return reply(`📋 *Logs: ${name}* (last ${lines} lines)\n\n\`\`\`\n${result.output}\n\`\`\``)
+        }
+
+        // ── ps / running processes ─────────────────────────────────────────
+        if (sub === 'ps' || sub === 'processes') {
+            await react('⚙️')
+            const list = await R.listRunningProjects(sender)
+            if (!list.length) return reply(`⚙️ No running processes.\n\nStart one: ${prefix}replit run <project-name>`)
+            const lines = list.map(p =>
+                `${p.status === 'online' ? '🟢' : '🔴'} *${p.name}*  ${p.status}  CPU: ${p.cpu}  RAM: ${p.memory}  Restarts: ${p.restarts}`
+            )
+            return reply(`⚙️ *Running Processes*\n\n${lines.join('\n')}`)
+        }
+
+        // ── install packages ──────────────────────────────────────────────
+        if (sub === 'install' || sub === 'add') {
+            const pkgs    = args.slice(1).filter(a => !a.startsWith('-'))
+            const project = args.find(a => a.startsWith('--project='))?.replace('--project=','')
+            if (!pkgs.length) return reply(`❌ Usage: ${prefix}replit install <package> [package2...]\nExample: ${prefix}replit install express axios cors`)
+            await react('📦')
+            await reply(`📦 Installing *${pkgs.join(', ')}*...`)
+            const result = await R.installPackages(sender, pkgs, project)
+            await react(result.success ? '✅' : '⚠️')
+            return reply(`${result.success ? '✅' : '⚠️'} *${result.manager} install*\n\n\`\`\`\n${result.output}\n\`\`\``)
+        }
+
+        // ── uninstall packages ────────────────────────────────────────────
+        if (sub === 'uninstall' || sub === 'remove' || sub === 'rm') {
+            const pkgs = args.slice(1)
+            if (!pkgs.length) return reply(`❌ Usage: ${prefix}replit uninstall <package>`)
+            await react('🗑️')
+            const result = await R.uninstallPackages(sender, pkgs)
+            return reply(`${result.success ? '✅' : '⚠️'} *uninstall*\n\n${result.output}`)
+        }
+
+        // ── env vars ──────────────────────────────────────────────────────
+        if (sub === 'env' || sub === 'secret' || sub === 'secrets') {
+            const project = args[1]
+            const action  = (args[2] || '').toLowerCase()
+
+            if (!project || !action) return reply(
+                `❌ Usage:\n` +
+                `• ${prefix}replit env <project> set KEY=value\n` +
+                `• ${prefix}replit env <project> list\n` +
+                `• ${prefix}replit env <project> del KEY`
+            )
+
+            if (action === 'list' || action === 'ls') {
+                const result = R.getEnvVars(sender, project)
+                return reply(result.output)
+            }
+
+            if (action === 'del' || action === 'delete' || action === 'remove') {
+                const key = args[3]
+                if (!key) return reply(`❌ Usage: ${prefix}replit env <project> del <KEY>`)
+                const result = R.deleteEnvVar(sender, project, key)
+                return reply(result.output)
+            }
+
+            if (action === 'set' || action === 'add') {
+                // Support: .replit env myapp set KEY=value OR .replit env myapp set KEY value
+                let rawKv = args.slice(3).join(' ')
+                if (!rawKv) return reply(`❌ Usage: ${prefix}replit env <project> set KEY=value`)
+                const eqIdx = rawKv.indexOf('=')
+                if (eqIdx < 1) return reply(`❌ Format: KEY=value`)
+                const key   = rawKv.slice(0, eqIdx).trim()
+                const value = rawKv.slice(eqIdx + 1).trim()
+                const result = R.setEnvVar(sender, project, key, value)
+                return reply(`${result.success ? '✅' : '❌'} ${result.output}`)
+            }
+
+            return reply(`❌ Unknown env action '${action}'. Use: set, list, del`)
+        }
+
+        // ── file tree ──────────────────────────────────────────────────────
+        if (sub === 'tree' || sub === 'files') {
+            const project = args[1]
+            await react('📁')
+            const result = await R.getFileTree(sender, project)
+            return reply(result.output)
+        }
+
+        // ── grep / search in files ─────────────────────────────────────────
+        if (sub === 'grep' || sub === 'find') {
+            const project = args[1]
+            const pattern = args.slice(2).join(' ')
+            if (!project || !pattern) return reply(`❌ Usage: ${prefix}replit grep <project> <pattern>`)
+            const result = await R.searchInFiles(sender, project, pattern)
+            return reply(result.output)
+        }
+
+        // ── project info ───────────────────────────────────────────────────
+        if (sub === 'info') {
+            const name = args[1]
+            if (!name) return reply(`❌ Usage: ${prefix}replit info <project-name>`)
+            const result = R.getProjectInfo(sender, name)
+            if (!result.success) return reply(`❌ ${result.error}`)
+            return reply(
+                `📦 *Project: ${result.name}*\n\n` +
+                `🧩 Template: ${result.template || 'unknown'}\n` +
+                `🔧 Language: ${result.lang}\n` +
+                `📄 Main: ${result.main}\n` +
+                (result.port ? `🌐 Port: ${result.port}\n` : '') +
+                `💾 Size: ${result.size}\n` +
+                `📅 Created: ${result.created}\n` +
+                `🔀 Git: ${result.hasGit ? '✅ initialized' : '❌ not initialized'}\n` +
+                `🔑 Env: ${result.hasEnv ? '✅ .env exists' : '❌ no .env'}\n\n` +
+                `*Files:*\n${result.files.slice(0,12).map(f => `  📄 ${f}`).join('\n')}` +
+                (result.files.length > 12 ? `\n  ...+${result.files.length - 12} more` : '') +
+                `\n\nPath: \`${result.dir}\``
+            )
+        }
+
+        // ── delete project ─────────────────────────────────────────────────
+        if (sub === 'delete' || sub === 'del' || sub === 'remove') {
+            const name = args[1]
+            if (!name) return reply(`❌ Usage: ${prefix}replit delete <project-name>`)
+            await react('🗑️')
+            const result = await R.deleteProject(sender, name)
+            await react(result.success ? '✅' : '❌')
+            return reply(result.output || result.error)
+        }
+
+        // ── git operations ─────────────────────────────────────────────────
+        if (sub === 'git') {
+            const project = args[1]
+            const action  = (args[2] || 'status').toLowerCase()
+            if (!project) return reply(`❌ Usage: ${prefix}replit git <project> <init|status|diff|pull|branch>`)
+            await react('🔀')
+            let result
+            if (action === 'init')   result = await R.gitInit(sender, project)
+            else if (action === 'status') result = await R.gitStatus(sender, project)
+            else if (action === 'diff')   result = await R.gitDiff(sender, project)
+            else if (action === 'pull')   result = await R.gitPull(sender, project)
+            else if (action === 'branch') result = await R.gitBranch(sender, project, args[3])
+            else return reply(`❌ Unknown git action '${action}'. Use: init, status, diff, pull, branch`)
+            await react(result.success ? '✅' : '❌')
+            return reply(`\`\`\`\n${result.output || result.error}\n\`\`\``)
+        }
+
+        // ── deploy ─────────────────────────────────────────────────────────
+        if (sub === 'deploy') {
+            const name = args[1]
+            if (!name) return reply(`❌ Usage: ${prefix}replit deploy <project-name>`)
+            await react('🚀')
+            const result = await R.deployInfo(sender, name)
+            return reply(result.output)
+        }
+
+        // ── search npm/pypi ────────────────────────────────────────────────
+        if (sub === 'search' || sub === 'pkg') {
+            const query   = args.slice(1).join(' ')
+            const isPypi  = args.includes('--python') || args.includes('--pip')
+            if (!query) return reply(`❌ Usage: ${prefix}replit search <query> [--python]\nExample: ${prefix}replit search web scraper`)
+            await react('🔍')
+            const result = isPypi ? await R.searchPypi(query) : await R.searchNpm(query)
+            return reply(result.output)
+        }
+
+        return reply(`❓ Unknown sub-command '${sub}'. Type *${prefix}replit* for help.`)
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  .shell / .term — interactive persistent terminal session
+    //  Every message runs in the user's own persistent working directory
+    // ══════════════════════════════════════════════════════════════════════
+    if (command === 'shell' || command === 'term' || command === 'terminal') {
+        const SM   = require('../Library/lib/sessionManager')
+        const react = (emoji) => conn.sendMessage(m.chat, { react: { text: emoji, key: m.key } }).catch(() => {})
+
+        if (!text || text === 'help') {
+            const info = SM.sessionInfo(sender)
+            return reply(
+                `💻 *Bera Shell — Interactive Terminal*\n\n` +
+                `📁 CWD: \`${info.cwd}\`\n` +
+                `⏱️ Session: ${info.uptime} old\n` +
+                (info.activeProject ? `🏗️ Project: ${info.activeProject}\n` : '') +
+                `\n*Usage:*\n` +
+                `  ${prefix}shell <command> — run any command\n` +
+                `  ${prefix}shell cd <dir> — change directory\n` +
+                `  ${prefix}shell history — last 10 commands\n` +
+                `  ${prefix}shell status — session info\n` +
+                `  ${prefix}shell reset — new session\n\n` +
+                `*Examples:*\n` +
+                `  ${prefix}shell ls -la\n` +
+                `  ${prefix}shell node -e "console.log(1+1)"\n` +
+                `  ${prefix}shell python3 --version\n` +
+                `  ${prefix}shell npm init -y\n` +
+                `  ${prefix}shell git status`
+            )
+        }
+
+        if (text === 'reset') {
+            SM.resetSession(sender)
+            return reply(`🔄 Session reset. New workspace: \`${SM.sessionInfo(sender).cwd}\``)
+        }
+
+        if (text === 'status' || text === 'info') {
+            const info = SM.sessionInfo(sender)
+            return reply(
+                `💻 *Session Status*\n\n` +
+                `📁 CWD: \`${info.cwd}\`\n` +
+                `🆔 User ID: ${info.uid}\n` +
+                `⏱️ Uptime: ${info.uptime}\n` +
+                `🕐 Last active: ${info.lastActive}\n` +
+                `📜 History: ${info.historyCount} commands\n` +
+                (info.activeProject ? `🏗️ Project: ${info.activeProject}` : '')
+            )
+        }
+
+        if (text === 'history') {
+            const hist = SM.getHistory(sender, 10)
+            if (!hist.length) return reply(`📜 No history yet.`)
+            const lines = hist.map((h, i) => `${i+1}. \`${h.cmd}\`\n   ${h.output.slice(0,60)}...`)
+            return reply(`📜 *Last ${hist.length} commands:*\n\n${lines.join('\n\n')}`)
+        }
+
+        // Run the command in session
+        await react('⏳')
+        const result = await SM.runInSession(sender, text, 30000)
+        const info   = SM.sessionInfo(sender)
+        await react(result.success ? '✅' : '❌')
+
+        const header = `💻 \`${text}\``
+        const footer = `\n📁 ${info.cwd}`
+        const body   = result.output ? `\n\`\`\`\n${result.output.slice(0, 2800)}\n\`\`\`` : '\n_(no output)_'
+
+        return reply(`${header}${body}${footer}`)
+    }
+
     return _origHandle(m, ctx)
 }
 handleWrapper.before = handle.before
@@ -2417,7 +2789,9 @@ handleWrapper.command = ['bera', 'agent', 'chatbot', 'beraclone', 'workspace', '
     'pm2list', 'pm2ls', 'processes',
     'pm2start', 'startapp',
     'pm2stop', 'stopapp',
-    'pm2logs', 'applogs']
+    'pm2logs', 'applogs',
+    'replit', 'rpl',
+    'shell', 'term', 'terminal']
 handleWrapper.tags = ['ai']
 
 module.exports = handleWrapper
