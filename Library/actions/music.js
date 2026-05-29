@@ -3,8 +3,9 @@ const axios = require('axios')
 const { exec, execSync } = require('child_process')
 const fs = require('fs')
 
-const GIFTED     = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
+const GIFTED        = 'https://api.gifted.co.ke'
+const GIFTED_KEY    = '_0u5aff45,_0l1876s8qc'   // download/media key
+const GIFTED_SEARCH = 'gifted'                    // search endpoints use 'gifted' key
 const SILVATECH  = 'https://api.silvatech.co.ke'
 
 // ── URL extractor ─────────────────────────────────────────────────────────────
@@ -28,14 +29,27 @@ const getVideoId = (url) => {
 
 // ── YouTube search ─────────────────────────────────────────────────────────────
 const searchYoutube = async (query) => {
-    // 1. Gifted YTS (primary)
+    // 1a. Gifted YTS with 'gifted' search key (correct key for search endpoints)
+    try {
+        const res = await axios.get(`${GIFTED}/api/search/yts`, {
+            params: { query, apikey: GIFTED_SEARCH }, timeout: 12000
+        })
+        const results = res.data?.results || res.data?.data || res.data?.videos
+        if (Array.isArray(results) && results.length) {
+            // Accept any item — type might be absent or different
+            const videos = results.filter(item => item.videoId || item.id || item.url)
+            if (videos.length) return { success: true, results: videos.slice(0, 5) }
+        }
+    } catch {}
+
+    // 1b. Gifted YTS with alternate key (fallback)
     try {
         const res = await axios.get(`${GIFTED}/api/search/yts`, {
             params: { query, apikey: GIFTED_KEY }, timeout: 12000
         })
-        const results = res.data?.results
+        const results = res.data?.results || res.data?.data || res.data?.videos
         if (Array.isArray(results) && results.length) {
-            const videos = results.filter(item => item.type === 'video')
+            const videos = results.filter(item => item.videoId || item.id || item.url)
             if (videos.length) return { success: true, results: videos.slice(0, 5) }
         }
     } catch {}
