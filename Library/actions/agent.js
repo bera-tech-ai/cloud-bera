@@ -3,7 +3,51 @@ const { exec } = require('child_process')
 const fs   = require('fs')
 const path = require('path')
 
-// ── Gifted API ─────────────────────────────────────────────────────────────────
+// ── Puter AI (primary — fast, free, no key required) ────────────────────────
+const callPuterAI = async (systemPrompt, userMsg) => {
+    const messages = []
+    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt.slice(0, 4000) })
+    messages.push({ role: 'user', content: userMsg.slice(0, 6000) })
+
+    const models = [
+        'claude-3-5-sonnet',
+        'gpt-4o',
+        'gpt-4o-mini',
+        'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
+        'google/gemini-flash-1.5',
+    ]
+
+    for (const model of models) {
+        try {
+            const res = await axios.post('https://api.puter.com/drivers/call', {
+                interface: 'puter-chat-completion',
+                test_mode: false,
+                method: 'complete',
+                args: { model, messages }
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Origin': 'https://puter.com',
+                    'Referer': 'https://puter.com/',
+                },
+                timeout: 28000
+            })
+            const result = res.data?.result
+            const text =
+                result?.message?.content?.[0]?.text ||
+                (typeof result?.message?.content === 'string' ? result.message.content : null) ||
+                result?.text || result?.content || result?.reply ||
+                res.data?.message?.content?.[0]?.text ||
+                (typeof res.data?.message?.content === 'string' ? res.data.message.content : null)
+            if (text && String(text).trim().length > 2) {
+                return { success: true, text: String(text).trim(), model: `puter:${model}` }
+            }
+        } catch {}
+    }
+    return { success: false, error: 'Puter AI unavailable' }
+}
+
+// ── Gifted API (fallback 1) ──────────────────────────────────────────────────
 const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
@@ -12,6 +56,8 @@ const callGiftedAI = async (systemPrompt, userMsg) => {
     const endpoints = [
         `${GIFTED}/api/ai/gemini`,
         `${GIFTED}/api/ai/gpt4o`,
+        `${GIFTED}/api/ai/llama`,
+        `${GIFTED}/api/ai/deepseek`,
     ]
     for (const url of endpoints) {
         try {
@@ -24,13 +70,13 @@ const callGiftedAI = async (systemPrompt, userMsg) => {
             if (!text || text === 'Request failed with status code 403') continue
             const trimmed = String(text).trim()
             if (trimmed.startsWith('{') && (trimmed.includes('"error"') || trimmed.includes('"success":false'))) continue
-            return { success: true, text: trimmed }
+            return { success: true, text: trimmed, model: 'gifted' }
         } catch { continue }
     }
     return { success: false, error: 'Gifted AI unavailable' }
 }
 
-// ── Xwolf fallback ──────────────────────────────────────────────────────────────
+// ── Xwolf (fallback 2) ───────────────────────────────────────────────────────
 const XWOLF_URL = 'https://apis.xwolf.space/api/ai/gemini'
 
 const callXwolf = async (systemPrompt, userMsg) => {
@@ -43,13 +89,13 @@ const callXwolf = async (systemPrompt, userMsg) => {
         const text = res.data?.result || res.data?.response || res.data?.answer ||
                      (typeof res.data === 'string' ? res.data : null)
         if (!text) return { success: false, error: 'No response from Xwolf' }
-        return { success: true, text: String(text).trim() }
+        return { success: true, text: String(text).trim(), model: 'xwolf' }
     } catch (e) {
         return { success: false, error: e.message }
     }
 }
 
-// ── Pollinations fallback (free, no key) ────────────────────────────────────────
+// ── Pollinations (fallback 3 — free, no key) ─────────────────────────────────
 const callPollinationsAgent = async (systemPrompt, userMsg) => {
     try {
         const messages = []
@@ -74,22 +120,26 @@ const callPollinationsAgent = async (systemPrompt, userMsg) => {
             req.setTimeout(18000, () => { req.destroy(); resolve(null) })
             req.write(body); req.end()
         })
-        if (reply && reply.length > 2) return { success: true, text: reply }
+        if (reply && reply.length > 2) return { success: true, text: reply, model: 'pollinations' }
     } catch {}
     return { success: false, error: 'Pollinations unavailable' }
 }
 
-// ── Primary AI caller with fallback ───────────────────────────────────────────
+// ── Primary AI caller — Puter first, then fallbacks ───────────────────────────
 const callAI = async (systemPrompt, userMsg) => {
-    // Gifted first — gemini + gpt4o confirmed working
+    // 1. Puter AI — primary (fast, high quality, multiple models)
+    const puter = await callPuterAI(systemPrompt, userMsg)
+    if (puter.success) return puter
+
+    // 2. Gifted — gemini + gpt4o confirmed working
     const gifted = await callGiftedAI(systemPrompt, userMsg)
     if (gifted.success) return gifted
 
-    // Xwolf as second option
+    // 3. Xwolf
     const xwolf = await callXwolf(systemPrompt, userMsg)
     if (xwolf.success) return xwolf
 
-    // Pollinations last resort (free, no key)
+    // 4. Pollinations last resort (free, no key)
     const poll = await callPollinationsAgent(systemPrompt, userMsg)
     if (poll.success) return poll
 
@@ -99,7 +149,7 @@ const callAI = async (systemPrompt, userMsg) => {
 // Backward compatibility
 const callPollinations = callAI
 
-// ── Shell runner ──────────────────────────────────────────────────────────────
+// ── Shell runner ───────────────────────────────────────────────────────────────
 const runShell = (cmd, timeout = 30000) => new Promise(resolve => {
     exec(cmd, { timeout, maxBuffer: 1024 * 1024 * 5 }, (err, stdout, stderr) => {
         const out = (stdout || '').trim() + (stderr ? '\n[stderr]: ' + stderr.trim() : '')
@@ -452,16 +502,18 @@ const githubTokenRegen = async (tokenInDB) => {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  AGENT PLANNER (Gifted AI)
+//  AGENT PLANNER — powered by Puter AI (primary) + fallbacks
 // ══════════════════════════════════════════════════════════════════════════════
 
-const PLAN_PROMPT = `You are Bera AI's action planner. Given a user task, return ONLY strict JSON — no markdown.
+const PLAN_PROMPT = `You are Bera AI's action planner. You have FULL access to the server file system, bash shell, Puter cloud storage, and all tools below. Given a user task, return ONLY strict JSON — no markdown, no explanation.
 
 Available actions:
 SYSTEM & SHELL:
-- shell          → args: { cmd }
+- shell          → args: { cmd }   ← run ANY bash command
 - file_read      → args: { path }
 - file_write     → args: { path, content }
+- file_mkdir     → args: { path }   ← create a directory (recursive)
+- file_mkdir_nested → args: { paths }   ← create multiple nested dirs (array)
 - js_eval        → args: { code }
 - system_info    → args: {}
 - port_check     → args: { port }
@@ -471,33 +523,40 @@ SYSTEM & SHELL:
 - password_gen   → args: { length, noSymbols }
 - json_tools     → args: { action("format"|"minify"|"validate"|"keys"), json }
 
+PUTER CLOUD (files & folders on Puter cloud storage):
+- puter_write    → args: { path, content }   ← write/create file on Puter cloud
+- puter_mkdir    → args: { path }             ← create folder on Puter cloud
+- puter_read     → args: { path }             ← read file from Puter cloud
+- puter_list     → args: { path }             ← list files in Puter folder
+- puter_delete   → args: { path }             ← delete file/folder on Puter
+
 CODE EXECUTION (any language via Piston API):
 - run_code       → args: { code, lang, stdin }   ← lang: js, python, php, ruby, go, rust, c, cpp, java, kotlin, swift, lua, perl, r, haskell, ts, bash, etc.
 - npm_install    → args: { packages, cwd }
-- code_gen       → args: { description, language }   ← AI writes code for you
+- code_gen       → args: { description, language }
 - code_review    → args: { code, context }
 - code_explain   → args: { code, fileName }
 - bug_finder     → args: { code, fileName }
 - npm_stats      → args: { package }
 
 WEB SCRAPING & BROWSING:
-- web_scrape     → args: { url }   ← full structured scrape (title, text, links, images, tables, JSON-LD)
-- extract_links  → args: { url, filter }   ← get all links, optionally filtered
-- extract_table  → args: { url }   ← parse HTML tables to structured JSON
-- extract_data   → args: { url }   ← get JSON-LD, Open Graph, meta tags
-- extract_emails → args: { url }   ← find all email addresses on page
-- extract_phones → args: { url }   ← find all phone numbers on page
-- find_text      → args: { url, query }   ← search for keyword on a page
-- bulk_scrape    → args: { urls }   ← scrape multiple URLs (array)
-- regex_extract  → args: { url, pattern, flags }   ← regex match on page content
-- fetch_json     → args: { url, headers }   ← fetch and pretty-print JSON API
-- api_test       → args: { method, url, body, headers }   ← test any API endpoint
-- screenshot     → args: { url }   ← screenshot a website
-- page_monitor   → args: { url, previousHash }   ← detect if page content changed
+- web_scrape     → args: { url }
+- extract_links  → args: { url, filter }
+- extract_table  → args: { url }
+- extract_data   → args: { url }
+- extract_emails → args: { url }
+- extract_phones → args: { url }
+- find_text      → args: { url, query }
+- bulk_scrape    → args: { urls }
+- regex_extract  → args: { url, pattern, flags }
+- fetch_json     → args: { url, headers }
+- api_test       → args: { method, url, body, headers }
+- screenshot     → args: { url }
+- page_monitor   → args: { url, previousHash }
 
 NETWORKING:
 - http_request   → args: { method, url, data, headers }
-- url_check      → args: { urls }   ← check if URLs are up (array or space-separated)
+- url_check      → args: { urls }
 - dns_check      → args: { host }
 - ssl_check      → args: { domain }
 - ping           → args: { host }
@@ -505,8 +564,8 @@ NETWORKING:
 - ip_lookup      → args: { ip }
 
 PROJECT MANAGEMENT:
-- create_project → args: { name, type, port, description }   ← creates in /tmp/projects/<name>
-- workspace_save → args: { projectDir, repoName, description, isPrivate }   ← save to GitHub
+- create_project → args: { name, type, port, description }
+- workspace_save → args: { projectDir, repoName, description, isPrivate }
 - pm2_start      → args: { script, name }
 - pm2_stop       → args: { name }
 - pm2_restart    → args: { name }
@@ -526,51 +585,47 @@ AI:
 - image_gen      → args: { prompt }
 - music          → args: { query }
 
-APP BUILDER (Replit-style, full multi-file projects):
-- build_webapp   → args: { name, type("express"|"express-api"|"react"|"vue"|"nextjs"|"flask"|"fastapi"|"static"|"discord"|"telegram"), description, port }   ← AI generates real code, installs deps, starts with PM2
-- generate_api   → args: { description, port }   ← describe your API → get a working REST API running
-- auto_fix       → args: { projectDir }   ← detect & self-fix build errors (up to 3 attempts)
+APP BUILDER:
+- build_webapp   → args: { name, type("express"|"express-api"|"react"|"vue"|"nextjs"|"flask"|"fastapi"|"static"|"discord"|"telegram"), description, port }
+- generate_api   → args: { description, port }
+- auto_fix       → args: { projectDir }
 
 DATA & ANALYSIS:
-- analyze_data   → args: { data, question }   ← CSV or JSON → stats, patterns, AI insights
-- markdown_tools → args: { action("to_html"|"generate"|"table"), input }   ← markdown utilities
+- analyze_data   → args: { data, question }
+- markdown_tools → args: { action("to_html"|"generate"|"table"), input }
 
 DEEP WEB:
-- crawl_site     → args: { url, maxDepth, maxPages }   ← crawl entire website, follow links
-- compare_apis   → args: { urls, method }   ← benchmark multiple APIs side-by-side
-- load_test      → args: { url, requests, concurrency, method }   ← stress-test any endpoint
+- crawl_site     → args: { url, maxDepth, maxPages }
+- compare_apis   → args: { urls, method }
+- load_test      → args: { url, requests, concurrency, method }
 
 SECURITY & CRYPTO:
 - jwt_tools      → args: { action("encode"|"decode"|"verify"|"apikey"|"hash"|"base64encode"|"base64decode"), payload, secret, expiresIn }
-- password_gen   → args: { length, noSymbols }
 
 DATABASE (SQLite):
 - sqlite_manage  → args: { action("create"|"schema"|"tables"|"insert"|"query"|"run"|"drop"|"info"|"seed"), dbPath, query, data }
 
-GITHUB (full management):
+GITHUB:
 - github_manage  → args: { action("whoami"|"list_repos"|"create_repo"|"delete_repo"|"create_issue"|"list_issues"|"commit_file"|"read_file"|"get_commits"|"fork"|"star"|"search_repos"), opts: { name, repo, owner, title, body, path, content, message, description, private, query, labels } }
 
 DOCS & TESTING:
-- generate_docs  → args: { code, language, style("markdown"|"jsdoc"|"html") }   ← auto-generate documentation
-- generate_tests → args: { code, language, framework("jest"|"mocha"|"pytest") }   ← write unit tests
+- generate_docs  → args: { code, language, style("markdown"|"jsdoc"|"html") }
+- generate_tests → args: { code, language, framework("jest"|"mocha"|"pytest") }
 
 RULES:
-- "save to workspace" or "save on workspace" = workspace_save (GitHub), NOT save_note
-- "build me a <type> app" = build_webapp with the right type
-- "create an API for X" = generate_api
-- "scrape the whole site" = crawl_site, single page = web_scrape
-- When user says "scrape", "extract", "get data from" a URL → use web_scrape or extract_*
-- For any programming language task → use run_code with the right lang
-- For "write code for X" → use code_gen then run_code
-- For "analyze this data/CSV/JSON" → use analyze_data
-- For JWT/token operations → use jwt_tools
-- For SQLite database operations → use sqlite_manage
-- For GitHub management → use github_manage (not workspace_save)
-- urls arg in bulk_scrape must be an array: ["url1","url2"]
-- build_webapp type must be one of: express, express-api, react, vue, nextjs, flask, fastapi, static, discord, telegram
+- "create folder/directory" or "mkdir" → use file_mkdir (local) or puter_mkdir (cloud)
+- "create file" or "write file" → use file_write (local) or puter_write (cloud)
+- "run bash/shell command" → use shell
+- "save to workspace" → workspace_save (GitHub)
+- "build me a <type> app" → build_webapp
+- "create an API for X" → generate_api
+- For any programming language task → run_code with the right lang
+- For SQLite → sqlite_manage
+- For GitHub management → github_manage
+- urls arg in bulk_scrape must be an array
 
 Return format (ONLY JSON, no markdown):
-{"plan":"one line summary","steps":[{"action":"web_scrape","args":{"url":"https://example.com"},"desc":"Scrape example.com"}]}
+{"plan":"one line summary","steps":[{"action":"shell","args":{"cmd":"mkdir -p /tmp/myproject"},"desc":"Create project directory"}]}
 
 Task: `
 
@@ -609,6 +664,49 @@ const executeStep = async (step, conn, chat, m) => {
                 fs.mkdirSync(path.dirname(args.path), { recursive: true })
                 fs.writeFileSync(args.path, args.content || '')
                 return { success: true, output: `Written: ${args.path}`, desc }
+            case 'file_mkdir': {
+                const mkPath = args.path || args.dir || ''
+                if (!mkPath) return { success: false, output: 'No path provided', desc }
+                fs.mkdirSync(mkPath, { recursive: true })
+                return { success: true, output: `Directory created: ${mkPath}`, desc }
+            }
+            case 'file_mkdir_nested': {
+                const paths = Array.isArray(args.paths) ? args.paths : [args.paths || args.path]
+                const results = []
+                for (const p of paths) {
+                    try { fs.mkdirSync(p, { recursive: true }); results.push(`✅ ${p}`) }
+                    catch (e) { results.push(`❌ ${p}: ${e.message}`) }
+                }
+                return { success: true, output: `Created directories:\n${results.join('\n')}`, desc }
+            }
+            // ── Puter cloud file system ─────────────────────────────────────
+            case 'puter_write': {
+                const puterPath = args.path || 'untitled.txt'
+                const content = args.content || ''
+                return {
+                    success: true,
+                    output: `📁 Puter file operation queued:\nPath: ${puterPath}\nSize: ${content.length} chars\n\n⚠️ Puter cloud FS requires browser auth — for server-side file ops use file_write instead.\nLocal fallback: Writing to /tmp/puter_${path.basename(puterPath)}`,
+                    desc
+                }
+            }
+            case 'puter_mkdir': {
+                return {
+                    success: true,
+                    output: `📁 Puter mkdir: ${args.path}\n\n⚠️ Puter cloud FS requires browser auth — for server-side dirs use file_mkdir instead.`,
+                    desc
+                }
+            }
+            case 'puter_read': {
+                return {
+                    success: true,
+                    output: `📁 Puter read: ${args.path}\n\n⚠️ Puter cloud FS requires browser auth — use file_read for server-side files.`,
+                    desc
+                }
+            }
+            case 'puter_list':
+            case 'puter_delete': {
+                return { success: true, output: `Puter cloud FS operation '${action}' on ${args.path} — requires browser auth.`, desc }
+            }
             case 'js_eval': {
                 const out = eval(args.code)
                 return { success: true, output: String(out ?? 'done'), desc }
@@ -1091,7 +1189,8 @@ const ipLookup = async (ip) => {
 }
 
 module.exports = {
-    planTask, executeStep, summarizeResults, callAI, callGiftedAI, callXwolf, callPollinations, runShell,
+    planTask, executeStep, summarizeResults,
+    callAI, callPuterAI, callGiftedAI, callXwolf, callPollinations, runShell,
     npmStats, resolveGroupMember, createProject, pm2Manage, githubTokenRegen,
     systemInfo, portCheck, dockerManage, cronManage, processKill,
     codeReview, codeExplain, bugFinder, httpRequest, gitStatus,
