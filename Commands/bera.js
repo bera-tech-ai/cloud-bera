@@ -154,15 +154,17 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
         }
         await react(conn, m, '✅')
         const infoLine = `🎵 *${res.title}*${res.channel ? `\n${res.channel}` : ''}${res.duration ? ` · ${res.duration}` : ''}`
-        if (typeof res.audioUrl !== 'string' || !res.audioUrl.startsWith('http')) {
+        const hasAudioUrl = typeof res.audioUrl === 'string' && res.audioUrl.startsWith('http')
+        const hasAudioBuf = Buffer.isBuffer(res.audioBuffer)
+        if (!hasAudioUrl && !hasAudioBuf) {
             await react(conn, m, '❌')
             return reply(`❌ Got an invalid audio link. Try a different song name.`)
         }
         await conn.sendMessage(m.chat, {
-            audio: { url: res.audioUrl },
-            mimetype: 'audio/mp4',
+            audio: hasAudioUrl ? { url: res.audioUrl } : res.audioBuffer,
+            mimetype: 'audio/mpeg',
             ptt: false,
-            fileName: `${res.title}.mp3`
+            fileName: `${res.title || query}.mp3`
         }, { quoted: m })
         const thumbUrl = typeof res.thumbnail === 'string' && res.thumbnail.startsWith('http') ? res.thumbnail : ''
         if (thumbUrl) {
