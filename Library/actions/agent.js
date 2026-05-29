@@ -2,6 +2,19 @@ const axios = require('axios')
 const { exec } = require('child_process')
 const fs   = require('fs')
 const path = require('path')
+const {
+    getUserWorkspace, resolvePath: wsResolve,
+    listWorkspace, readWorkspaceFile, writeWorkspaceFile,
+    mkdirWorkspace, deleteWorkspaceItem
+} = require('../lib/workspace')
+
+// Resolve agent file path: relative → workspace, absolute → as-is
+const resolveAgentPath = (argPath, userId) => {
+    if (!argPath) return userId ? getUserWorkspace(userId) : '/workspace/shared'
+    const p = String(argPath)
+    if (path.isAbsolute(p)) return p
+    return wsResolve(userId || 'shared', p)
+}
 
 // ── Puter AI (primary — fast, free, no key required) ────────────────────────
 const callPuterAI = async (systemPrompt, userMsg) => {
@@ -505,7 +518,20 @@ const githubTokenRegen = async (tokenInDB) => {
 //  AGENT PLANNER — powered by Puter AI (primary) + fallbacks
 // ══════════════════════════════════════════════════════════════════════════════
 
-const PLAN_PROMPT = `You are Bera AI's action planner. You have FULL access to the server file system, bash shell, Puter cloud storage, and all tools below. Given a user task, return ONLY strict JSON — no markdown, no explanation.
+const PLAN_PROMPT = `You are Bera AI's action planner. You have FULL access to the server file system, bash shell, Puter cloud storage, and all tools below.
+
+WORKSPACE RULES (CRITICAL):
+- All files and folders are created inside /workspace/{userId}/ by default unless the user specifies an absolute path.
+- When user says "create a folder called X" → use file_mkdir with path: "X" (relative — system auto-resolves to /workspace/{userId}/X)
+- When user says "save file at Y" → use file_write with path: "Y" (relative)
+- When user says "create in /tmp/..." → use absolute path as given
+- ALWAYS use file_mkdir BEFORE file_write for new directories
+
+CHAIN-OF-THOUGHT (include in your response):
+Think through the task step by step in the "reasoning" field BEFORE listing steps.
+Ask yourself: What is the end goal? What must happen first? What can run in parallel? What might fail?
+
+Given a user task, return ONLY strict JSON — no markdown, no extra text.
 
 Available actions:
 SYSTEM & SHELL:
@@ -625,7 +651,7 @@ RULES:
 - urls arg in bulk_scrape must be an array
 
 Return format (ONLY JSON, no markdown):
-{"plan":"one line summary","steps":[{"action":"shell","args":{"cmd":"mkdir -p /tmp/myproject"},"desc":"Create project directory"}]}
+{"reasoning":"Why I chose these steps and in what order","plan":"one line summary","steps":[{"action":"shell","args":{"cmd":"mkdir -p /tmp/myproject"},"desc":"Create project directory"}]}
 
 Task: `
 
@@ -651,33 +677,60 @@ const planTask = async (task) => {
     }
 }
 
-const executeStep = async (step, conn, chat, m) => {
+const executeStep = async (step, conn, chat, m, opts = {}) => {
     const { action, args, desc } = step
+    const userId = opts.userId || null  // for workspace-aware paths
     try {
         switch (action) {
             case 'shell':        return { ...await runShell(args.cmd, 45000), desc }
             case 'file_read': {
-                const content = fs.existsSync(args.path) ? fs.readFileSync(args.path, 'utf8').slice(0, 3000) : 'File not found'
+                const filePath = resolveAgentPath(args.path, userId)
+                const content  = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8').slice(0, 3000) : 'File not found'
                 return { success: true, output: content, desc }
             }
-            case 'file_write':
-                fs.mkdirSync(path.dirname(args.path), { recursive: true })
-                fs.writeFileSync(args.path, args.content || '')
-                return { success: true, output: `Written: ${args.path}`, desc }
+            case 'file_write': {
+                const writePath = resolveAgentPath(args.path, userId)
+                fs.mkdirSync(path.dirname(writePath), { recursive: true })
+                fs.writeFileSync(writePath, args.content || '')
+                return { success: true, output: `✅ Written: ${writePath}`, desc }
+            }
             case 'file_mkdir': {
-                const mkPath = args.path || args.dir || ''
-                if (!mkPath) return { success: false, output: 'No path provided', desc }
+                const rawPath = args.path || args.dir || ''
+                if (!rawPath) return { success: false, output: 'No path provided', desc }
+                const mkPath = resolveAgentPath(rawPath, userId)
                 fs.mkdirSync(mkPath, { recursive: true })
-                return { success: true, output: `Directory created: ${mkPath}`, desc }
+                return { success: true, output: `✅ Directory created: ${mkPath}`, desc }
             }
             case 'file_mkdir_nested': {
-                const paths = Array.isArray(args.paths) ? args.paths : [args.paths || args.path]
-                const results = []
-                for (const p of paths) {
-                    try { fs.mkdirSync(p, { recursive: true }); results.push(`✅ ${p}`) }
-                    catch (e) { results.push(`❌ ${p}: ${e.message}`) }
+                const rawPaths = Array.isArray(args.paths) ? args.paths : [args.paths || args.path]
+                const results  = []
+                for (const p of rawPaths) {
+                    const resolved = resolveAgentPath(p, userId)
+                    try { fs.mkdirSync(resolved, { recursive: true }); results.push(`✅ ${resolved}`) }
+                    catch (e) { results.push(`❌ ${resolved}: ${e.message}`) }
                 }
                 return { success: true, output: `Created directories:\n${results.join('\n')}`, desc }
+            }
+            // ── Workspace shortcuts ────────────────────────────────────────────
+            case 'workspace_list': {
+                const r = listWorkspace(userId, args.path)
+                return { success: r.success, output: r.output, desc }
+            }
+            case 'workspace_write': {
+                const r = writeWorkspaceFile(userId, args.path || args.name, args.content || '')
+                return { success: r.success, output: r.output, desc }
+            }
+            case 'workspace_read': {
+                const r = readWorkspaceFile(userId, args.path)
+                return { success: r.success, output: r.output, desc }
+            }
+            case 'workspace_mkdir': {
+                const r = mkdirWorkspace(userId, args.path)
+                return { success: r.success, output: r.output, desc }
+            }
+            case 'workspace_delete': {
+                const r = deleteWorkspaceItem(userId, args.path)
+                return { success: r.success, output: r.output, desc }
             }
             // ── Puter cloud file system ─────────────────────────────────────
             case 'puter_write': {
@@ -1188,8 +1241,112 @@ const ipLookup = async (ip) => {
     } catch (e) { return { success: false, error: e.message } }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+//  SELF-CORRECTION LOOP — retry failed steps with AI-generated fix (max 3x)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const RETRYABLE_ACTIONS = new Set([
+    'shell', 'run_code', 'js_eval', 'npm_install',
+    'file_write', 'file_mkdir', 'file_mkdir_nested',
+    'workspace_write', 'workspace_mkdir', 'git_clone', 'http_request'
+])
+
+const executeWithRetry = async (step, conn, chat, m, opts = {}, maxRetries = 3) => {
+    let current = { ...step }
+    let lastResult = null
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        lastResult = await executeStep(current, conn, chat, m, opts)
+        if (lastResult.success) return lastResult
+        if (!RETRYABLE_ACTIONS.has(current.action) || attempt >= maxRetries - 1) break
+
+        // Ask AI to correct the failed step
+        const fixPrompt = `An automated task step failed. Analyze the error and return a corrected step as JSON only (no markdown).
+
+FAILED STEP:
+${JSON.stringify(current, null, 2)}
+
+ERROR OUTPUT:
+${(lastResult.output || 'unknown error').slice(0, 800)}
+
+Return ONLY corrected step JSON: {"action":"...","args":{...},"desc":"..."}`
+
+        const fix = await callAI('', fixPrompt)
+        if (!fix.success) break
+        try {
+            const match = fix.text.match(/\{[\s\S]*?\}/)
+            if (!match) break
+            const corrected = JSON.parse(match[0])
+            if (!corrected.action) break
+            console.log(`[AGENT] 🔧 Self-correcting step (attempt ${attempt + 2}/${maxRetries}):`, corrected.action)
+            current = corrected
+        } catch { break }
+    }
+
+    return lastResult
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  MULTI-AGENT PARALLELISM — run independent steps concurrently
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Actions that are safe to run in parallel (no side-effect ordering needed)
+const PARALLEL_SAFE = new Set([
+    'shell', 'file_mkdir', 'file_mkdir_nested', 'workspace_mkdir',
+    'http_request', 'web_scrape', 'extract_links', 'extract_emails',
+    'extract_phones', 'run_code', 'npm_stats', 'search', 'dns_check',
+    'ssl_check', 'ping', 'whois', 'ip_lookup', 'system_info', 'port_check'
+])
+
+const groupStepsForParallel = (steps) => {
+    // Batch consecutive parallelizable steps; break on sequential actions
+    const groups = []
+    let batch     = []
+
+    for (const step of steps) {
+        if (PARALLEL_SAFE.has(step.action)) {
+            batch.push(step)
+        } else {
+            if (batch.length) { groups.push([...batch]); batch = [] }
+            groups.push([step])   // sequential — its own group
+        }
+    }
+    if (batch.length) groups.push(batch)
+    return groups
+}
+
+const runAgentParallel = async (steps, conn, chat, m, opts = {}, onStepDone) => {
+    const groups  = groupStepsForParallel(steps)
+    const results = []
+
+    for (const group of groups) {
+        if (group.length === 1) {
+            const r = await executeWithRetry(group[0], conn, chat, m, opts)
+            const entry = { desc: group[0].desc, ...r }
+            results.push(entry)
+            if (onStepDone) onStepDone(entry)
+        } else {
+            // Parallel group
+            const groupResults = await Promise.all(
+                group.map(step =>
+                    executeWithRetry(step, conn, chat, m, opts)
+                        .then(r => ({ desc: step.desc, ...r }))
+                )
+            )
+            for (const r of groupResults) {
+                results.push(r)
+                if (onStepDone) onStepDone(r)
+            }
+        }
+    }
+
+    return results
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+
 module.exports = {
-    planTask, executeStep, summarizeResults,
+    planTask, executeStep, executeWithRetry, runAgentParallel, summarizeResults,
     callAI, callPuterAI, callGiftedAI, callXwolf, callPollinations, runShell,
     npmStats, resolveGroupMember, createProject, pm2Manage, githubTokenRegen,
     systemInfo, portCheck, dockerManage, cronManage, processKill,
