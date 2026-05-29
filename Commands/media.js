@@ -64,16 +64,18 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         const res = await searchAndDownload(text)
         if (!res.success) {
             await react(conn, m, '❌')
-            return reply(`❌ *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nTrack "${text}" not found. Try a different song or check spelling.`)
+            return reply(`❌ *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nTrack "${text}" not found. Try a different song name or check spelling.\n\n💡 Tip: Try being more specific — e.g. "${text} official audio"`)
         }
-        if (typeof res.audioUrl !== 'string' || !res.audioUrl.startsWith('http')) {
+        const hasAudioUrl  = typeof res.audioUrl === 'string' && res.audioUrl.startsWith('http')
+        const hasAudioBuf  = Buffer.isBuffer(res.audioBuffer)
+        if (!hasAudioUrl && !hasAudioBuf) {
             await react(conn, m, '❌')
             return reply(`⚠️ *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nMusic service is napping. Try again in a moment.`)
         }
-        await reply(`🎵 *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nTitle: ${res.title || text}\nDuration: ${res.duration || 'N/A'}\n\nDownloading audio...`)
+        await reply(`🎵 *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nTitle: ${res.title || text}\nDuration: ${res.duration || 'N/A'}\nSource: ${res.source || 'auto'}\n\nDownloading audio...`)
         const hasThumbnail = res.thumbnail && typeof res.thumbnail === 'string' && res.thumbnail.startsWith('http')
         await conn.sendMessage(chat, {
-            audio: { url: res.audioUrl },
+            audio: hasAudioUrl ? { url: res.audioUrl } : res.audioBuffer,
             mimetype: 'audio/mpeg',
             ptt: false,
             fileName: `${res.title || text}.mp3`,
