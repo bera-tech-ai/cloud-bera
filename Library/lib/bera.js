@@ -179,12 +179,18 @@ Your rules:
 - Be helpful, friendly, not robotic.`
 
 // Max chars for the GET query — servers reject very long URL params (HTTP 431)
-const MAX_QUERY_CHARS = 700
+const MAX_QUERY_CHARS = 900
+
+// Key persona lines included in every fallback query so the AI stays in character
+const SHORT_PERSONA = `You are Bera AI — a smart WhatsApp assistant built by Bera Tech. You have REAL access to GitHub (as bera-tech-ai), the web, shell commands, and workspace files. NEVER say you cannot access these — you CAN. Be direct and helpful.`
 
 const buildQuery = (userText, history = []) => {
-    const bare = `You are Bera AI — a smart WhatsApp assistant built by Bera Tech. Answer concisely.\n\nUser: ${userText}\nBera AI:`
-    if (bare.length <= MAX_QUERY_CHARS) return bare
-    return `User: ${(userText || '').slice(0, 500)}\nBera AI:`
+    const full = `${SHORT_PERSONA}\n\nUser: ${(userText || '').slice(0, 400)}\nBera AI:`
+    if (full.length <= MAX_QUERY_CHARS) return full
+    // User message too long — trim it to fit
+    const base = `${SHORT_PERSONA}\n\nUser: `
+    const available = MAX_QUERY_CHARS - base.length - '\nBera AI:'.length
+    return base + (userText || '').slice(0, Math.max(50, available)) + '\nBera AI:'
 }
 
 const cleanAnswer = (raw) => {
