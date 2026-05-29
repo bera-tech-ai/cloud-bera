@@ -726,6 +726,70 @@ const handle = async (m, { conn, command, args, reply, prefix, text }) => {
         return reply(`📖 *${d.verse || text}*\n\n_${d.text || d.content || d.result}_\n\n${d.translation ? `📌 ${d.translation}` : ''}`)
     }
 
+    // ── YOUTUBE SEARCH ────────────────────────────────────────────────────────
+    if (command === 'yts' || command === 'ytsearch' || command === 'yousearch') {
+        if (!text) return reply(`Usage: *${prefix}yts <song or video name>*\n_Example: ${prefix}yts Afrobeats 2024_`)
+        await react(conn, m, '🔍')
+
+        // Try multiple API keys for search — 'gifted' works for search, numeric keys for downloads
+        let results = null
+        for (const key of ['gifted', '_0u5aff45,_0l1876s8qc']) {
+            try {
+                const r = await gt('/api/search/yts', { query: text, apikey: key })
+                const items = r?.results || r?.data || r?.videos || []
+                if (Array.isArray(items) && items.length) { results = items.slice(0, 6); break }
+                // Also accept top-level success object
+                if (r?.success && r?.result) {
+                    const flat = Array.isArray(r.result) ? r.result : [r.result]
+                    if (flat.length) { results = flat.slice(0, 6); break }
+                }
+            } catch {}
+        }
+
+        if (!results || !results.length) {
+            // Fallback: yt.lemnoslife (no key required)
+            try {
+                const res = await axios.get(
+                    `https://yt.lemnoslife.com/noKey/search?part=snippet&q=${encodeURIComponent(text)}&type=video&maxResults=6`,
+                    { timeout: 10000 }
+                )
+                const items = res.data?.items || []
+                if (items.length) {
+                    results = items.map(it => ({
+                        title: it.snippet?.title || 'Unknown',
+                        videoId: it.id?.videoId,
+                        channel: it.snippet?.channelTitle || '',
+                        url: `https://youtube.com/watch?v=${it.id?.videoId}`
+                    })).filter(v => v.videoId)
+                }
+            } catch {}
+        }
+
+        if (!results || !results.length) {
+            await react(conn, m, '❌')
+            return reply(`❌ No YouTube results found for: *${text}*\n\nTip: Try a shorter or different search term.`)
+        }
+
+        await react(conn, m, '✅')
+        const lines = results.map((v, i) => {
+            const title = v.title || v.name || 'Unknown'
+            const id = v.videoId || v.id || (v.url?.match(/v=([A-Za-z0-9_-]{11})/)?.[1])
+            const channel = v.channel || v.channelTitle || v.author?.name || v.uploader || ''
+            const dur = v.duration || v.lengthSeconds ? (
+                typeof v.lengthSeconds === 'number'
+                    ? `${Math.floor(v.lengthSeconds/60)}:${String(v.lengthSeconds%60).padStart(2,'0')}`
+                    : v.duration
+            ) : ''
+            const link = id ? `https://youtu.be/${id}` : (v.url || '')
+            return `*${i+1}.* ${title}${channel ? `\n   👤 ${channel}` : ''}${dur ? `  ⏱ ${dur}` : ''}${link ? `\n   🔗 ${link}` : ''}`
+        })
+
+        return reply(
+            `🎬 *YouTube Search: "${text}"*\n${'─'.repeat(30)}\n\n${lines.join('\n\n')}\n\n` +
+            `💡 _Copy a link above then use *${prefix}play <url>* or *${prefix}song <url>* to download_`
+        )
+    }
+
     // ── WALLPAPER ──────────────────────────────────────────────────────────────
     if (command === 'wallpaper' || command === 'wp' || command === 'wallp') {
         if (!text) return reply(`Usage: *${prefix}wallpaper <keyword>*`)
@@ -787,6 +851,7 @@ handle.command = [
     'pixelate', 'pixel', 'pixelize',
     'anime', 'toanime', 'animify',
     'img2img', 'imgedit', 'restyle',
+    'yts', 'ytsearch', 'yousearch',
     'transcript', 'ytscript', 'captions',
     'livescore', 'live', 'scores',
     'predictions', 'predict', 'tips',
