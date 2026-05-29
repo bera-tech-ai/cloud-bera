@@ -15,7 +15,10 @@ const { analyzeImageFromBuffer } = require('../Library/actions/vision')
 const { readFile, writeFile, listFiles, deleteFile } = require('../Library/actions/files')
 const { evalJS } = require('../Library/actions/jseval')
 const { validateAndFixCode } = require('../Library/actions/beraai')
-const { planTask, summarizeResults } = require('../Library/actions/agent')
+const { planTask, summarizeResults, runAgentParallel } = require('../Library/actions/agent')
+const { listWorkspace, writeWorkspaceFile, readWorkspaceFile, mkdirWorkspace, workspaceInfo, getUserWorkspace } = require('../Library/lib/workspace')
+const { semanticRoute } = require('../Library/lib/semanticRouter')
+const pluginLoader = require('../Library/lib/pluginLoader')
 const { translate } = require('../Library/actions/translate')
 const { download, detectPlatform } = require('../Library/actions/downloader')
 const { listServers, getServerStatus, powerAction, sendCommand, formatUptime, statusEmoji } = require('../Library/actions/pterodactyl')
@@ -82,8 +85,6 @@ const askNick = async (m, conn, reply, sender, userText, imageBuffer = null) => 
 }
 
 const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
-    const intent = detectIntent(text)
-
     const ownerNum = (config.owner || config.ownerNumber || '254116763755').replace(/[^0-9]/g, '')
     const senderNum = (sender || '').replace(/[^0-9]/g, '')
     const isOwner = senderNum === ownerNum || (Array.isArray(global.db?.data?.settings?.sudo) && global.db.data.settings.sudo.includes(senderNum))
@@ -94,6 +95,28 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
             isAdmin = meta?.participants?.find(p => p.id.split('@')[0] === senderNum)?.admin != null
         }
     } catch {}
+
+    // ── Plugin matching — check before intent routing ─────────────────────────
+    if (!imageBuffer && text) {
+        const matchedPlugin = pluginLoader.matchPlugin(text)
+        if (matchedPlugin) {
+            await react(conn, m, '🔌')
+            try {
+                const result = await pluginLoader.executePlugin(matchedPlugin, {
+                    text, m, conn, reply, sender, isOwner, isAdmin,
+                    react: (e) => react(conn, m, e)
+                })
+                await react(conn, m, result.success ? '✅' : '❌')
+                if (result.output) return reply(result.output)
+                return
+            } catch (e) {
+                await react(conn, m, '❌')
+                return reply(`❌ Plugin error: ${e.message}`)
+            }
+        }
+    }
+
+    const intent = detectIntent(text)
 
     if (imageBuffer) {
         const wantsCreate = /\b(create|generate|make|draw|similar|like this|same style)\b/i.test(text)
@@ -1130,59 +1153,96 @@ Start immediately with the code — no lengthy intro.`
     if (intent === 'agent') {
         await react(conn, m, '🤖')
         const task = text.replace(/\b(agent|automate|plan and execute|do the following|step by step)\b/gi, '').trim() || text
-        if (!task || task.length < 5) return reply(`❌ Describe what you want me to do. E.g: "agent: list all workspace files and push them to github"`)
+        if (!task || task.length < 5) return reply(`❌ Describe what you want me to do. E.g: "agent: create a folder called projects with files index.js and README.md"`)
 
-        await reply(`🤖 *Planning task...*\n_"${task}"_`)
+        // Workspace path for this user so created files persist
+        const wsDir = getUserWorkspace(sender)
+
+        await reply(`🤖 *Planning...*\n_"${task}"_`)
         const plan = await planTask(task)
         if (!plan.success) return reply(`❌ Couldn't plan this task: ${plan.error}`)
 
-        const steps = plan.plan.steps
-        await reply(`📋 *Plan:* ${plan.plan.plan}\n\n${steps.map((s, i) => `${i + 1}. ${s.desc}`).join('\n')}\n\n_Executing..._`)
+        const { plan: planData } = plan
+        const steps = planData.steps || []
 
-        const results = []
-        for (const step of steps) {
-            let result = { success: false, output: 'Unknown action' }
-            try {
-                if (step.action === 'shell') {
-                    result = await runShell(step.args?.cmd || '')
-                } else if (step.action === 'file_read') {
-                    const r = readFile(step.args?.path || '')
-                    result = { success: r.success, output: r.content || r.error }
-                } else if (step.action === 'file_write') {
-                    const r = writeFile(step.args?.path || '', step.args?.content || '')
-                    result = { success: r.success, output: r.success ? `Written: ${r.path}` : r.error }
-                } else if (step.action === 'js_eval') {
-                    result = await evalJS(step.args?.code || '')
-                } else if (step.action === 'search') {
-                    const r = await webSearch(step.args?.query || '')
-                    result = { success: r.success, output: r.result || r.error }
-                } else if (step.action === 'git_clone') {
-                    result = await cloneRepo(step.args?.url || '')
-                } else if (step.action === 'git_push') {
-                    result = await gitPush(step.args?.folder || '')
-                } else if (step.action === 'image_gen') {
-                    const r = await generateImage(step.args?.prompt || '')
-                    result = { success: r.success, output: r.success ? '[image generated]' : r.error }
-                    if (r.success) {
-                        if (r.buffer) await conn.sendMessage(m.chat, { image: r.buffer, caption: step.args?.prompt }, { quoted: m })
-                        else if (r.url) await conn.sendMessage(m.chat, { image: { url: r.url }, caption: step.args?.prompt }, { quoted: m })
-                    }
-                } else if (step.action === 'music') {
-                    const r = await searchAndDownload(step.args?.query || '')
-                    result = { success: r.success, output: r.success ? r.title : r.error }
-                    if (r.success && r.audioUrl) {
-                        await conn.sendMessage(m.chat, { audio: { url: r.audioUrl }, mimetype: 'audio/mp4', ptt: false }, { quoted: m })
-                    }
+        // Show chain-of-thought reasoning + step list
+        const reasoning = planData.reasoning ? `\n\n💭 _${planData.reasoning.slice(0, 300)}_` : ''
+        await reply(`📋 *Plan:* ${planData.plan}${reasoning}\n\n${steps.map((s, i) => `${i + 1}. ${s.desc}`).join('\n')}\n\n_Executing ${steps.length} step(s)..._`)
+
+        // Run steps with parallelism + self-correction, passing userId for workspace paths
+        const results = await runAgentParallel(steps, conn, m.chat, m,
+            { userId: sender },
+            (stepResult) => {
+                // Send media results inline as they complete
+                if (stepResult._media === 'image' && stepResult._url) {
+                    conn.sendMessage(m.chat, { image: { url: stepResult._url }, caption: stepResult.desc }, { quoted: m }).catch(() => {})
+                } else if (stepResult._media === 'audio' && stepResult._url) {
+                    conn.sendMessage(m.chat, { audio: { url: stepResult._url }, mimetype: 'audio/mpeg', ptt: false }, { quoted: m }).catch(() => {})
                 }
-            } catch (e) {
-                result = { success: false, output: e.message }
             }
-            results.push({ desc: step.desc, ...result })
-        }
+        )
+
+        // Build step summary
+        const stepLines = results.map((r, i) =>
+            `${r.success ? '✅' : '❌'} ${r.desc}${r.success ? '' : `\n   _${String(r.output || '').slice(0, 100)}_`}`
+        ).join('\n')
 
         const summary = await summarizeResults(task, results)
+
         await react(conn, m, '✅')
-        return reply(`✅ *Done!*\n\n${summary}`)
+        return reply(
+            `✅ *Done!*\n\n📁 *Workspace:* ${wsDir}\n\n` +
+            `📊 *Steps:*\n${stepLines}\n\n` +
+            `📝 *Summary:*\n${summary}`
+        )
+    }
+
+    if (intent === 'workspace_cmd') {
+        await react(conn, m, '📁')
+        const t = text.toLowerCase()
+
+        // list workspace
+        if (/\b(list|ls|show|contents?|files?|what.{0,10}in)\b/.test(t) || /^(my workspace|workspace)$/.test(t)) {
+            const r = listWorkspace(sender)
+            await react(conn, m, '✅')
+            return reply(r.output)
+        }
+
+        // workspace info
+        if (/\b(info|size|about)\b/.test(t)) {
+            const r = workspaceInfo(sender)
+            await react(conn, m, '✅')
+            return reply(r.output)
+        }
+
+        // create folder in workspace
+        const mkMatch = text.match(/\b(?:create|make|mkdir)\b.{0,20}(?:folder|dir(?:ectory)?)\b.*?["\s](\S+)/i)
+        if (mkMatch) {
+            const r = mkdirWorkspace(sender, mkMatch[1])
+            await react(conn, m, r.success ? '✅' : '❌')
+            return reply(r.output)
+        }
+
+        // write file in workspace
+        const writeMatch = text.match(/\b(?:create|write|save|make)\b.{0,20}file\b.{0,30}["\s](\S+)/i)
+        if (writeMatch) {
+            const r = writeWorkspaceFile(sender, writeMatch[1], '')
+            await react(conn, m, r.success ? '✅' : '❌')
+            return reply(r.output)
+        }
+
+        // read file from workspace
+        const readMatch = text.match(/\b(?:read|show|cat|open)\b.{0,20}["\s](\S+\.\w+)/i)
+        if (readMatch) {
+            const r = readWorkspaceFile(sender, readMatch[1])
+            await react(conn, m, r.success ? '✅' : '❌')
+            return reply(r.success ? `📄 *${readMatch[1]}*\n\`\`\`\n${r.output}\n\`\`\`` : r.output)
+        }
+
+        // default: list
+        const r = listWorkspace(sender)
+        await react(conn, m, '✅')
+        return reply(r.output)
     }
 
     if (intent === 'pterodactyl') {
