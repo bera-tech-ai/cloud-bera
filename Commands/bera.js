@@ -1,7 +1,7 @@
 const { nickAi, MAX_HISTORY } = require('../Library/lib/bera')
 const config = require('../Config')
 const { detectIntent } = require('../Library/router')
-const { cloneRepo, setupRepoRemote, gitPush, gitStatus, gitLog, listWorkspace, runShell } = require('../Library/actions/shell')
+const { cloneRepo, setupRepoRemote, gitPush, gitStatus, gitLog, runShell } = require('../Library/actions/shell')
 const {
     getUser: ghUser, getOwner, listRepos, createRepo, deleteRepo, getRepo,
     listFiles: ghListFiles, getFile: ghGetFile, upsertFile, pushMultipleFiles,
