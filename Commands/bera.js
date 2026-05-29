@@ -2206,12 +2206,156 @@ const handleWrapper = async (m, ctx) => {
             `Example: ${prefix}cron add 0 9 * * * Good morning!`
         )
     }
+
+    // ── scaffold ──────────────────────────────────────────────────────────────
+    if (command === 'scaffold' || command === 'create' || command === 'init') {
+        if (!ctx.isOwner) return reply(`⛔ Owner only.`)
+        const parts = (text || '').trim().split(/\s+/)
+        const type  = parts[0]?.toLowerCase()
+        const name  = parts.slice(1).join('-') || type
+
+        if (!type) {
+            return reply(
+                `╭══〘 *🏗️ SCAFFOLD* 〙═⊷\n` +
+                `\n` +
+                `Usage: ${prefix}scaffold <type> <name>\n\n` +
+                `Types:\n` +
+                `• *react* — React 18 + Vite + TailwindCSS\n` +
+                `• *next* — Next.js 14 App Router\n` +
+                `• *express* — Express 5 REST API\n` +
+                `• *fastapi* — Python FastAPI\n` +
+                `• *fullstack* — React + Express monorepo\n` +
+                `• *discord* — Discord.js v14 bot\n` +
+                `• *telegram* — Telegraf.js bot\n` +
+                `• *electron* — Electron desktop app\n` +
+                `• *cli* — Node.js CLI tool\n` +
+                `• *flask* — Python Flask API\n\n` +
+                `Example: ${prefix}scaffold express todo-api\n` +
+                `╰══════════════════⊷`
+            )
+        }
+
+        await reply(`⏳ *Scaffolding ${type} project:* \`${name}\`...`)
+        ctx.conn.sendMessage(m.chat, { react: { text: '🏗️', key: m.key } }).catch(() => {})
+
+        const { executeToolCall } = require('../Library/actions/beraai')
+        const result = await executeToolCall({ tool: 'scaffold', type, name }, sender, ctx.conn, m)
+
+        ctx.conn.sendMessage(m.chat, { react: { text: '✅', key: m.key } }).catch(() => {})
+        return reply(result)
+    }
+
+    // ── newrepo ───────────────────────────────────────────────────────────────
+    if (command === 'newrepo' || command === 'createrepo') {
+        if (!ctx.isOwner) return reply(`⛔ Owner only.`)
+        const parts  = (text || '').trim().split(/\s+/)
+        const name   = parts[0]
+        const isPriv = parts.includes('--private') || parts.includes('-p')
+        const desc   = parts.filter(p => !p.startsWith('-')).slice(1).join(' ')
+
+        if (!name) return reply(`❌ Usage: ${prefix}newrepo <repo-name> [description] [--private]`)
+
+        await reply(`⏳ Creating GitHub repo: *${name}*...`)
+        ctx.conn.sendMessage(m.chat, { react: { text: '📁', key: m.key } }).catch(() => {})
+
+        const { executeToolCall } = require('../Library/actions/beraai')
+        const result = await executeToolCall({ tool: 'create_repo', name, description: desc, private: isPriv }, sender, ctx.conn, m)
+
+        ctx.conn.sendMessage(m.chat, { react: { text: '✅', key: m.key } }).catch(() => {})
+        return reply(result)
+    }
+
+    // ── gitpush ───────────────────────────────────────────────────────────────
+    if (command === 'gitpush' || command === 'pushrepo') {
+        if (!ctx.isOwner) return reply(`⛔ Owner only.`)
+        // .gitpush <folder> <username/repo> [message]
+        const parts   = (text || '').trim().split(/\s+/)
+        const folder  = parts[0]
+        const repo    = parts[1]
+        const message = parts.slice(2).join(' ') || 'feat: update via Bera Agent'
+
+        if (!folder || !repo) return reply(
+            `❌ Usage: ${prefix}gitpush <folder> <username/repo> [commit message]\n\n` +
+            `Example: ${prefix}gitpush workspace/my-app john/my-app initial commit`
+        )
+
+        await reply(`⏳ Pushing \`${folder}\` → \`${repo}\`...`)
+        ctx.conn.sendMessage(m.chat, { react: { text: '🚀', key: m.key } }).catch(() => {})
+
+        const { executeToolCall } = require('../Library/actions/beraai')
+        const result = await executeToolCall({ tool: 'git_push_folder', folder, repo, message }, sender, ctx.conn, m)
+
+        ctx.conn.sendMessage(m.chat, { react: { text: result.includes('✅') ? '✅' : '❌', key: m.key } }).catch(() => {})
+        return reply(result)
+    }
+
+    // ── pm2list ───────────────────────────────────────────────────────────────
+    if (command === 'pm2list' || command === 'pm2ls' || command === 'processes') {
+        if (!ctx.isOwner) return reply(`⛔ Owner only.`)
+        ctx.conn.sendMessage(m.chat, { react: { text: '📊', key: m.key } }).catch(() => {})
+        const { executeToolCall } = require('../Library/actions/beraai')
+        const result = await executeToolCall({ tool: 'pm2_manage', action: 'list' }, sender, ctx.conn, m)
+        return reply(result)
+    }
+
+    // ── pm2start ──────────────────────────────────────────────────────────────
+    if (command === 'pm2start' || command === 'startapp') {
+        if (!ctx.isOwner) return reply(`⛔ Owner only.`)
+        const parts = (text || '').trim().split(/\s+/)
+        const name  = parts[0]
+        const file  = parts.slice(1).join(' ')
+
+        if (!name || !file) return reply(
+            `❌ Usage: ${prefix}pm2start <name> <file>\n\n` +
+            `Example: ${prefix}pm2start my-api workspace/my-api/index.js`
+        )
+
+        await reply(`⏳ Starting \`${name}\` with PM2...`)
+        ctx.conn.sendMessage(m.chat, { react: { text: '▶️', key: m.key } }).catch(() => {})
+
+        const { executeToolCall } = require('../Library/actions/beraai')
+        const result = await executeToolCall({ tool: 'pm2_manage', action: 'start', name, file }, sender, ctx.conn, m)
+
+        ctx.conn.sendMessage(m.chat, { react: { text: result.includes('✅') ? '✅' : '❌', key: m.key } }).catch(() => {})
+        return reply(result)
+    }
+
+    // ── pm2stop ───────────────────────────────────────────────────────────────
+    if (command === 'pm2stop' || command === 'stopapp') {
+        if (!ctx.isOwner) return reply(`⛔ Owner only.`)
+        const name = (text || '').trim()
+        if (!name) return reply(`❌ Usage: ${prefix}pm2stop <name>`)
+        const { executeToolCall } = require('../Library/actions/beraai')
+        const result = await executeToolCall({ tool: 'pm2_manage', action: 'stop', name }, sender, ctx.conn, m)
+        return reply(result)
+    }
+
+    // ── pm2logs ───────────────────────────────────────────────────────────────
+    if (command === 'pm2logs' || command === 'applogs') {
+        if (!ctx.isOwner) return reply(`⛔ Owner only.`)
+        const parts = (text || '').trim().split(/\s+/)
+        const name  = parts[0]
+        const lines = parseInt(parts[1]) || 30
+        if (!name) return reply(`❌ Usage: ${prefix}pm2logs <name> [lines]\nExample: ${prefix}pm2logs my-api 50`)
+        ctx.conn.sendMessage(m.chat, { react: { text: '📋', key: m.key } }).catch(() => {})
+        const { executeToolCall } = require('../Library/actions/beraai')
+        const result = await executeToolCall({ tool: 'pm2_manage', action: 'logs', name, lines }, sender, ctx.conn, m)
+        return reply(result)
+    }
+
     return _origHandle(m, ctx)
 }
 handleWrapper.before = handle.before
 handleWrapper.command = ['bera', 'agent', 'chatbot', 'beraclone', 'workspace', 'setghtoken', 'tagreply', 'transcribe', 'listen', 'beratrigger', 'beratrig', 'beralisten',
     'remember', 'recall', 'memories', 'forget', 'deletememory',
-    'berahistory', 'apidocs', 'cron']
+    'berahistory', 'apidocs', 'cron',
+    'scaffold', 'create', 'init',
+    'newrepo', 'createrepo',
+    'gitpush', 'pushrepo',
+    'pm2list', 'pm2ls', 'processes',
+    'pm2start', 'startapp',
+    'pm2stop', 'stopapp',
+    'pm2logs', 'applogs']
 handleWrapper.tags = ['ai']
 
 module.exports = handleWrapper
