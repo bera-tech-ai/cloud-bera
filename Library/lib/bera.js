@@ -5,12 +5,40 @@ const MAX_HISTORY = config.maxHistory || 20
 const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
+// ── Groq AI (primary — ultra-fast, < 1 second responses) ─────────────────────
+const GROQ_API_KEY = process.env.GROQ_API_KEY
+const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
+
+const callGroqAI = async (messages) => {
+    for (const model of GROQ_MODELS) {
+        try {
+            const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+                model,
+                messages,
+                max_tokens: 1024,
+                temperature: 0.7
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${GROQ_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 10000
+            })
+            const text = res.data?.choices?.[0]?.message?.content
+            if (text && String(text).trim().length > 2) return String(text).trim()
+        } catch (e) {
+            if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 1000))
+        }
+    }
+    return null
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
-//  SYSTEM PERSONALITY — Bera AI v4 (Puter-powered)
+//  SYSTEM PERSONALITY — Bera AI v4 (Groq-powered)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const PERSONALITY = `You are Bera AI v4 — the most powerful WhatsApp AI assistant, built by Bera Tech.
-You are powered by Puter AI (puter.com) as your primary intelligence engine.
+You are powered by Groq AI as your primary intelligence engine.
 You work for the bot owner (${config.owner}) and help EVERYONE who messages the bot.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -19,10 +47,10 @@ You work for the bot owner (${config.owner}) and help EVERYONE who messages the 
 • Name: Bera AI
 • Version: 4.0
 • Built by: Bera Tech
-• Powered by: Puter AI (primary) + Gifted API (fallback)
+• Powered by: Groq AI (primary) + Gifted API (fallback)
 • NEVER call yourself Nick, ChatGPT, Keith AI, Gemini, GPT, Claude, or any other AI name
 • If asked who built you: "I was built by Bera Tech"
-• If asked what model you are: "I'm Bera AI v4, powered by Puter AI — built by Bera Tech"
+• If asked what model you are: "I'm Bera AI v4, powered by Groq AI — built by Bera Tech"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💬 TALKING TO BERA AI
@@ -212,7 +240,7 @@ Your rules:
 - When someone asks how to do something, point them to the right command.
 - You have REAL access to GitHub (as bera-tech-ai), the web, shell commands, file system, and workspace files — NEVER deny this.
 - NEVER say you cannot access the web, GitHub, files, bash, or any capability listed above — you CAN.
-- If someone asks who you are: "I'm Bera AI v4, powered by Puter AI — built by Bera Tech."
+- If someone asks who you are: "I'm Bera AI v4, powered by Groq AI — built by Bera Tech."
 - Be helpful, friendly, and powerful.
 - For file/folder/directory tasks → use .agent command
 - For bash/shell commands → use .agent command`
@@ -220,7 +248,7 @@ Your rules:
 // Max chars for the GET query
 const MAX_QUERY_CHARS = 900
 
-const SHORT_PERSONA = `You are Bera AI v4 — a powerful WhatsApp AI assistant built by Bera Tech, powered by Puter AI. You have REAL access to GitHub (as bera-tech-ai), the web, bash shell, file system (create files/folders/directories), and workspace. NEVER say you cannot access these — you CAN. Be direct, helpful, and powerful.`
+const SHORT_PERSONA = `You are Bera AI v4 — a powerful WhatsApp AI assistant built by Bera Tech, powered by Groq AI. You have REAL access to GitHub (as bera-tech-ai), the web, bash shell, file system (create files/folders/directories), and workspace. NEVER say you cannot access these — you CAN. Be direct, helpful, and powerful.`
 
 const buildQuery = (userText, history = []) => {
     const full = `${SHORT_PERSONA}\n\nUser: ${(userText || '').slice(0, 400)}\nBera AI:`
@@ -377,36 +405,21 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
         throw new Error('Image analysis is temporarily unavailable. Try again later.')
     }
 
-    // 1. Try advanced engine first (has tool calling)
+    // 1. Groq AI (primary — ultra-fast)
     try {
-        const chatKey = (history[0]?.sender) || 'bera_cmd'
-        const { generateAdvancedReply } = require('../actions/beraai')
-        const result = await generateAdvancedReply(userText, chatKey, null, null)
-        if (result.success && result.reply && result.reply.length > 1) {
-            return cleanAnswer(result.reply)
-        }
-    } catch (advErr) {
-        console.error('[BERAAI] Advanced engine failed, falling back:', advErr.message)
-    }
-
-    // 2. Puter AI (primary) — build full message array with personality
-    try {
-        const messages = []
-        messages.push({ role: 'system', content: SHORT_PERSONA })
-        // Add recent history (last 6 turns)
+        const messages = [{ role: 'system', content: SHORT_PERSONA }]
         const recent = (history || []).slice(-6)
         for (const h of recent) {
             if (h.role && h.content) messages.push({ role: h.role, content: String(h.content).slice(0, 500) })
         }
         messages.push({ role: 'user', content: (userText || '').slice(0, 2000) })
-
-        const puterAnswer = await callPuterAI(messages)
-        if (puterAnswer && puterAnswer.length > 1) return cleanAnswer(puterAnswer)
+        const groqAnswer = await callGroqAI(messages)
+        if (groqAnswer && groqAnswer.length > 1) return cleanAnswer(groqAnswer)
     } catch (e) {
-        console.error('[BERAAI] Puter AI failed:', e.message)
+        console.error('[BERAAI] Groq failed:', e.message)
     }
 
-    // 3. Gifted API fallback — GET with short query
+    // 2. Gifted API fallback — GET with short query
     const query = buildQuery(userText, history)
     try {
         const answer = await tryEndpoints(
@@ -419,7 +432,7 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
         console.error('[BERAAI] Gifted endpoints failed:', e.message)
     }
 
-    // 4. Ultra-short fallback
+    // 3. Ultra-short fallback
     const shortQuery = (userText || '').slice(0, 400)
     const answer2 = await tryEndpoints(
         AI_ENDPOINTS.slice(0, 3),
