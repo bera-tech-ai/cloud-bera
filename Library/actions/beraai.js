@@ -741,6 +741,47 @@ GITHUB
 {"tool":"github","action":"clone","repo":"user/repo","dest":"workspace/myapp"}
 
 ══════════════════════════════════════════════
+PROJECT SCAFFOLDING  (Replit/Lovable-like)
+══════════════════════════════════════════════
+When a user asks to "build", "create", "scaffold", "start", or "make" a project — use scaffold FIRST, then run npm install automatically.
+{"tool":"scaffold","type":"react","name":"my-app"} → Full React 18 + Vite 5 + TailwindCSS project (ready to run)
+{"tool":"scaffold","type":"next","name":"my-site"} → Next.js 14 App Router + TailwindCSS project
+{"tool":"scaffold","type":"express","name":"my-api"} → Express 5 REST API + Zod validation + routes + middleware
+{"tool":"scaffold","type":"fastapi","name":"my-api"} → Python FastAPI + Pydantic + uvicorn
+{"tool":"scaffold","type":"fullstack","name":"my-app"} → React + Express monorepo with proxy setup
+{"tool":"scaffold","type":"discord","name":"my-bot"} → Discord.js v14 bot with slash commands
+{"tool":"scaffold","type":"telegram","name":"my-bot"} → Telegraf.js Telegram bot
+{"tool":"scaffold","type":"electron","name":"my-desktop"} → Electron + React desktop app
+{"tool":"scaffold","type":"cli","name":"my-tool"} → Node.js CLI with commander.js
+{"tool":"scaffold","type":"flask","name":"my-app"} → Python Flask + SQLAlchemy + REST
+Example workflow: build a todo API
+→ {"tool":"scaffold","type":"express","name":"todo-api"}
+→ {"tool":"bash","cmd":"cd workspace/todo-api && npm install"}
+→ {"tool":"write_file","path":"workspace/todo-api/routes/todos.js","content":"...full todos route..."}
+→ {"tool":"pm2_manage","action":"start","name":"todo-api","file":"workspace/todo-api/index.js"}
+
+══════════════════════════════════════════════
+PM2 PROCESS MANAGER  (start, stop, monitor apps)
+══════════════════════════════════════════════
+{"tool":"pm2_manage","action":"list"} → see all running processes
+{"tool":"pm2_manage","action":"start","name":"my-api","file":"workspace/my-api/index.js"} → start app
+{"tool":"pm2_manage","action":"start","name":"my-api","file":"workspace/my-api/index.js","env":{"PORT":"3000","NODE_ENV":"production"}}
+{"tool":"pm2_manage","action":"stop","name":"my-api"}
+{"tool":"pm2_manage","action":"restart","name":"my-api"}
+{"tool":"pm2_manage","action":"logs","name":"my-api","lines":30}
+{"tool":"pm2_manage","action":"delete","name":"my-api"}
+{"tool":"pm2_manage","action":"monit"} → CPU/RAM usage for all processes
+
+══════════════════════════════════════════════
+ADVANCED GITHUB  (create repos, push full projects)
+══════════════════════════════════════════════
+{"tool":"create_repo","name":"my-app","private":false,"description":"My new app","autoInit":true}
+{"tool":"git_push_folder","folder":"workspace/my-app","repo":"username/my-app","message":"feat: initial commit","branch":"main"}
+→ This creates the repo on GitHub, inits git in the folder, commits all files, and pushes — one shot.
+{"tool":"github","action":"clone","repo":"user/repo","dest":"workspace/myapp"}
+{"tool":"github","action":"create_file","repo":"user/repo","path":"src/index.js","content":"...","message":"feat: add file"}
+
+══════════════════════════════════════════════
 BERAHOST DEPLOYMENTS
 ══════════════════════════════════════════════
 {"tool":"berahost","action":"list"} → list all your bot deployments
@@ -1728,6 +1769,238 @@ try {
         if (!conv) return `unknown conversion: ${tc.from} → ${tc.to}`
         const result = typeof conv === 'function' ? conv(Number(tc.value)) : Number(tc.value) * conv
         return `📐 ${tc.value} *${tc.from}* = *${result.toFixed(4)} ${tc.to}*`
+    }
+
+    // ── scaffold ──────────────────────────────────────────────────────────────
+    if (t === 'scaffold') {
+        const nodePath = require('path')
+        const nodeFsS  = require('fs')
+        const type = (tc.type || 'express').toLowerCase().trim()
+        const rawName  = (tc.name || 'my-app').replace(/[^a-zA-Z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+        const dest = nodePath.resolve(process.env.HOME || '/root', 'workspace', rawName)
+
+        const write = (rel, content) => {
+            const full = nodePath.join(dest, rel)
+            nodeFsS.mkdirSync(nodePath.dirname(full), { recursive: true })
+            nodeFsS.writeFileSync(full, content, 'utf8')
+        }
+
+        const TEMPLATES = {
+            react: () => {
+                write('package.json', JSON.stringify({ name: rawName, version: '1.0.0', private: true, type: 'module', scripts: { dev: 'vite', build: 'vite build', preview: 'vite preview' }, dependencies: { react: '^18.3.1', 'react-dom': '^18.3.1' }, devDependencies: { '@vitejs/plugin-react': '^4.3.1', vite: '^5.4.2', tailwindcss: '^3.4.10', autoprefixer: '^10.4.20', postcss: '^8.4.45' } }, null, 2))
+                write('vite.config.js', `import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\nexport default defineConfig({ plugins: [react()], server: { port: 3000 } })`)
+                write('tailwind.config.js', `export default { content: ['./index.html','./src/**/*.{js,jsx}'], theme: { extend: {} }, plugins: [] }`)
+                write('postcss.config.js', `export default { plugins: { tailwindcss: {}, autoprefixer: {} } }`)
+                write('index.html', `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8"/>\n  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>\n  <title>${rawName}</title>\n</head>\n<body class="bg-gray-950 text-white min-h-screen">\n  <div id="root"></div>\n  <script type="module" src="/src/main.jsx"></script>\n</body>\n</html>`)
+                write('src/main.jsx', `import React from 'react'\nimport ReactDOM from 'react-dom/client'\nimport './index.css'\nimport App from './App'\nReactDOM.createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>)`)
+                write('src/index.css', `@tailwind base;\n@tailwind components;\n@tailwind utilities;`)
+                write('src/App.jsx', `import { useState } from 'react'\nexport default function App() {\n  const [count, setCount] = useState(0)\n  return (\n    <div className="flex flex-col items-center justify-center min-h-screen gap-6">\n      <h1 className="text-4xl font-bold text-blue-400">${rawName}</h1>\n      <p className="text-gray-400">Built with React + Vite + TailwindCSS</p>\n      <button onClick={() => setCount(c => c + 1)}\n        className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl text-white font-semibold transition">\n        Count: {count}\n      </button>\n    </div>\n  )\n}`)
+                write('.gitignore', 'node_modules/\ndist/\n.env\n.DS_Store')
+                write('README.md', `# ${rawName}\n\nReact 18 + Vite 5 + TailwindCSS\n\n## Setup\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\nOpen http://localhost:3000`)
+                return ['package.json','vite.config.js','tailwind.config.js','postcss.config.js','index.html','src/main.jsx','src/index.css','src/App.jsx','.gitignore','README.md']
+            },
+            next: () => {
+                write('package.json', JSON.stringify({ name: rawName, version: '0.1.0', private: true, scripts: { dev: 'next dev', build: 'next build', start: 'next start' }, dependencies: { next: '^14.2.5', react: '^18.3.1', 'react-dom': '^18.3.1' }, devDependencies: { tailwindcss: '^3.4.10', autoprefixer: '^10.4.20', postcss: '^8.4.45' } }, null, 2))
+                write('next.config.mjs', `/** @type {import('next').NextConfig} */\nconst nextConfig = {}\nexport default nextConfig`)
+                write('tailwind.config.js', `module.exports = { content: ['./app/**/*.{js,jsx,ts,tsx}'], theme: { extend: {} }, plugins: [] }`)
+                write('postcss.config.js', `module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } }`)
+                write('app/globals.css', `@tailwind base;\n@tailwind components;\n@tailwind utilities;`)
+                write('app/layout.jsx', `import './globals.css'\nexport const metadata = { title: '${rawName}', description: 'Next.js app' }\nexport default function RootLayout({ children }) {\n  return <html lang="en"><body className="bg-gray-950 text-white">{children}</body></html>\n}`)
+                write('app/page.jsx', `export default function Home() {\n  return (\n    <main className="flex min-h-screen flex-col items-center justify-center gap-6">\n      <h1 className="text-5xl font-bold text-blue-400">${rawName}</h1>\n      <p className="text-gray-400">Next.js 14 App Router</p>\n      <a href="/api/hello" className="text-blue-500 underline">Test API →</a>\n    </main>\n  )\n}`)
+                write('app/api/hello/route.js', `export async function GET() { return Response.json({ message: 'Hello from ${rawName}!' }) }`)
+                write('.gitignore', 'node_modules/\n.next/\n.env*\n!.env.example')
+                write('README.md', `# ${rawName}\n\nNext.js 14 + TailwindCSS\n\n\`\`\`bash\nnpm install && npm run dev\n\`\`\``)
+                return ['package.json','next.config.mjs','app/layout.jsx','app/page.jsx','app/api/hello/route.js','tailwind.config.js','README.md']
+            },
+            express: () => {
+                write('package.json', JSON.stringify({ name: rawName, version: '1.0.0', main: 'index.js', scripts: { start: 'node index.js', dev: 'nodemon index.js' }, dependencies: { express: '^5.0.0', cors: '^2.8.5', dotenv: '^16.4.5', morgan: '^1.10.0' }, devDependencies: { nodemon: '^3.1.4' } }, null, 2))
+                write('index.js', `require('dotenv').config()\nconst express = require('express')\nconst cors    = require('cors')\nconst morgan  = require('morgan')\nconst routes  = require('./routes')\n\nconst app  = express()\nconst PORT = process.env.PORT || 3000\n\napp.use(cors())\napp.use(morgan('dev'))\napp.use(express.json())\napp.use(express.urlencoded({ extended: true }))\n\napp.use('/api', routes)\n\napp.get('/', (req, res) => res.json({ app: '${rawName}', status: 'running', time: new Date().toISOString() }))\n\napp.use((err, req, res, next) => {\n  console.error(err)\n  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' })\n})\n\napp.listen(PORT, () => console.log(\`✅ ${rawName} running on port \${PORT}\`))\n`)
+                write('routes/index.js', `const express = require('express')\nconst router  = express.Router()\n\nrouter.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }))\n\nrouter.get('/hello', (req, res) => res.json({ message: 'Hello from ${rawName}!' }))\n\nmodule.exports = router\n`)
+                write('middleware/auth.js', `module.exports = (req, res, next) => {\n  const token = req.headers.authorization?.replace('Bearer ', '')\n  if (!token) return res.status(401).json({ error: 'Unauthorized' })\n  req.user = { token }\n  next()\n}\n`)
+                write('.env', `PORT=3000\nNODE_ENV=development\n# Add your secrets below\n`)
+                write('.env.example', 'PORT=3000\nNODE_ENV=development\n')
+                write('.gitignore', 'node_modules/\n.env\n*.log')
+                write('README.md', `# ${rawName}\n\nExpress 5 REST API\n\n## Setup\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\n## Endpoints\n- GET /          → app info\n- GET /api/health → health check\n- GET /api/hello  → hello world`)
+                return ['index.js','routes/index.js','middleware/auth.js','.env','.env.example','package.json','README.md']
+            },
+            fastapi: () => {
+                write('main.py', `from fastapi import FastAPI, HTTPException\nfrom fastapi.middleware.cors import CORSMiddleware\nfrom pydantic import BaseModel\nfrom datetime import datetime\n\napp = FastAPI(title="${rawName}", version="1.0.0")\n\napp.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])\n\nclass Item(BaseModel):\n    name: str\n    description: str = ""\n\n@app.get("/")\nasync def root():\n    return {"app": "${rawName}", "status": "running", "time": str(datetime.now())}\n\n@app.get("/health")\nasync def health():\n    return {"status": "ok"}\n\n@app.post("/items")\nasync def create_item(item: Item):\n    return {"id": 1, **item.dict()}\n`)
+                write('requirements.txt', 'fastapi==0.115.0\nuvicorn[standard]==0.30.6\npydantic==2.9.2\npython-dotenv==1.0.1\n')
+                write('.env', 'PORT=8000\nDEBUG=True\n')
+                write('README.md', `# ${rawName}\n\nPython FastAPI\n\n## Setup\n\`\`\`bash\npip install -r requirements.txt\nuvicorn main:app --reload\n\`\`\`\n\nDocs at http://localhost:8000/docs`)
+                return ['main.py','requirements.txt','.env','README.md']
+            },
+            fullstack: () => {
+                write('package.json', JSON.stringify({ name: rawName, version: '1.0.0', workspaces: ['client','server'], scripts: { dev: 'concurrently "npm run dev --workspace=server" "npm run dev --workspace=client"', start: 'npm run start --workspace=server' }, devDependencies: { concurrently: '^8.2.2' } }, null, 2))
+                write('server/package.json', JSON.stringify({ name: `${rawName}-server`, version: '1.0.0', main: 'index.js', scripts: { dev: 'nodemon index.js', start: 'node index.js' }, dependencies: { express: '^5.0.0', cors: '^2.8.5', dotenv: '^16.4.5' }, devDependencies: { nodemon: '^3.1.4' } }, null, 2))
+                write('server/index.js', `require('dotenv').config()\nconst express = require('express')\nconst cors = require('cors')\nconst path = require('path')\nconst app = express()\nconst PORT = process.env.PORT || 5000\napp.use(cors({ origin: 'http://localhost:3000' }))\napp.use(express.json())\napp.get('/api/health', (_, res) => res.json({ status: 'ok' }))\napp.get('/api/hello', (_, res) => res.json({ message: 'Hello from ${rawName} server!' }))\napp.listen(PORT, () => console.log(\`✅ Server on port \${PORT}\`))\n`)
+                write('server/.env', 'PORT=5000\n')
+                write('client/package.json', JSON.stringify({ name: `${rawName}-client`, version: '1.0.0', private: true, type: 'module', scripts: { dev: 'vite', build: 'vite build' }, dependencies: { react: '^18.3.1', 'react-dom': '^18.3.1' }, devDependencies: { '@vitejs/plugin-react': '^4.3.1', vite: '^5.4.2' } }, null, 2))
+                write('client/vite.config.js', `import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\nexport default defineConfig({ plugins: [react()], server: { port: 3000, proxy: { '/api': 'http://localhost:5000' } } })`)
+                write('client/index.html', `<!DOCTYPE html><html><head><title>${rawName}</title></head><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>`)
+                write('client/src/main.jsx', `import React from 'react'\nimport ReactDOM from 'react-dom/client'\nimport App from './App'\nReactDOM.createRoot(document.getElementById('root')).render(<App />)`)
+                write('client/src/App.jsx', `import { useState, useEffect } from 'react'\nexport default function App() {\n  const [data, setData] = useState(null)\n  useEffect(() => { fetch('/api/hello').then(r=>r.json()).then(setData) }, [])\n  return <div style={{textAlign:'center',padding:'2rem'}}><h1>${rawName}</h1><p>{data?.message || 'Loading...'}</p></div>\n}`)
+                write('.gitignore', 'node_modules/\ndist/\n.env\n.DS_Store')
+                write('README.md', `# ${rawName}\n\nFull-stack React + Express monorepo\n\n\`\`\`bash\nnpm install\nnpm run dev   # starts both client (3000) and server (5000)\n\`\`\``)
+                return ['package.json','server/index.js','server/package.json','client/src/App.jsx','client/vite.config.js','README.md']
+            },
+            discord: () => {
+                write('package.json', JSON.stringify({ name: rawName, version: '1.0.0', main: 'index.js', scripts: { start: 'node index.js', dev: 'nodemon index.js', deploy: 'node deploy-commands.js' }, dependencies: { 'discord.js': '^14.15.3', dotenv: '^16.4.5' }, devDependencies: { nodemon: '^3.1.4' } }, null, 2))
+                write('index.js', `require('dotenv').config()\nconst { Client, GatewayIntentBits, Collection } = require('discord.js')\nconst fs = require('fs')\nconst path = require('path')\nconst client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] })\nclient.commands = new Collection()\nconst cmdFiles = fs.readdirSync('./commands').filter(f => f.endsWith('.js'))\nfor (const file of cmdFiles) {\n  const cmd = require(\`./commands/\${file}\`)\n  client.commands.set(cmd.data.name, cmd)\n}\nclient.once('ready', () => console.log(\`✅ Logged in as \${client.user.tag}\`))\nclient.on('interactionCreate', async i => {\n  if (!i.isChatInputCommand()) return\n  const cmd = client.commands.get(i.commandName)\n  if (!cmd) return\n  try { await cmd.execute(i) } catch (e) { await i.reply({ content: 'Error!', ephemeral: true }) }\n})\nclient.login(process.env.DISCORD_TOKEN)\n`)
+                write('commands/ping.js', `const { SlashCommandBuilder } = require('discord.js')\nmodule.exports = { data: new SlashCommandBuilder().setName('ping').setDescription('Replies with Pong!'), async execute(i) { await i.reply(\`🏓 Pong! Latency: \${Date.now() - i.createdTimestamp}ms\`) } }\n`)
+                write('deploy-commands.js', `require('dotenv').config()\nconst { REST, Routes } = require('discord.js')\nconst fs = require('fs')\nconst commands = fs.readdirSync('./commands').filter(f=>f.endsWith('.js')).map(f=>require(\`./commands/\${f}\`).data.toJSON())\nconst rest = new REST().setToken(process.env.DISCORD_TOKEN)\nrest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), { body: commands }).then(() => console.log('Commands deployed!')).catch(console.error)\n`)
+                write('.env', 'DISCORD_TOKEN=your_bot_token_here\nCLIENT_ID=your_client_id\nGUILD_ID=your_guild_id\n')
+                write('.gitignore', 'node_modules/\n.env')
+                write('README.md', `# ${rawName}\n\nDiscord.js v14 Bot\n\n## Setup\n1. Create bot at https://discord.com/developers/applications\n2. Copy token to .env\n3. npm install\n4. npm run deploy\n5. npm start`)
+                return ['index.js','commands/ping.js','deploy-commands.js','.env','package.json','README.md']
+            },
+            telegram: () => {
+                write('package.json', JSON.stringify({ name: rawName, version: '1.0.0', main: 'index.js', scripts: { start: 'node index.js', dev: 'nodemon index.js' }, dependencies: { telegraf: '^4.16.3', dotenv: '^16.4.5' }, devDependencies: { nodemon: '^3.1.4' } }, null, 2))
+                write('index.js', `require('dotenv').config()\nconst { Telegraf, session } = require('telegraf')\nconst bot = new Telegraf(process.env.BOT_TOKEN)\nbot.use(session())\nbot.start((ctx) => ctx.reply(\`👋 Welcome! I'm \${ctx.botInfo.first_name}. Type /help for commands.\`))\nbot.help((ctx) => ctx.reply('Available commands:\\n/start - Start bot\\n/help - Show this help\\n/ping - Check bot status'))\nbot.command('ping', (ctx) => ctx.reply(\`🏓 Pong! I'm alive.\`))\nbot.on('text', (ctx) => ctx.reply(\`You said: \${ctx.message.text}\`))\nbot.launch()\nprocess.once('SIGINT', () => bot.stop('SIGINT'))\nprocess.once('SIGTERM', () => bot.stop('SIGTERM'))\nconsole.log('✅ ${rawName} bot started')\n`)
+                write('.env', 'BOT_TOKEN=your_telegram_bot_token_here\n')
+                write('.gitignore', 'node_modules/\n.env')
+                write('README.md', `# ${rawName}\n\nTelegraf.js Telegram Bot\n\n1. Create bot via @BotFather → get token\n2. Add token to .env\n3. npm install && npm start`)
+                return ['index.js','.env','package.json','README.md']
+            },
+            cli: () => {
+                write('package.json', JSON.stringify({ name: rawName, version: '1.0.0', bin: { [rawName]: './bin/cli.js' }, scripts: { start: 'node bin/cli.js' }, dependencies: { commander: '^12.1.0', chalk: '^5.3.0', ora: '^8.0.1' }, type: 'module' }, null, 2))
+                write('bin/cli.js', `#!/usr/bin/env node\nimport { program } from 'commander'\nimport chalk from 'chalk'\nimport ora from 'ora'\n\nprogram.name('${rawName}').description('CLI tool').version('1.0.0')\n\nprogram.command('hello').description('Say hello').option('-n, --name <name>', 'Your name', 'World').action(opts => { console.log(chalk.blue(\`Hello, \${opts.name}!\`)) })\n\nprogram.command('run').description('Run a task').action(async () => {\n  const spin = ora('Working...').start()\n  await new Promise(r => setTimeout(r, 1000))\n  spin.succeed(chalk.green('Done!'))\n})\n\nprogram.parse()\n`)
+                write('.gitignore', 'node_modules/\n.env')
+                write('README.md', `# ${rawName}\n\nNode.js CLI\n\n\`\`\`bash\nnpm install\nnode bin/cli.js hello --name Bera\nnpm link   # install globally\n${rawName} hello\n\`\`\``)
+                return ['bin/cli.js','package.json','README.md']
+            },
+            flask: () => {
+                write('app.py', `from flask import Flask, jsonify, request\nfrom flask_cors import CORS\nfrom dotenv import load_dotenv\nimport os\n\nload_dotenv()\napp = Flask(__name__)\nCORS(app)\n\n@app.route('/')\ndef index():\n    return jsonify({'app': '${rawName}', 'status': 'running'})\n\n@app.route('/api/health')\ndef health():\n    return jsonify({'status': 'ok'})\n\n@app.route('/api/hello', methods=['GET','POST'])\ndef hello():\n    data = request.json or {}\n    return jsonify({'message': f"Hello {data.get('name', 'World')}!"})\n\nif __name__ == '__main__':\n    port = int(os.getenv('PORT', 5000))\n    app.run(host='0.0.0.0', port=port, debug=os.getenv('DEBUG', 'false').lower() == 'true')\n`)
+                write('requirements.txt', 'flask==3.0.3\nflask-cors==4.0.1\npython-dotenv==1.0.1\ngunicorn==23.0.0\n')
+                write('.env', 'PORT=5000\nDEBUG=true\n')
+                write('README.md', `# ${rawName}\n\nPython Flask\n\n\`\`\`bash\npip install -r requirements.txt\npython app.py\n\`\`\``)
+                return ['app.py','requirements.txt','.env','README.md']
+            }
+        }
+        const electron = () => {
+            write('package.json', JSON.stringify({ name: rawName, version: '1.0.0', main: 'main.js', scripts: { start: 'electron .', dev: 'concurrently "vite" "electron ."' }, dependencies: { electron: '^31.3.1' }, devDependencies: { concurrently: '^8.2.2', vite: '^5.4.2' } }, null, 2))
+            write('main.js', `const { app, BrowserWindow } = require('electron')\nconst path = require('path')\nfunction createWindow() {\n  const win = new BrowserWindow({ width: 1200, height: 800, webPreferences: { nodeIntegration: true } })\n  win.loadFile('index.html')\n}\napp.whenReady().then(createWindow)\napp.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })\n`)
+            write('index.html', `<!DOCTYPE html><html><head><title>${rawName}</title><style>body{font-family:sans-serif;text-align:center;padding:4rem;background:#1a1a2e;color:#fff}</style></head><body><h1>${rawName}</h1><p>Electron + Node.js desktop app</p></body></html>`)
+            write('README.md', `# ${rawName}\n\nElectron desktop app\n\n\`\`\`bash\nnpm install && npm start\n\`\`\``)
+            return ['main.js','index.html','package.json','README.md']
+        }
+        TEMPLATES.electron = electron
+
+        const builder = TEMPLATES[type]
+        if (!builder) return `❌ Unknown scaffold type: *${type}*\n\nAvailable: react, next, express, fastapi, fullstack, discord, telegram, electron, cli, flask`
+
+        try {
+            nodeFsS.mkdirSync(dest, { recursive: true })
+            const files = builder()
+            const fileList = files.map(f => `• ${f}`).join('\n')
+            return `✅ *Scaffolded ${type} project:* \`${rawName}\`\n\n📁 *Location:* \`workspace/${rawName}/\`\n\n📄 *Files created:*\n${fileList}\n\n▶️ *Next step — install & run:*\n\`\`\`\ncd workspace/${rawName} && npm install && npm run dev\n\`\`\``
+        } catch (e) {
+            return `❌ Scaffold failed: ${e.message}`
+        }
+    }
+
+    // ── pm2_manage ────────────────────────────────────────────────────────────
+    if (t === 'pm2_manage') {
+        const action = (tc.action || 'list').toLowerCase()
+        try {
+            const { execSync } = require('child_process')
+            const run = (cmd) => execSync(cmd, { encoding: 'utf8', timeout: 20000, stdio: ['pipe','pipe','pipe'] }).trim()
+
+            if (action === 'list' || action === 'ls') {
+                try {
+                    const out = run('pm2 jlist')
+                    const procs = JSON.parse(out)
+                    if (!procs.length) return `📭 No PM2 processes running.\n\nStart one: {"tool":"pm2_manage","action":"start","name":"my-app","file":"workspace/my-app/index.js"}`
+                    const lines = procs.map(p => {
+                        const mem = p.monit?.memory ? `${Math.round(p.monit.memory / 1024 / 1024)}MB` : 'N/A'
+                        const cpu = p.monit?.cpu !== undefined ? `${p.monit.cpu}%` : 'N/A'
+                        const st  = p.pm2_env?.status === 'online' ? '🟢' : p.pm2_env?.status === 'stopped' ? '🔴' : '🟡'
+                        return `${st} *${p.name}* #${p.pm_id} | CPU:${cpu} MEM:${mem} | ${p.pm2_env?.status || 'unknown'}`
+                    }).join('\n')
+                    return `📊 *PM2 Processes (${procs.length}):*\n\n${lines}`
+                } catch { return `📭 PM2 not available or no processes.\n\`\`\`\nnpm install -g pm2\n\`\`\`` }
+            }
+            if (action === 'start') {
+                const name = tc.name || 'app'
+                const file = tc.file || 'index.js'
+                const envStr = tc.env ? Object.entries(tc.env).map(([k,v]) => `${k}=${v}`).join(' ') : ''
+                const cmd = `${envStr ? envStr + ' ' : ''}pm2 start ${file} --name "${name}" --time`
+                const out = run(cmd)
+                return `✅ *Started:* \`${name}\`\n\nPM2 output: ${out.slice(0, 300)}\n\nView logs: {"tool":"pm2_manage","action":"logs","name":"${name}"}`
+            }
+            if (action === 'stop')    { run(`pm2 stop "${tc.name}"`);    return `⏹️ Stopped: \`${tc.name}\`` }
+            if (action === 'restart') { run(`pm2 restart "${tc.name}"`); return `🔄 Restarted: \`${tc.name}\`` }
+            if (action === 'delete')  { run(`pm2 delete "${tc.name}"`);  return `🗑️ Deleted: \`${tc.name}\`` }
+            if (action === 'logs') {
+                const lines = tc.lines || 30
+                const out = run(`pm2 logs "${tc.name}" --lines ${lines} --nostream`)
+                return `📋 *PM2 Logs — ${tc.name} (last ${lines} lines):*\n\n\`\`\`\n${out.slice(-2000)}\n\`\`\``
+            }
+            if (action === 'monit') {
+                const out = run('pm2 jlist')
+                const procs = JSON.parse(out)
+                const lines = procs.map(p => `• *${p.name}*: CPU ${p.monit?.cpu || 0}% | RAM ${Math.round((p.monit?.memory || 0)/1024/1024)}MB | ${p.pm2_env?.status}`).join('\n')
+                return `📈 *PM2 Monitor:*\n\n${lines || 'No processes running.'}`
+            }
+            return `❓ Unknown PM2 action: ${action}\n\nAvailable: list, start, stop, restart, delete, logs, monit`
+        } catch (e) {
+            return `❌ PM2 error: ${e.message}\n\nInstall PM2: \`npm install -g pm2\``
+        }
+    }
+
+    // ── create_repo ────────────────────────────────────────────────────────────
+    if (t === 'create_repo') {
+        const token = global.db?.data?.settings?.githubToken
+        if (!token) return `❌ No GitHub token set. Use: {"tool":"setghtoken","token":"ghp_..."}`
+        try {
+            const res = await axios2.post('https://api.github.com/user/repos', {
+                name: tc.name,
+                description: tc.description || '',
+                private: tc.private !== false,
+                auto_init: tc.autoInit !== false
+            }, { headers: { Authorization: `token ${token}`, 'User-Agent': 'BeraAgent/1.0', Accept: 'application/vnd.github.v3+json' } })
+            const repo = res.data
+            return `✅ *Repository created!*\n\n📁 *Name:* ${repo.full_name}\n🔗 *URL:* ${repo.html_url}\n🔒 *Private:* ${repo.private}\n\nClone: \`git clone ${repo.clone_url}\`\n\nPush local folder: {"tool":"git_push_folder","folder":"workspace/${tc.name}","repo":"${repo.full_name}","message":"feat: initial commit"}`
+        } catch (e) {
+            const msg = e.response?.data?.message || e.message
+            return `❌ GitHub create repo failed: ${msg}`
+        }
+    }
+
+    // ── git_push_folder ────────────────────────────────────────────────────────
+    if (t === 'git_push_folder') {
+        const token = global.db?.data?.settings?.githubToken
+        if (!token) return `❌ No GitHub token set. Use: {"tool":"setghtoken","token":"ghp_..."}`
+        const { execSync } = require('child_process')
+        const nodeFsS = require('fs')
+        const nodePath = require('path')
+        const folder  = nodePath.resolve(process.env.HOME || '/root', tc.folder || 'workspace')
+        const repo    = tc.repo
+        const branch  = tc.branch || 'main'
+        const message = tc.message || 'feat: initial commit via Bera Agent'
+
+        if (!repo) return `❌ repo is required: e.g. "username/my-app"`
+        if (!nodeFsS.existsSync(folder)) return `❌ Folder not found: ${folder}\n\nScaffold first: {"tool":"scaffold","type":"express","name":"my-app"}`
+
+        try {
+            const run = (cmd) => execSync(cmd, { cwd: folder, encoding: 'utf8', timeout: 60000, env: { ...process.env, GIT_ASKPASS: 'echo', GIT_TERMINAL_PROMPT: '0' } }).trim()
+
+            const gitUrl = `https://${token}@github.com/${repo}.git`
+
+            const isGitRepo = nodeFsS.existsSync(nodePath.join(folder, '.git'))
+            if (!isGitRepo) run('git init')
+
+            try { run('git remote remove origin') } catch {}
+            run(`git remote add origin ${gitUrl}`)
+            run('git add -A')
+            try { run(`git commit -m "${message.replace(/"/g, '\\"')}"`) } catch {}
+            try { run(`git branch -M ${branch}`) } catch {}
+            run(`git push -u origin ${branch} --force`)
+
+            return `✅ *Pushed to GitHub!*\n\n📁 *Repo:* https://github.com/${repo}\n🌿 *Branch:* ${branch}\n💬 *Commit:* ${message}\n\nView: https://github.com/${repo}`
+        } catch (e) {
+            return `❌ Git push failed: ${e.message.slice(0, 500)}\n\nCheck: repo name correct? GitHub token has write access?`
+        }
     }
 
     return `❓ unknown tool: *${t}*\nAvailable tools listed in help. Ask "what tools do you have?" for the full list.`
