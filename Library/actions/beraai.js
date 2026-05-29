@@ -13,6 +13,34 @@ const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 const XWOLF = 'https://apis.xwolf.space'
 
+// ── Groq AI (primary — ultra-fast, < 1 second responses) ─────────────────────
+const GROQ_API_KEY = process.env.GROQ_API_KEY
+const GROQ_MODELS_LIST = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
+
+const callGroqAI = async (messages, timeoutMs) => {
+    for (const model of GROQ_MODELS_LIST) {
+        try {
+            const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+                model,
+                messages,
+                max_tokens: 1024,
+                temperature: 0.7
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${GROQ_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: timeoutMs || 10000
+            })
+            const text = res.data?.choices?.[0]?.message?.content
+            if (text && String(text).trim().length > 2) return String(text).trim()
+        } catch (e) {
+            if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 500))
+        }
+    }
+    return null
+}
+
 // ── Memory store (per-chat, persists in process memory) ──────────────────────
 const MEMORY = {}
 const remember = (chat, key, val) => {
@@ -252,12 +280,15 @@ const localFallback = (userText) => {
 
 // ── One attempt through ALL providers ────────────────────────────────────────
 const _tryAllProviders = async (messages, lastUser, historyMsgs, systemContent, timeoutMs) => {
-    // Try Gifted first — gemini + gpt4o endpoints confirmed working
+    // Groq first — ultra-fast primary
+    const groq = await callGroqAI(messages, Math.min(timeoutMs, 10000))
+    if (groq) return groq
+    // Gifted fallback
     if (lastUser) {
         const gt = await callGiftedTech(lastUser, historyMsgs, Math.min(timeoutMs, 15000), systemContent)
         if (gt) return gt
     }
-    // Xwolf as second option
+    // Xwolf as third option
     if (lastUser) {
         const xw = await callXwolf(lastUser, Math.min(timeoutMs, 10000), systemContent)
         if (xw) return xw
@@ -276,16 +307,11 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
     const t = timeoutMs || 30000
 
     if (agentMode) {
-        // Agent mode: Pollinations supports the full messages array with system role
-        // and can produce structured JSON tool call output correctly.
-        // Gifted/Xwolf use GET params that strip the system prompt and turn the AI
-        // into a plain chat assistant that refuses to use tools.
-        for (let attempt = 0; attempt < 3; attempt++) {
-            if (attempt > 0) await new Promise(r => setTimeout(r, 2500 * attempt))
-            const poll = await callPollinations(messages, Math.min(t, 28000))
-            if (poll) return poll
-        }
-        // All Pollinations models failed — last resort fallback (AI may not tool-call here)
+        // Agent mode: Groq supports full messages array with system prompt
+        // and produces structured JSON tool call output correctly.
+        const groq = await callGroqAI(messages, Math.min(t, 10000))
+        if (groq) return groq
+        // Fallback to Gifted/Xwolf
         const gt = await callGiftedTech(lastUser, historyMsgs, Math.min(t, 15000), systemContent)
         if (gt) return gt
         const xw = await callXwolf(lastUser, Math.min(t, 10000), systemContent)
@@ -293,17 +319,13 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
         return null
     }
 
-    // Normal chat mode — existing Gifted-first behaviour
+    // Normal chat mode — Groq first, then fallbacks
     const r1 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
     if (r1) return r1
 
-    await new Promise(r => setTimeout(r, 2000))
+    await new Promise(r => setTimeout(r, 1000))
     const r2 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
     if (r2) return r2
-
-    await new Promise(r => setTimeout(r, 4000))
-    const r3 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
-    if (r3) return r3
 
     return null  // Let caller decide — avoids fallback string masquerading as a valid AI reply
 }
