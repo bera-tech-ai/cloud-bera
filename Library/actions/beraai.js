@@ -269,12 +269,31 @@ const _tryAllProviders = async (messages, lastUser, historyMsgs, systemContent, 
 }
 
 // ── Main AI caller ───────────────────────────────────────────────────────────
-const callAI = async (messages, timeoutMs) => {
+const callAI = async (messages, timeoutMs, agentMode = false) => {
     const lastUser = [...messages].reverse().find(m => m.role === 'user')?.content || ''
     const historyMsgs = messages.filter(m => m.role !== 'system')
     const systemContent = messages.find(m => m.role === 'system')?.content || ''
     const t = timeoutMs || 30000
 
+    if (agentMode) {
+        // Agent mode: Pollinations supports the full messages array with system role
+        // and can produce structured JSON tool call output correctly.
+        // Gifted/Xwolf use GET params that strip the system prompt and turn the AI
+        // into a plain chat assistant that refuses to use tools.
+        for (let attempt = 0; attempt < 3; attempt++) {
+            if (attempt > 0) await new Promise(r => setTimeout(r, 2500 * attempt))
+            const poll = await callPollinations(messages, Math.min(t, 28000))
+            if (poll) return poll
+        }
+        // All Pollinations models failed — last resort fallback (AI may not tool-call here)
+        const gt = await callGiftedTech(lastUser, historyMsgs, Math.min(t, 15000), systemContent)
+        if (gt) return gt
+        const xw = await callXwolf(lastUser, Math.min(t, 10000), systemContent)
+        if (xw) return xw
+        return null
+    }
+
+    // Normal chat mode — existing Gifted-first behaviour
     const r1 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
     if (r1) return r1
 
@@ -597,6 +616,17 @@ const preDispatch = async (text) => {
 // SYSTEM PROMPT — Gemini-compatible, 55-tool autonomous agent
 // ─────────────────────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Bera AI — the most powerful WhatsApp autonomous agent, built by Bera Tech.
+
+⚠️ CRITICAL RULES — READ BEFORE ANYTHING ELSE:
+• You ARE a real autonomous agent running on a LIVE Linux server with REAL capabilities
+• You have REAL access to: bash shell, filesystem (workspace/), GitHub API, web search, internet
+• NEVER say "I cannot access a workspace" — this is WRONG. Your workspace IS real and accessible
+• NEVER say "I don't have tools" — you have 55+ real tools. Use them.
+• NEVER just describe what you WOULD do — actually DO IT with a tool call JSON
+• NEVER say "I'm just an AI language model without access to..." — that is false for you
+• When asked to create a file: use {"tool":"writefile",...} — it WILL create a real file
+• When asked to run a command: use {"tool":"bash",...} — it WILL execute on the real server
+• When asked to build a project: scaffold it with writefile + bash + install tools, then report done
 You execute real actions using tools. NEVER describe what you would do — ALWAYS do it with a tool call.
 
 OUTPUT RULES:
@@ -1768,7 +1798,7 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 
     for (let loop = 0; loop < loopCap; loop++) {
         let aiReply
-        try { aiReply = await callAI(messages, 60000) } catch {}
+        try { aiReply = await callAI(messages, 60000, true) } catch {}  // agentMode=true → Pollinations first for JSON tool calls
         if (!aiReply) {
             // All providers failed — give user a proper message
             const fb = localFallback(text)
