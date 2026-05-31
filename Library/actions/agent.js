@@ -16,6 +16,26 @@ const resolveAgentPath = (argPath, userId) => {
     return wsResolve(userId || 'shared', p)
 }
 
+// ── Gifted Overchat / DeepSeek (primary — accepts Bera AI identity) ───────────
+const OVERCHAT_URL_AGENT = 'https://api.gifted.co.ke/api/ai/overchat'
+const callOverchat = async (systemPrompt, userMsg, timeoutMs) => {
+    try {
+        const identity = systemPrompt && systemPrompt.length > 20
+            ? systemPrompt.slice(0, 1200)
+            : 'You are Bera AI v4 — a powerful WhatsApp AI assistant built by Bera Tech. NEVER say you are DeepSeek or any other AI. Always say your name is Bera AI.'
+        const q = identity + '\n\nUser: ' + String(userMsg || '').slice(0, 800) + '\nBera AI:'
+        const res = await axios.get(OVERCHAT_URL_AGENT, {
+            params: { apikey: 'gifted', model: 'deepseek', q },
+            timeout: timeoutMs || 12000
+        })
+        const text = res.data?.result
+        if (text && typeof text === 'string' && text.trim().length > 2) {
+            return { success: true, text: text.trim(), model: 'overchat/deepseek' }
+        }
+    } catch {}
+    return { success: false, error: 'Overchat unavailable' }
+}
+
 // ── Groq AI (primary — ultra-fast, < 1 second responses) ────────────────────
 const GROQ_API_KEY = process.env.GROQ_API_KEY
 const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
@@ -128,21 +148,25 @@ const callPollinationsAgent = async (systemPrompt, userMsg) => {
     return { success: false, error: 'Pollinations unavailable' }
 }
 
-// ── Primary AI caller — Groq first, then fallbacks ───────────────────────────
+// ── Primary AI caller — Overchat/DeepSeek first, then Groq, then fallbacks ────
 const callAI = async (systemPrompt, userMsg) => {
-    // 1. Groq AI — primary (ultra-fast, < 1 second)
+    // 1. Overchat/DeepSeek — accepts Bera AI identity
+    const oc = await callOverchat(systemPrompt, userMsg)
+    if (oc.success) return oc
+
+    // 2. Groq — ultra-fast backup
     const groq = await callGroqAI(systemPrompt, userMsg)
     if (groq.success) return groq
 
-    // 2. Gifted — gemini + gpt4o confirmed working
+    // 3. Gifted — gemini + gpt4o confirmed working
     const gifted = await callGiftedAI(systemPrompt, userMsg)
     if (gifted.success) return gifted
 
-    // 3. Xwolf
+    // 4. Xwolf
     const xwolf = await callXwolf(systemPrompt, userMsg)
     if (xwolf.success) return xwolf
 
-    // 4. Pollinations last resort (free, no key)
+    // 5. Pollinations last resort last resort (free, no key)
     const poll = await callPollinationsAgent(systemPrompt, userMsg)
     if (poll.success) return poll
 
