@@ -23,29 +23,6 @@ const callOverchat = async (userText, systemPrompt, timeoutMs) => {
     return null
 }
 
-// ── Groq AI (backup — ultra-fast) ────────────────────────────────────────────
-const GROQ_API_KEY = process.env.GROQ_API_KEY
-const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
-const callGroqAI = async (messages, timeoutMs) => {
-    if (!GROQ_API_KEY) return null
-    for (const model of GROQ_MODELS) {
-        try {
-            const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-                model, messages, max_tokens: 1024, temperature: 0.7
-            }, {
-                headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-                timeout: timeoutMs || 10000
-            })
-            const text = res.data?.choices?.[0]?.message?.content
-            if (text && String(text).trim().length > 2) return String(text).trim()
-        } catch (e) {
-            if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 500))
-        }
-    }
-    return null
-}
-
-
 // ── Groq AI (primary — ultra-fast, < 1 second responses) ─────────────────────
 const GROQ_API_KEY = process.env.GROQ_API_KEY
 const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
