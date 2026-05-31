@@ -341,8 +341,18 @@ const cleanAnswer = (raw) => {
     clean = clean.replace(/\b(?:made|built|created|trained)\s+by\s+OpenAI[,!.]?/gi, 'built by Bera Tech.')
     clean = clean.replace(/\bOpenAI\b/g, 'Bera Tech')
 
+    // DeepSeek identity fixes
+    clean = clean.replace(/I'?m DeepSeek[,!.]?/gi, "I'm Bera AI, built by Bera Tech.")
+    clean = clean.replace(/(?:Hi[,!]?|Hello[,!]?|Hey[,!]?)[,\s]+I'?m DeepSeek[,!.]/gi, "Hi! I'm Bera AI, built by Bera Tech.")
+    clean = clean.replace(/This is DeepSeek[,!.]?/gi, "This is Bera AI.")
+    clean = clean.replace(/DeepSeek here[,!.]?/gi, "Bera AI here.")
+    clean = clean.replace(/(?:made|built|created|trained|developed)\s+by\s+DeepSeek(?:\s+company)?[,!.]?/gi, 'built by Bera Tech.')
+    clean = clean.replace(/\bDeepSeek(?:-V\d)?\b/gi, 'Bera AI')
+    // Also fix Groq identity leak
+    clean = clean.replace(/(?:made|built|created|trained)\s+by\s+Groq[,!.]?/gi, 'built by Bera Tech.')
+
     // Strip AI name prefixes
-    clean = clean.replace(/^(Nick|ChatGPT|GPT|AI|Keith AI|Gemini|Google\s+Gemini|Claude|Bera AI|Assistant):\s*/i, '').trim()
+    clean = clean.replace(/^(Nick|ChatGPT|GPT|AI|Keith AI|Gemini|Google\s+Gemini|Claude|DeepSeek|Bera AI|Assistant):\s*/i, '').trim()
     clean = clean.replace(/\bI'?m Nick\b/gi, "I'm Bera AI")
     clean = clean.replace(/\bNick AI\b/gi, 'Bera AI')
     clean = clean.replace(/\bKeith AI\b/gi, 'Bera AI')
