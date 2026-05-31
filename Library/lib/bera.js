@@ -5,6 +5,47 @@ const MAX_HISTORY = config.maxHistory || 20
 const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
+// ── Gifted Overchat / DeepSeek (primary — accepts Bera AI identity) ───────────
+const OVERCHAT_URL = 'https://api.gifted.co.ke/api/ai/overchat'
+const callOverchat = async (userText, systemPrompt, timeoutMs) => {
+    try {
+        const identity = systemPrompt && systemPrompt.length > 20
+            ? systemPrompt.slice(0, 1200)
+            : 'You are Bera AI v4 — a powerful WhatsApp AI assistant built by Bera Tech. NEVER say you are DeepSeek, Gemini, GPT, Claude, or any other AI. Always say your name is Bera AI, built by Bera Tech. Be direct, helpful, and powerful.'
+        const q = identity + '\n\nUser: ' + String(userText || '').slice(0, 800) + '\nBera AI:'
+        const res = await axios.get(OVERCHAT_URL, {
+            params: { apikey: 'gifted', model: 'deepseek', q },
+            timeout: timeoutMs || 12000
+        })
+        const text = res.data?.result
+        if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
+    } catch {}
+    return null
+}
+
+// ── Groq AI (backup — ultra-fast) ────────────────────────────────────────────
+const GROQ_API_KEY = process.env.GROQ_API_KEY
+const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
+const callGroqAI = async (messages, timeoutMs) => {
+    if (!GROQ_API_KEY) return null
+    for (const model of GROQ_MODELS) {
+        try {
+            const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+                model, messages, max_tokens: 1024, temperature: 0.7
+            }, {
+                headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+                timeout: timeoutMs || 10000
+            })
+            const text = res.data?.choices?.[0]?.message?.content
+            if (text && String(text).trim().length > 2) return String(text).trim()
+        } catch (e) {
+            if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 500))
+        }
+    }
+    return null
+}
+
+
 // ── Groq AI (primary — ultra-fast, < 1 second responses) ─────────────────────
 const GROQ_API_KEY = process.env.GROQ_API_KEY
 const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
@@ -405,7 +446,15 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
         throw new Error('Image analysis is temporarily unavailable. Try again later.')
     }
 
-    // 1. Groq AI (primary — ultra-fast)
+    // 1. Gifted Overchat / DeepSeek (primary — accepts Bera AI identity)
+    try {
+        const overchatAnswer = await callOverchat(userText, SHORT_PERSONA, 12000)
+        if (overchatAnswer && overchatAnswer.length > 1) return cleanAnswer(overchatAnswer)
+    } catch (e) {
+        console.error('[BERAAI] Overchat failed:', e.message)
+    }
+
+    // 2. Groq AI (backup — ultra-fast)
     try {
         const messages = [{ role: 'system', content: SHORT_PERSONA }]
         const recent = (history || []).slice(-6)
@@ -419,7 +468,7 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
         console.error('[BERAAI] Groq failed:', e.message)
     }
 
-    // 2. Gifted API fallback — GET with short query
+    // 3. Gifted API fallback — GET with short query
     const query = buildQuery(userText, history)
     try {
         const answer = await tryEndpoints(
@@ -432,7 +481,7 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
         console.error('[BERAAI] Gifted endpoints failed:', e.message)
     }
 
-    // 3. Ultra-short fallback
+    // 4. Ultra-short fallback
     const shortQuery = (userText || '').slice(0, 400)
     const answer2 = await tryEndpoints(
         AI_ENDPOINTS.slice(0, 3),
