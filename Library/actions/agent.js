@@ -18,6 +18,10 @@ const resolveAgentPath = (argPath, userId) => {
 
 // ── Gifted Overchat / DeepSeek (primary — accepts Bera AI identity) ───────────
 const OVERCHAT_URL_AGENT = 'https://api.gifted.co.ke/api/ai/overchat'
+const {
+    gtCrypto, gtStock, gtCurrency, gtMovie, gtAnime, gtIpInfo, gtGithub,
+    gtTranslate, gtNews, gtWeather, gtLyrics, gtWiki, gtBible
+} = require('./giftedapi')
 const callOverchat = async (systemPrompt, userMsg, timeoutMs) => {
     try {
         const identity = systemPrompt && systemPrompt.length > 20
@@ -625,6 +629,19 @@ AI:
 - image_gen      → args: { prompt }
 - music          → args: { query }
 
+DATA & LIVE INFO:
+- crypto_price   → args: { coins: ["bitcoin","ethereum","solana"] }  ← live crypto prices
+- stock_price    → args: { symbol: "AAPL" }  ← live stock price (Yahoo Finance)
+- currency_convert → args: { amount, from: "USD", to: "KES" }  ← FX conversion
+- weather_gt     → args: { location: "Nairobi" }  ← current weather + 3-day forecast
+- news_fetch     → args: { topic: "Kenya" }  ← latest news headlines
+- movie_info     → args: { title: "Inception" }  ← IMDB movie info
+- anime_search   → args: { query: "Naruto" }  ← MyAnimeList anime search
+- translate_text → args: { text, to: "sw" }  ← translate (sw=Swahili, fr, es, de, zh, ar...)
+- lyrics_fetch   → args: { query: "Song by Artist" }  ← song lyrics
+- wiki_search    → args: { topic: "Nairobi" }  ← Wikipedia summary
+- bible_verse    → args: { verse: "John 3:16" }  ← Bible verse lookup
+
 APP BUILDER:
 - build_webapp   → args: { name, type("express"|"express-api"|"react"|"vue"|"nextjs"|"flask"|"fastapi"|"static"|"discord"|"telegram"), description, port }
 - generate_api   → args: { description, port }
@@ -986,6 +1003,67 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
             case 'ping':      { const r = await pingHost(args.host); return { success: r.success, output: r.output, desc } }
             case 'whois':     { const r = await whoisLookup(args.domain); return { success: r.success, output: r.output, desc } }
             case 'ip_lookup': { const r = await ipLookup(args.ip); return { success: r.success, output: r.output, desc } }
+
+            // ── GIFTED DATA TOOLS ─────────────────────────────────────────
+            case 'crypto_price': {
+                const coins = args.coins || ['bitcoin', 'ethereum', 'solana']
+                const data = await gtCrypto(coins)
+                if (!data) return { success: false, output: 'Could not fetch crypto prices', desc }
+                const lines = data.slice(0, 6).map(c => `${c.name} (${c.symbol?.toUpperCase()}): $${c.current_price?.toLocaleString()} | ${c.price_change_percentage_24h?.toFixed(2)}% 24h`)
+                return { success: true, output: lines.join('\n'), desc }
+            }
+            case 'stock_price': {
+                const d = await gtStock(args.symbol)
+                if (!d) return { success: false, output: `No data for ${args.symbol}`, desc }
+                return { success: true, output: `${d.name} (${d.symbol}): ${d.currency} ${d.price?.toFixed(2)} | ${d.change}% change | Exchange: ${d.exchange}`, desc }
+            }
+            case 'currency_convert': {
+                const r = await gtCurrency(args.amount, args.from, args.to)
+                if (!r) return { success: false, output: 'Conversion failed', desc }
+                return { success: true, output: `${args.amount} ${args.from.toUpperCase()} = ${r.result} ${args.to.toUpperCase()} (rate: ${r.rate.toFixed(4)})`, desc }
+            }
+            case 'movie_info': {
+                const d = await gtMovie(args.title)
+                if (!d || d.Response === 'False') return { success: false, output: `Movie not found: ${args.title}`, desc }
+                return { success: true, output: `${d.Title} (${d.Year}) | ⭐ ${d.imdbRating}/10 | ${d.Genre} | ${d.Plot}`, desc }
+            }
+            case 'anime_search': {
+                const data = await gtAnime(args.query)
+                if (!data?.length) return { success: false, output: `No anime found: ${args.query}`, desc }
+                const top = data[0]
+                return { success: true, output: `${top.title} (${top.title_english || ''}) | Score: ${top.score} | Episodes: ${top.episodes} | ${top.synopsis?.slice(0, 200)}`, desc }
+            }
+            case 'translate_text': {
+                const result = await gtTranslate(args.text, args.to || 'sw', args.from || 'auto')
+                if (!result) return { success: false, output: 'Translation failed', desc }
+                return { success: true, output: `Translated to ${(args.to||'sw').toUpperCase()}: ${result}`, desc }
+            }
+            case 'weather_gt': {
+                const w = await gtWeather(args.location)
+                if (!w) return { success: false, output: `No weather data for: ${args.location}`, desc }
+                return { success: true, output: `${w.city}, ${w.country}: ${w.temp}°C, Feels ${w.feels}°C, ${w.desc}, Humidity ${w.humidity}%, Wind ${w.wind}km/h`, desc }
+            }
+            case 'news_fetch': {
+                const articles = await gtNews(args.topic || 'Kenya')
+                if (!articles?.length) return { success: false, output: 'No news found', desc }
+                const lines = articles.slice(0, 5).map((a, i) => `${i+1}. ${a.title} — ${a.url || ''}`)
+                return { success: true, output: lines.join('\n'), desc }
+            }
+            case 'lyrics_fetch': {
+                const d = await gtLyrics(args.query)
+                if (!d?.lyrics) return { success: false, output: `No lyrics for: ${args.query}`, desc }
+                return { success: true, output: `${d.title} — ${d.artist}\n\n${d.lyrics.slice(0, 1500)}`, desc }
+            }
+            case 'wiki_search': {
+                const d = await gtWiki(args.topic)
+                if (!d) return { success: false, output: `No Wikipedia article for: ${args.topic}`, desc }
+                return { success: true, output: `${d.title}\n\n${d.extract}\n\n${d.url}`, desc }
+            }
+            case 'bible_verse': {
+                const d = await gtBible(args.verse)
+                if (!d) return { success: false, output: `Verse not found: ${args.verse}`, desc }
+                return { success: true, output: `${d.verse || args.verse}: ${d.data || d.text || JSON.stringify(d)}`, desc }
+            }
 
             // ── Dev tools ───────────────────────────────────────────────────
             case 'env_manage':   { const r = await envManager(args.action, args.key, args.value); return { success: r.success, output: r.output || r.error, desc } }
