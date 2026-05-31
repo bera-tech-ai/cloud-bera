@@ -669,6 +669,35 @@ DOCS & TESTING:
 - generate_docs  → args: { code, language, style("markdown"|"jsdoc"|"html") }
 - generate_tests → args: { code, language, framework("jest"|"mocha"|"pytest") }
 
+
+SUPERTOOLS 2 — REPLIT-LEVEL AUTONOMOUS:
+- smart_extract      → args: { url, hint("product"|"job"|"article"|"price") }  ← intelligently extract structured data from any page
+- data_pipeline      → args: { sources: ["url1","url2"], hint, format("json"|"csv"|"tsv"), outputPath }  ← scrape → clean → store → export
+- scaffold_project   → args: { name, stack("express-rest"|"flask"|"next"|"react"), description, port }  ← generate full multi-file project + install + start
+- auto_install_deps  → args: { path, lang("node"|"python") }  ← detect and install missing packages from code or directory
+- format_convert     → args: { input, from("json"|"csv"|"yaml"|"tsv"), to("json"|"csv"|"yaml"|"xml"|"table"), saveTo }  ← convert between data formats
+- zip_tools          → args: { action("create"|"extract"|"list"|"tar"|"untar"|"tarlist"), target, dest }  ← archive management
+- multi_shell        → args: { commands: [{ cmd, desc, required, timeout }] }  ← ordered bash pipeline with dependency checking
+- nl_to_sql          → args: { query, schema, dialect("sqlite"|"mysql"|"postgres") }  ← natural language → SQL query
+- self_test_fix      → args: { projectDir, port, endpoints: ["/health","/api/items"], maxRetries }  ← build → test → AI fix → repeat
+- mock_server        → args: { spec, port }  ← describe API in plain English → running mock server with sample data
+- github_code_search → args: { query, lang("javascript"|"python"|"etc"), limit }  ← search GitHub for real code examples
+- ai_code_fix        → args: { file, instruction }  ← read a file, AI improves/fixes it, writes back
+- project_memory     → args: { action("list"|"save"|"get"|"delete"), name, info }  ← remember built projects across sessions
+- deep_scrape        → args: { url, question }  ← fetch page, strip HTML, AI analyzes and answers your question about it
+
+AUTONOMOUS TASK PATTERNS:
+- "build me a X app" → scaffold_project + self_test_fix + project_memory(save)
+- "scrape X and save to CSV" → data_pipeline with format:"csv"
+- "extract all products/prices from URL" → smart_extract with hint:"product"
+- "convert this JSON to CSV" → format_convert
+- "create a mock API for X" → mock_server
+- "fix errors in my code" → ai_code_fix
+- "install missing packages" → auto_install_deps
+- "what does this page say about X?" → deep_scrape
+- "find code examples for X" → github_code_search
+- "run these commands in order" → multi_shell
+
 RULES:
 - "create folder/directory" or "mkdir" → use file_mkdir (local) or puter_mkdir (cloud)
 - "create file" or "write file" → use file_write (local) or puter_write (cloud)
@@ -1197,6 +1226,164 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 const st = require('./supertools')
                 const r = await st.generateTests(args.code || '', args.language || 'javascript', args.framework || 'jest')
                 return { success: r.success, output: (r.tests || r.error || '').slice(0, 3000), desc }
+            }
+
+
+            // ══ SUPERTOOLS 2 — Replit-level autonomous capabilities ════════
+
+            case 'smart_extract': {
+                const st2 = require('./supertools2')
+                const r = await st2.smartExtract(args.url, args.hint || '')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                const itemPreview = (r.items || []).slice(0, 8).map((item, i) =>
+                    `${i+1}. ${Object.entries(item).map(([k,v]) => `${k}: ${v}`).join(' | ')}`
+                ).join('\n')
+                return {
+                    success: true,
+                    output: `🔍 *Smart Extract: ${r.url}*\nType: ${r.type} | Items: ${r.items?.length || 0}\n${r.summary || ''}\n\n${itemPreview}\n\n${r.raw?.emails?.length ? '📧 Emails: ' + r.raw.emails.slice(0,5).join(', ') : ''}\n${r.raw?.phones?.length ? '📞 Phones: ' + r.raw.phones.slice(0,5).join(', ') : ''}`.trim(),
+                    rawData: r, desc
+                }
+            }
+            case 'data_pipeline': {
+                const st2 = require('./supertools2')
+                const sources = Array.isArray(args.sources) ? args.sources : String(args.sources||'').split(/[,\s]+/).filter(u=>u.startsWith('http'))
+                const r = await st2.dataPipeline({
+                    sources, hint: args.hint || '', dbPath: args.dbPath || null,
+                    exportFormat: args.format || 'json', outputPath: args.outputPath || null
+                })
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                const prev = (r.preview || []).map(i => JSON.stringify(i).slice(0, 80)).join('\n')
+                return {
+                    success: true,
+                    output: `🔄 *Data Pipeline Complete*\n📡 Sources: ${r.sources} | ✅ Records: ${r.records} | ⚠️ Errors: ${r.errors}\n💾 DB: ${r.db}\n📁 Output: ${r.output} (${r.fileSize})\n🏷️ Columns: ${(r.columns||[]).join(', ')}\n\nPreview:\n${prev}`,
+                    desc
+                }
+            }
+            case 'scaffold_project': {
+                const st2 = require('./supertools2')
+                const r = await st2.scaffoldProject(args.name, args.stack || 'express-rest', args.description || '', args.port || null)
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                // Save to project memory
+                try {
+                    const { projectMemory } = require('./supertools2')
+                    projectMemory.save(r.name, { stack: r.stack, port: r.port, dir: r.dir })
+                } catch {}
+                return {
+                    success: true,
+                    output: `🏗️ *Project Scaffolded!*\n\n📁 ${r.dir}\n🔌 Port: ${r.port} | Stack: ${r.stack}\n✅ ${r.stepsOk}/${r.stepsTotal} steps OK\n📄 Main: ${r.mainFile}\n\n${r.summary}`,
+                    desc
+                }
+            }
+            case 'auto_install_deps': {
+                const st2 = require('./supertools2')
+                const r = await st2.autoInstallDeps(args.path || args.code || '', args.lang || 'node')
+                return {
+                    success: r.success,
+                    output: r.installed?.length
+                        ? `📦 *Installed ${r.installed.length} package(s):*\n${r.installed.join(', ')}\n\n${r.output || ''}`
+                        : r.message || 'No packages needed',
+                    desc
+                }
+            }
+            case 'format_convert': {
+                const st2 = require('./supertools2')
+                const r = st2.formatConvert(args.input || '', args.from || 'json', args.to || 'csv')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                const preview = (r.output || '').slice(0, 1500)
+                if (args.saveTo) {
+                    try { require('fs').writeFileSync(args.saveTo, r.output); } catch {}
+                    return { success: true, output: `✅ Converted ${args.from}→${args.to} saved to ${args.saveTo}\n\nPreview:\n${preview}`, desc }
+                }
+                return { success: true, output: `✅ *${args.from.toUpperCase()} → ${args.to.toUpperCase()}*\n\n${preview}`, desc }
+            }
+            case 'zip_tools': {
+                const st2 = require('./supertools2')
+                const r = await st2.zipTools(args.action || 'list', args.target, args.dest || null)
+                return { success: r.success, output: `🗜️ *${args.action}*\n${r.output}`, desc }
+            }
+            case 'multi_shell': {
+                const st2 = require('./supertools2')
+                const cmds = Array.isArray(args.commands) ? args.commands
+                    : String(args.commands||'').split('\n').map(c=>({cmd:c.trim(),desc:c.trim(),required:true})).filter(c=>c.cmd)
+                const r = await st2.multiShell(cmds)
+                return {
+                    success: r.success,
+                    output: `🔧 *Multi-Shell: ${r.ok}✅ ${r.failed}❌ ${r.skipped}⏭️*\n\n${r.summary}`,
+                    desc
+                }
+            }
+            case 'nl_to_sql': {
+                const st2 = require('./supertools2')
+                const r = await st2.nlToSql(args.query || args.nl || '', args.schema || '', args.dialect || 'sqlite')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return {
+                    success: true,
+                    output: `🗃️ *NL → SQL (${r.dialect})*\n${r.valid ? '✅ Valid query' : '⚠️ Check syntax'}\n\n\`\`\`sql\n${r.sql}\n\`\`\``,
+                    desc
+                }
+            }
+            case 'self_test_fix': {
+                const st2 = require('./supertools2')
+                const endpoints = Array.isArray(args.endpoints) ? args.endpoints : [args.endpoint || '/health']
+                const r = await st2.selfTestFix(args.projectDir || args.dir, args.port, endpoints, args.maxRetries || 4)
+                return {
+                    success: r.success,
+                    output: `🔄 *Self-Test & Fix*\nAttempts: ${r.attempts} | Port: ${r.port}\n${r.success ? '✅ All tests passing!' : '❌ Could not fix: ' + (r.lastError||'')}\n\n${r.log}`,
+                    desc
+                }
+            }
+            case 'mock_server': {
+                const st2 = require('./supertools2')
+                const r = await st2.mockServer(args.spec || args.description || '', args.port || null)
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                const eps = (r.endpoints||[]).join('\n  ')
+                return {
+                    success: true,
+                    output: `🎭 *Mock API Server*\n📡 Port: ${r.port} | ${r.healthy ? '✅ Healthy' : '⚠️ Check logs'}\n📁 ${r.dir}\n\nEndpoints:\n  ${eps}\n\nCode preview:\n\`\`\`js\n${(r.codePreview||'').slice(0,400)}\n\`\`\``,
+                    desc
+                }
+            }
+            case 'github_code_search': {
+                const st2 = require('./supertools2')
+                const r = await st2.githubCodeSearch(args.query || '', args.lang || '', args.limit || 5)
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                const lines = (r.results || []).map((res, i) =>
+                    `${i+1}. 📁 ${res.repo} — ${res.file}\n   🔗 ${res.url}\n   ${res.snippet ? '\`\`\`\n' + res.snippet.slice(0,200) + '\n\`\`\`' : ''}`
+                ).join('\n\n')
+                return { success: true, output: `🔍 *GitHub Code Search* (${r.total?.toLocaleString() || '?'} results)\n\n${lines}`, desc }
+            }
+            case 'ai_code_fix': {
+                const st2 = require('./supertools2')
+                const r = await st2.aiCodeFix(args.file, args.instruction || args.error || '')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return { success: true, output: `✏️ *AI Code Fix*\n📄 ${r.file}\n📏 ${r.lines} lines\n\nPreview:\n${r.preview}`, desc }
+            }
+            case 'project_memory': {
+                const st2 = require('./supertools2')
+                const { projectMemory } = st2
+                const action = args.action || 'list'
+                if (action === 'save') {
+                    const r = projectMemory.save(args.name, args.info || {})
+                    return { success: true, output: `💾 Saved project: ${r.saved}`, desc }
+                } else if (action === 'get') {
+                    const p = projectMemory.get(args.name)
+                    return { success: true, output: p ? JSON.stringify(p, null, 2) : 'Project not found', desc }
+                } else if (action === 'delete') {
+                    projectMemory.delete(args.name)
+                    return { success: true, output: `🗑️ Deleted: ${args.name}`, desc }
+                } else {
+                    return { success: true, output: `📋 *Saved Projects*\n${projectMemory.list()}`, desc }
+                }
+            }
+            case 'deep_scrape': {
+                const st2 = require('./supertools2')
+                const r = await st2.deepScrapeAnalyze(args.url, args.question || 'Summarize the key information on this page')
+                if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
+                return {
+                    success: true,
+                    output: `🧠 *Deep Scrape Analysis*\n🌐 ${r.url}\n❓ ${r.question}\n📏 Content: ${r.contentLength} chars\n\n${r.answer}`,
+                    desc
+                }
             }
 
             default: return { success: false, output: `Unknown action: ${action}`, desc }
