@@ -31,35 +31,12 @@ const callOverchat = async (userText, systemPrompt, timeoutMs) => {
     return null
 }
 
-// ── Groq AI (backup — ultra-fast) ────────────────────────────────────────────
+// ── Groq AI (ultra-fast, < 1 second responses) ────────────────────────────────
 const GROQ_API_KEY = process.env.GROQ_API_KEY
-const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
+const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
+
 const callGroqAI = async (messages, timeoutMs) => {
-    if (!GROQ_API_KEY) return null
     for (const model of GROQ_MODELS) {
-        try {
-            const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-                model, messages, max_tokens: 1024, temperature: 0.7
-            }, {
-                headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-                timeout: timeoutMs || 10000
-            })
-            const text = res.data?.choices?.[0]?.message?.content
-            if (text && String(text).trim().length > 2) return String(text).trim()
-        } catch (e) {
-            if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 500))
-        }
-    }
-    return null
-}
-
-
-// ── Groq AI (primary — ultra-fast, < 1 second responses) ─────────────────────
-const GROQ_API_KEY = process.env.GROQ_API_KEY
-const GROQ_MODELS_LIST = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
-
-const callGroqAI = async (messages, timeoutMs) => {
-    for (const model of GROQ_MODELS_LIST) {
         try {
             const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
                 model,
@@ -158,7 +135,6 @@ const isPollinationsError = (text) => {
     const t = text.trim()
     if (t.startsWith('{') && t.includes('"error"')) return true
     if (t.startsWith('{') && t.includes('"status"') && t.includes('404')) return true
-    // Detect OpenAI-style assistant message objects with no usable plain text
     if (t.startsWith('{') && t.includes('"role"')) {
         try {
             const obj = JSON.parse(t)
@@ -177,17 +153,14 @@ const parseAiText = (raw) => {
     if (t.startsWith('{')) {
         try {
             const obj = JSON.parse(t)
-            // OpenAI choices array (Pollinations format)
             if (obj.choices && Array.isArray(obj.choices) && obj.choices[0]) {
                 const c = obj.choices[0]
                 const content = c.message?.content || c.text || c.delta?.content
                 if (content && typeof content === 'string' && content.length > 1) return content.trim()
             }
-            // Standard content field
             if (obj.content && typeof obj.content === 'string' && obj.content.length > 1) {
                 return obj.content.trim()
             }
-            // OpenAI-style with reasoning but no content — extract reasoning as response
             if (obj.role === 'assistant' && obj.reasoning && typeof obj.reasoning === 'string' && obj.reasoning.length > 10) {
                 const lines = obj.reasoning.split('\n').filter(l => l.trim().length > 0)
                 return lines.slice(-3).join(' ').trim().slice(0, 800)
@@ -236,7 +209,6 @@ const callGiftedTech = async (userText, historyMessages, timeoutMs, systemPrompt
         .map(m => (m.role === 'user' ? 'User' : 'Bera AI') + ': ' + String(m.content || '').slice(0, 200))
         .join('\n')
 
-    // Gifted uses a GET param — keep q under ~3000 chars so the user message always gets through
     const identity = systemPrompt && systemPrompt.length > 100
         ? systemPrompt.slice(0, 1500)
         : 'You are Bera AI, a smart WhatsApp assistant built by Bera Tech. Always say your name is Bera AI.'
@@ -376,7 +348,7 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
     const r2 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
     if (r2) return r2
 
-    return null  // Let caller decide — avoids fallback string masquerading as a valid AI reply
+    return null
 }
 
 // ── Conversation history ──────────────────────────────────────────────────────
@@ -631,7 +603,6 @@ const preDispatch = async (text) => {
     const t = text.trim()
     const lc = t.toLowerCase()
 
-    // Ping command
     const PING_RX = /^ping\s+([\w.\-]+)$/i
     const mPing = t.match(PING_RX)
     if (mPing) {
@@ -640,7 +611,6 @@ const preDispatch = async (text) => {
         return { success: true, reply: `🏓 *Ping ${host}*\n\`\`\`\n${r.output.slice(0, 500)}\n\`\`\`` }
     }
 
-    // Shell commands
     const RUN_RX = /^(?:run|execute|exec|bash|shell|terminal)\s+(.+)/i
     const mRun = t.match(RUN_RX)
     if (mRun) {
@@ -651,7 +621,6 @@ const preDispatch = async (text) => {
         return { success: true, reply: `\`\`\`\n${(r.output || 'done').slice(0, 1500)}\n\`\`\`` }
     }
 
-    // PM2 shortcuts
     const PM2_RX = /^pm2\s+(.+)/i
     const mPm2 = t.match(PM2_RX)
     if (mPm2) {
@@ -660,7 +629,6 @@ const preDispatch = async (text) => {
         return { success: true, reply: `\`\`\`\n${(r.output || 'done').slice(0, 1500)}\n\`\`\`` }
     }
 
-    // NPM install commands (with package)
     const NPM_RX = /^npm\s+(install|i|add|ci)\s+(.+)/i
     const mNpm = t.match(NPM_RX)
     if (mNpm) {
@@ -669,7 +637,6 @@ const preDispatch = async (text) => {
         return { success: true, reply: `\`\`\`\n${(r.output || 'done').slice(0, 1500)}\n\`\`\`` }
     }
     
-    // NPM install without package name (just npm install)
     const NPM_INSTALL_RX = /^npm\s+(install|i)$/i
     if (NPM_INSTALL_RX.test(t)) {
         const r = await runBash('npm install', 60000)
@@ -681,10 +648,6 @@ const preDispatch = async (text) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SYSTEM PROMPT — Full Agent Mode (46 tools)
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SYSTEM PROMPT — Gemini-compatible, 55-tool autonomous agent
 // ─────────────────────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Bera AI — the most powerful WhatsApp autonomous agent, built by Bera Tech.
 
@@ -941,16 +904,14 @@ User: "what 2+2?" → Plain text: "2 + 2 = 4"
 `
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PARSE TOOL CALLS — handles Gemini's habit of wrapping JSON in text
+// PARSE TOOL CALLS
 // ─────────────────────────────────────────────────────────────────────────────
 const parseToolCalls = (text) => {
     if (!text) return null
     const t = text.trim()
 
-    // Strip markdown code fences
     const stripped = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
 
-    // Try pure JSON array or object first
     for (const src of [stripped, t]) {
         if (src.startsWith('[')) {
             try { const p = JSON.parse(src); if (Array.isArray(p) && p.length && p[0]?.tool) return p } catch {}
@@ -960,7 +921,6 @@ const parseToolCalls = (text) => {
         }
     }
 
-    // Extract JSON embedded anywhere in text
     const matches = []
     const tryExtract = (src) => {
         for (let i = 0; i < src.length; i++) {
@@ -1011,7 +971,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         return (r.output || 'done (no output)').slice(0, 4000)
     }
 
-    // ── multi_bash — run steps in sequence ───────────────────────────────────
+    // ── multi_bash ───────────────────────────────────────────────────
     if (t === 'multi_bash') {
         const steps = Array.isArray(tc.steps) ? tc.steps : [tc.cmd || '']
         const results = []
@@ -1103,7 +1063,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         return r.output || `zipped to ${out}`
     }
 
-    // ── pastebin — paste.rs / ix.io fallback ─────────────────────────────────
+    // ── pastebin ─────────────────────────────────────────────────
     if (t === 'pastebin' || t === 'paste') {
         const content = tc.content || tc.code || tc.text || ''
         try {
@@ -1121,13 +1081,12 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         }
     }
 
-    // ── api / fetch_api — LIVE API FETCHING ───────────────────────────────────
+    // ── api / fetch_api ───────────────────────────────────────────────────
     if (t === 'api' || t === 'fetch_api' || t === 'fetch' || t === 'http') {
         const method = (tc.method || 'GET').toUpperCase()
         const url = tc.url || tc.endpoint
         if (!url) return 'ERROR: no URL provided'
         const headers = Object.assign({}, tc.headers || {})
-        // Auth shortcuts
         if (tc.bearer || tc.token) headers['Authorization'] = `Bearer ${tc.bearer || tc.token}`
         if (tc.apikey) headers['x-api-key'] = tc.apikey
         if (tc.basic) headers['Authorization'] = `Basic ${Buffer.from(tc.basic).toString('base64')}`
@@ -1144,11 +1103,10 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         } catch (e) { return `HTTP error: ${e.message}` }
     }
 
-    // ── read_page / scrape — like Replit agent ────────────────────────────────
+    // ── read_page / scrape ────────────────────────────────────────────────
     if (t === 'read_page' || t === 'scrape_page' || t === 'scrape') {
         const url = tc.url || ''
         if (!url) return 'ERROR: no URL'
-        // Try Jina AI reader first (excellent for JS-rendered pages)
         try {
             const r = await axios2.get(`https://r.jina.ai/${url}`, {
                 headers: {
@@ -1163,7 +1121,6 @@ const executeToolCall = async (tc, chatId, conn, m) => {
                 return `🌐 *${url}*\n\n${r.data.slice(0, 6000)}${r.data.length > 6000 ? '\n\n[...truncated]' : ''}`
             }
         } catch {}
-        // Fallback: direct fetch + smart HTML strip
         try {
             const r = await axios2.get(url, {
                 headers: {
@@ -1174,21 +1131,18 @@ const executeToolCall = async (tc, chatId, conn, m) => {
                 timeout: 20000
             })
             let html = String(r.data || '')
-            // Strip non-content
             html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
                 .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
                 .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
                 .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
                 .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
                 .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
-                // Preserve structure
                 .replace(/<h[1-6][^>]*>/gi, '\n## ')
                 .replace(/<\/h[1-6]>/gi, '\n')
                 .replace(/<p[^>]*>/gi, '\n')
                 .replace(/<li[^>]*>/gi, '\n• ')
                 .replace(/<br\s*\/?>/gi, '\n')
                 .replace(/<[^>]+>/g, ' ')
-                // Decode entities
                 .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
                 .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
                 .replace(/\s{3,}/g, '\n\n').trim()
@@ -1200,7 +1154,6 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     if (t === 'screenshot') {
         const sUrl = tc.url || ''
         try {
-            // Try GiftedTech screenshot
             const r = await axios2.get(`https://api.giftedtech.web.id/api/search/screenshot`, {
                 params: { url: sUrl, apikey: 'gifted' }, timeout: 30000, validateStatus: () => true
             })
@@ -1210,7 +1163,6 @@ const executeToolCall = async (tc, chatId, conn, m) => {
                 return `screenshot sent`
             }
         } catch {}
-        // Fallback: thum.io
         const thumbUrl = `https://image.thum.io/get/width/1200/crop/900/${encodeURIComponent(sUrl)}`
         if (conn && m) {
             await conn.sendMessage(chatId, { image: { url: thumbUrl }, caption: `📸 ${sUrl}` }, { quoted: m }).catch(() => {})
@@ -1229,7 +1181,6 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     // ── news ──────────────────────────────────────────────────────────────────
     if (t === 'news') {
         const q = tc.query || tc.topic || tc.q || 'technology news'
-        // Use GNews API (free tier available)
         try {
             const r = await axios2.get(`https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=en&max=5&apikey=bbbc5ec9e33cb9cda571f61a1ba8cf0f`, {
                 timeout: 10000, validateStatus: () => true
@@ -1238,7 +1189,6 @@ const executeToolCall = async (tc, chatId, conn, m) => {
                 return r.data.articles.map(a => `📰 *${a.title}*\n${a.description || ''}\n${a.url}\n_${a.source?.name} — ${new Date(a.publishedAt).toLocaleDateString()}_`).join('\n\n')
             }
         } catch {}
-        // Fallback to web search
         const res = await webSearch(q)
         return res.success ? res.results.slice(0, 5).map(r => `📰 *${r.title}*\n${r.snippet}`).join('\n\n') : 'news unavailable'
     }
@@ -1371,14 +1321,13 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         } catch (e) { return `email failed: ${e.message}` }
     }
 
-    // ── tts — FIXED: Google TTS with proper User-Agent ────────────────────────
+    // ── tts ────────────────────────────────────────────────────────
     if (t === 'tts') {
         const rawText = (tc.text || '').slice(0, 700)
         const lang = tc.lang || tc.voice || 'en'
         if (!rawText) return '❌ TTS: no text provided'
         if (!conn || !m) return `TTS: "${rawText}" (lang: ${lang})`
 
-        // Multi-provider TTS with reliable fallbacks
         const tryTTS = async (url, opts = {}) => {
             try {
                 const r = await axios2.get(url, {
@@ -1387,20 +1336,17 @@ const executeToolCall = async (tc, chatId, conn, m) => {
                     headers: { 'User-Agent': 'Mozilla/5.0', ...opts.headers }
                 })
                 const buf = Buffer.from(r.data)
-                if (buf.length > 1000) return buf // must be a real audio file
+                if (buf.length > 1000) return buf
             } catch {}
             return null
         }
 
-        // 1. Microsoft Edge TTS via free Deno proxy (best quality, no limits)
         const VOICE_MAP = { en: 'en-US-AriaNeural', sw: 'sw-KE-ZuriNeural', fr: 'fr-FR-DeniseNeural', ar: 'ar-EG-SalmaNeural', hi: 'hi-IN-SwaraNeural', de: 'de-DE-KatjaNeural', es: 'es-ES-ElviraNeural', pt: 'pt-BR-FranciscaNeural', zh: 'zh-CN-XiaoxiaoNeural' }
         const voice = tc.voice_name || VOICE_MAP[lang] || `${lang}-Default`
         let buf = await tryTTS(`https://tts.deno.dev/?t=${encodeURIComponent(rawText)}&v=${encodeURIComponent(voice)}`)
 
-        // 2. StreamElements Brian voice (reliable, good quality)
         if (!buf) buf = await tryTTS(`https://api.streamelements.com/kappa/v2/speech?voice=${tc.se_voice || 'Brian'}&text=${encodeURIComponent(rawText.slice(0,400))}`)
 
-        // 3. Google Translate TTS (limited but usually works for short text)
         if (!buf) {
             const chunks = rawText.match(/.{1,180}/g) || [rawText]
             const parts = []
@@ -1411,7 +1357,6 @@ const executeToolCall = async (tc, chatId, conn, m) => {
             if (parts.length) buf = Buffer.concat(parts)
         }
 
-        // 4. VoiceRSS (free tier, decent quality)
         if (!buf) buf = await tryTTS(`https://api.voicerss.org/?key=11f53b18b5094a2483f26fa09a28b74c&hl=${lang}&src=${encodeURIComponent(rawText.slice(0,300))}&f=16khz_16bit_stereo&c=MP3`)
 
         if (!buf) return `❌ TTS failed: all voice providers unavailable. Try again in a moment.`
@@ -1431,7 +1376,6 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         const to = tc.to || tc.target || 'en'
         const from = tc.from || 'auto'
         try {
-            // MyMemory free translation (1000 req/day, no auth)
             const r = await axios2.get(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`, { timeout: 12000 })
             const translated = r.data?.responseData?.translatedText
             if (translated && translated !== 'NO QUERY SPECIFIED') return `🌐 [${from} → ${to}]\n${translated}`
@@ -1439,7 +1383,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         return 'translation unavailable'
     }
 
-    // ── image_gen — multi-provider ────────────────────────────────────────────
+    // ── image_gen ────────────────────────────────────────────────────────────
     if (t === 'image_gen' || t === 'imagine') {
         const prompt = tc.prompt || tc.text || ''
         if (!prompt) return 'ERROR: no prompt'
@@ -1467,7 +1411,6 @@ const executeToolCall = async (tc, chatId, conn, m) => {
                 }
                 return 'image generated (no connection)'
             } catch (e) {
-                // Fallback to Pollinations if HF fails
                 imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true`
             }
         } else if (provider === 'realistic') {
@@ -1542,25 +1485,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
                 bhLines = list.slice(0, 5).map(d => `┃ ${d.status === 'running' ? '🟢' : '🔴'} #${d.id} ${d.name || d.botName || ''}`).join('\n')
             } else bhLines = '┃ no deployments yet'
         } catch {}
-        return `╭══〘 🤖 BERA AI STATUS 〙═⊷
-┃ 🧠 RAM: ${sys.memory.used}/${sys.memory.total} (${sys.memory.pct})
-┃ 💾 Disk: ${sys.disk.used}/${sys.disk.total} (${sys.disk.pct})
-┃ ⏱️ Uptime: ${sys.uptime}
-┃ 📈 Load: ${sys.load}
-┃ 🖥️ CPUs: ${sys.cpus}
-┃
-┃ ━━━ 🚀 BERAHOST BOTS ━━━
-${bhLines}
-┃
-┃ ━━━ ⏰ CRON JOBS (${crons.length}) ━━━
-${crons.length ? crons.map(([id, j]) => `┃ • ${id}: ${j.schedule}`).join('\n') : '┃ none'}
-┃
-┃ ━━━ 👁️ MONITORS (${monitors.length}) ━━━
-${monitors.length ? monitors.map(([id, mon]) => `┃ • ${id}: ${mon.lastStatus === true ? '✅ up' : mon.lastStatus === false ? '🔴 down' : '⏳'}`).join('\n') : '┃ none'}
-┃
-┃ ━━━ 📝 NOTES (${notes.length}) ━━━
-${notes.length ? notes.slice(0, 5).map(n => `┃ • ${n}`).join('\n') : '┃ none'}
-╰══════════════════⊷`
+        return `╭══〘 🤖 BERA AI STATUS 〙═⊷\n┃ 🧠 RAM: ${sys.memory.used}/${sys.memory.total} (${sys.memory.pct})\n┃ 💾 Disk: ${sys.disk.used}/${sys.disk.total} (${sys.disk.pct})\n┃ ⏱️ Uptime: ${sys.uptime}\n┃ 📈 Load: ${sys.load}\n┃ 🖥️ CPUs: ${sys.cpus}\n┃\n┃ ━━━ 🚀 BERAHOST BOTS ━━━\n${bhLines}\n┃\n┃ ━━━ ⏰ CRON JOBS (${crons.length}) ━━━\n${crons.length ? crons.map(([id, j]) => `┃ • ${id}: ${j.schedule}`).join('\n') : '┃ none'}\n┃\n┃ ━━━ 👁️ MONITORS (${monitors.length}) ━━━\n${monitors.length ? monitors.map(([id, mon]) => `┃ • ${id}: ${mon.lastStatus === true ? '✅ up' : mon.lastStatus === false ? '🔴 down' : '⏳'}`).join('\n') : '┃ none'}\n┃\n┃ ━━━ 📝 NOTES (${notes.length}) ━━━\n${notes.length ? notes.slice(0, 5).map(n => `┃ • ${n}`).join('\n') : '┃ none'}\n╰══════════════════⊷`
     }
 
     // ── memory: remember ──────────────────────────────────────────────────────
@@ -1810,7 +1735,7 @@ try {
         return 'unknown monitor action'
     }
 
-    // ── wa_group_setting — open/close/restrict/unrestrict ────────────────────
+    // ── wa_group_setting ────────────────────────────────────
     if (t === 'wa_group_setting') {
         if (!conn) return 'ERROR: no connection'
         const group = tc.group || chatId
@@ -1988,7 +1913,6 @@ try {
             const result = r.data?.result
             if (result) return `💱 ${tc.amount} *${tc.from}* = *${result.toFixed(2)} ${tc.to}*`
         } catch {}
-        // Fallback: use crypto coingecko rates if KES
         return 'currency conversion unavailable'
     }
 
@@ -2245,10 +2169,9 @@ try {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN AGENT LOOP — executes tools, feeds results back, gets final answer
+// MAIN AGENT LOOP
 // ─────────────────────────────────────────────────────────────────────────────
 const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
-    // Pre-dispatch hook (existing utility)
     try {
         const pd = await preDispatch(text)
         if (pd?.reply) {
@@ -2258,7 +2181,6 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
         }
     } catch {}
 
-    // Rate limiting for non-owners
     if (global.db?.data && !opts.isOwner) {
         const now = Date.now()
         const db = global.db.data
@@ -2273,7 +2195,6 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 
     pushHistory(chat, 'user', text)
 
-    // Build rich context for the agent
     const mem = getMemory(chat)
     const memStr = Object.keys(mem).length
         ? '\n\nStored memory:\n' + Object.entries(mem).map(([k, v]) => `${k}: ${v}`).join('\n') : ''
@@ -2284,7 +2205,6 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
         if (r.output?.trim()) wsCtx = '\n\nWorkspace contents:\n' + r.output.trim()
     } catch {}
 
-    // Inject WhatsApp context for group ops
     let mentionCtx = ''
     try {
         const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
@@ -2301,7 +2221,6 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
     const loopCap = opts.maxLoops || 25
     let stepCount = 0
 
-    // Immediately acknowledge so the user knows work has started
     if (conn && m) {
         conn.sendMessage(chat, { react: { text: '⚙️', key: m.key } }).catch(() => {})
         conn.sendMessage(chat, { text: '⚙️ *Got it! Working on it...*\n_Thinking..._' }).catch(() => {})
@@ -2309,9 +2228,8 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 
     for (let loop = 0; loop < loopCap; loop++) {
         let aiReply
-        try { aiReply = await callAI(messages, 60000, true) } catch {}  // agentMode=true → Pollinations first for JSON tool calls
+        try { aiReply = await callAI(messages, 60000, true) } catch {}
         if (!aiReply) {
-            // All providers failed — give user a proper message
             const fb = localFallback(text)
             return { success: false, reply: fb }
         }
@@ -2319,12 +2237,10 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
         const toolCalls = parseToolCalls(aiReply)
 
         if (!toolCalls || !toolCalls.length) {
-            // No tools → final answer
             pushHistory(chat, 'assistant', aiReply)
             return { success: true, reply: aiReply }
         }
 
-        // Show progress for first 3 steps, then every 5
         stepCount += toolCalls.length
         if ((stepCount <= 3 || stepCount % 5 < toolCalls.length) && conn && m) {
             const toolNames = toolCalls.map(tc => tc.tool).join(', ')
@@ -2333,7 +2249,6 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 
         messages.push({ role: 'assistant', content: aiReply })
 
-        // Execute all tool calls
         const toolResults = []
         for (const tc of toolCalls) {
             try {
