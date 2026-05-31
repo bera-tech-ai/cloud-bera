@@ -244,85 +244,70 @@ How you text (strict rules based on your real messages):
 - Reply to what was actually said — read the context`
 }
 
-// ── Generate reply using Gifted AI ────────────────────────────────────────
+// ── Strip AI thinking blocks from response ────────────────────────────────────
+const cleanReply = (text) => {
+    if (!text) return ''
+    let t = String(text)
+    // Remove DeepSeek <think>...</think> blocks entirely
+    t = t.replace(/<think>[\s\S]*?<\/think>/gi, '')
+    // Remove any markdown bold/italic asterisks
+    t = t.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1')
+    // Remove "As Developer Bera:" or similar AI prefixes
+    t = t.replace(/^(As\s+)?[\w\s]+:\s*/i, '')
+    // Trim and keep it short — max 2 sentences
+    t = t.trim()
+    const sentences = t.split(/(?<=[.!?])\s+/)
+    if (sentences.length > 2) t = sentences.slice(0, 2).join(' ')
+    return t.slice(0, 250).trim()
+}
+
+// ── Generate reply using Gifted Overchat / DeepSeek (primary) ────────────────
 generateStyleReply = async (incomingText, styleData) => {
     try {
         // 1. Quick reply — instant, no AI needed for common phrases
         const quick = getQuickReply(incomingText)
-        if (quick) {
-            console.log('[CHATBERA] ⚡ Quick reply:', quick)
-            return { success: true, reply: quick }
-        }
+        if (quick) return { success: true, reply: quick }
 
         // 2. Build profile
         const dbProfile = global.db?.data?.chatbera?.profile
         const profile = (dbProfile && dbProfile.myMessages && dbProfile.myMessages.length > 0)
             ? dbProfile : PREBUILT_PROFILE
         const sysPrompt = getSystemPrompt(profile)
+        const name = profile.myName || 'Bera'
+        const prompt = sysPrompt + '\n\nSomeone said: ' + incomingText + '\n\n' + name + ':'
 
-        // 3. Gifted AI - GPT endpoint (primary)
+        // 3. Overchat / DeepSeek — primary (accepts identity, no thinking leak)
         try {
-            const prompt = sysPrompt + '\n\nUser said: ' + incomingText + '\n\nReply as ' + (profile.myName || 'Bera') + ':'
-            const res = await axios.get(`${GIFTED}/api/ai/gpt`, { 
-                params: { 
-                    q: prompt.slice(0, 800),
-                    apikey: GIFTED_KEY
-                }, 
-                timeout: 15000 
+            const res = await axios.get('https://api.gifted.co.ke/api/ai/overchat', {
+                params: { apikey: 'gifted', model: 'deepseek', q: prompt.slice(0, 1200) },
+                timeout: 12000
             })
-            const aiReply = res.data?.result || res.data?.response
-            if (aiReply && typeof aiReply === 'string' && aiReply.length > 1 && aiReply !== 'Request failed with status code 403') {
-                console.log('[CHATBERA] ✅ Gifted GPT replied')
-                return { success: true, reply: aiReply.slice(0, 300) }
+            const raw = res.data?.result
+            if (raw && typeof raw === 'string' && raw.trim().length > 1) {
+                const reply = cleanReply(raw)
+                if (reply.length > 0) return { success: true, reply }
             }
-        } catch (e) {
-            console.log('[CHATBERA] Gifted GPT failed:', e.message)
-        }
+        } catch {}
 
-        // 4. Gifted AI - Gemini endpoint (fallback)
+        // 4. Xwolf Gemini — fallback
         try {
-            const prompt = sysPrompt + '\n\nUser said: ' + incomingText + '\n\nReply as ' + (profile.myName || 'Bera') + ':'
-            const res = await axios.get(`${GIFTED}/api/ai/gemini`, {
-                params: { 
-                    q: prompt.slice(0, 2000),
-                    apikey: GIFTED_KEY
-                },
-                timeout: 20000
-            })
-            const reply = res.data?.result || res.data?.response || res.data?.answer ||
-                          (typeof res.data === 'string' ? res.data : null)
-            if (reply && typeof reply === 'string' && reply.length > 1 && reply !== 'Request failed with status code 403') {
-                console.log('[CHATBERA] ✅ Gifted Gemini replied as', profile.myName || 'Bera')
-                return { success: true, reply: String(reply).trim().slice(0, 300) }
-            }
-        } catch (e) {
-            console.log('[CHATBERA] Gifted Gemini failed:', e.message)
-        }
-
-        // 5. Xwolf Gemini AI — reliable fallback
-        try {
-            const prompt = sysPrompt + '\n\nUser said: ' + incomingText + '\n\nReply as ' + (profile.myName || 'Bera') + ':'
             const res = await axios.get(`${XWOLF}/api/ai/gemini`, {
-                params: { q: prompt.slice(0, 2000) },
-                timeout: 25000
+                params: { q: prompt.slice(0, 1200) },
+                timeout: 15000
             })
-            const reply = res.data?.result || res.data?.response || res.data?.answer ||
-                          (typeof res.data === 'string' ? res.data : null)
-            if (reply && typeof reply === 'string' && reply.length > 1) {
-                console.log('[CHATBERA] ✅ Xwolf Gemini replied as', profile.myName || 'Bera')
-                return { success: true, reply: String(reply).trim().slice(0, 300) }
+            const raw = res.data?.result || res.data?.response || res.data?.answer ||
+                        (typeof res.data === 'string' ? res.data : null)
+            if (raw && typeof raw === 'string' && raw.trim().length > 1) {
+                const reply = cleanReply(raw)
+                if (reply.length > 0) return { success: true, reply }
             }
-        } catch (e) {
-            console.log('[CHATBERA] Xwolf failed:', e.message)
-        }
+        } catch {}
 
-        // 6. Last resort — pick random real message from training data
+        // 5. Last resort — pick from real training messages
         const msgs = (profile.myMessages || PREBUILT_PROFILE.myMessages || [])
             .filter(m => m && m.length > 2 && m.length < 80)
         if (msgs.length > 0) {
-            const pick = msgs[Math.floor(Math.random() * msgs.length)]
-            console.log('[CHATBERA] ⚠️ Using fallback message')
-            return { success: true, reply: pick }
+            return { success: true, reply: msgs[Math.floor(Math.random() * msgs.length)] }
         }
 
         return { success: false, error: 'All options failed.' }
