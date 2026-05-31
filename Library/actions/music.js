@@ -170,9 +170,10 @@ const downloadViaCobalt = async (videoUrl) => {
 
 // ── Gifted primary download chain ─────────────────────────────────────────────
 const downloadAudioGifted = async (videoUrl) => {
+    // ytmp3 confirmed working — returns result.download_url
     const endpoints = [
-        `/api/download/savetubemp3`,
         `/api/download/ytmp3`,
+        `/api/download/savetubemp3`,
         `/api/download/yt`,
         `/api/download/ytdl`,
     ]
@@ -184,9 +185,17 @@ const downloadAudioGifted = async (videoUrl) => {
             })
             const data = res.data
             if (data?.status === false || data?.success === false) continue
-            const audioUrl = toUrl(data?.result) || toUrl(data?.url) || toUrl(data?.audio) ||
-                             toUrl(data?.download) || toUrl(data?.mp3) || toUrl(data?.link)
-            if (audioUrl) return { success: true, url: audioUrl, title: data?.result?.title || data?.title || '' }
+            // /api/download/ytmp3 returns result.download_url
+            const result = data?.result
+            const audioUrl =
+                (result && typeof result === 'object' ? result.download_url || result.downloadUrl || toUrl(result) : null) ||
+                (typeof result === 'string' && result.startsWith('http') ? result : null) ||
+                toUrl(data?.url) || toUrl(data?.audio) ||
+                toUrl(data?.download) || toUrl(data?.mp3) || toUrl(data?.link)
+            if (audioUrl) {
+                const title = (result && typeof result === 'object' ? result.title : null) || data?.title || ''
+                return { success: true, url: audioUrl, title }
+            }
         } catch {}
     }
     return null
