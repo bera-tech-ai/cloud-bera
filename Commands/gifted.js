@@ -1,865 +1,687 @@
 const axios = require('axios')
-
-const GT = 'https://api.gifted.co.ke'
-const KEY = 'gifted'
-
-const gt = (path, params = {}) =>
-    axios.get(`${GT}${path}`, { params: { apikey: KEY, ...params }, timeout: 30000 })
-        .then(r => r.data)
-        .catch(e => ({ success: false, error: e.message }))
+const {
+    gt, free,
+    gtWeather, gtLyrics, gtWiki, gtGoogle, gtDictionary, gtBible, gtWallpaper,
+    gtNews, gtShazam, gtSpotifySearch, gtYtSearch,
+    gtYtMp3, gtYtMp4, gtTikTok, gtInstagram, gtTwitter, gtFacebook, gtSpotifyDl,
+    gtRemoveBg, gtCreateQr, gtReadQr, gtScreenshot, gtOcr, gtUpscale,
+    gtTranscript, gtWhois, gtImage, gtChat, gtVision,
+    gtLiveScore, gtPredictions, gtStandings, gtFootballNews,
+    gtCrypto, gtTranslate, gtMovie, gtAnime, gtIpInfo, gtStock, gtCurrency, gtGithub,
+    GT, KEY
+} = require('../Library/actions/giftedapi')
 
 const react = (conn, m, emoji) =>
     conn.sendMessage(m.chat, { react: { text: emoji, key: m.key } }).catch(() => {})
 
-const hasMedia = (msg) => msg && /image|video|audio/.test(msg.mimetype || '')
-
-// ── Photo edit helper ─────────────────────────────────────────────────────────
-// Resolves quoted image → URL, hits one of several Gifted endpoint variants,
-// and sends back the resulting image. Returns true on success, false otherwise.
-const resolveImageUrl = async (m, conn, args) => {
-    let url = args[0]
-    if (url && url.startsWith('http')) return url
-    if (m.quoted && hasMedia(m.quoted)) {
-        const buf = await conn.downloadMediaMessage(m.quoted).catch(() => null)
-        if (buf) {
-            // Many Gifted endpoints accept an https URL only — fall back to a
-            // public uploader if the endpoint refuses base64. For now, return
-            // base64 first; the caller will retry with upload if needed.
-            return 'data:image/jpeg;base64,' + buf.toString('base64')
-        }
-    }
-    return null
-}
-
-const photoEdit = async (m, conn, reply, args, prefix, cmd, label, paths, extraParams = {}) => {
-    const imgUrl = await resolveImageUrl(m, conn, args)
-    if (!imgUrl) return reply(`Usage: *${prefix}${cmd} <image URL>* or reply to an image.`)
-    await react(conn, m, '🎨')
-    let outUrl = null
-    let lastErr = ''
-    for (const path of paths) {
-        const r = await gt(path, { url: imgUrl, ...extraParams })
-        const candidate = r?.result?.url || r?.result || r?.url || r?.image ||
-            r?.imageUrl || r?.data?.url || r?.data
-        if (typeof candidate === 'string' && candidate.startsWith('http')) {
-            outUrl = candidate
-            break
-        }
-        lastErr = r?.error || r?.message || 'No URL in response'
-    }
-    if (!outUrl) {
-        await react(conn, m, '❌')
-        return reply(`❌ ${label} failed: ${lastErr || 'all endpoints unavailable'}`)
-    }
-    await react(conn, m, '✅')
-    return conn.sendMessage(m.chat, { image: { url: outUrl }, caption: `🎨 *${label}*` }, { quoted: m })
-}
+const hasMedia = (msg) => msg && /image|video|audio/.test(msg?.mimetype || '')
 
 const fmtDuration = (s) => {
     if (!s) return ''
-    const m = Math.floor(s / 60), sec = s % 60
+    const m = Math.floor(+s / 60), sec = +s % 60
     return `${m}:${String(sec).padStart(2, '0')}`
+}
+
+// Download quoted/attached image → URL (sends to Gifted-compatible upload or uses buffer)
+const resolveImageUrl = async (m, conn, args) => {
+    if (args[0]?.startsWith('http')) return args[0]
+    const target = m.quoted || m
+    if (!hasMedia(target)) return null
+    const buf = await conn.downloadMediaMessage(target).catch(() => null)
+    if (!buf) return null
+    // Upload to a public host so Gifted tools accept it
+    try {
+        const FormData = require('form-data')
+        const form = new FormData()
+        form.append('file', buf, { filename: 'image.jpg', contentType: 'image/jpeg' })
+        const res = await axios.post('https://tmpfiles.org/api/v1/upload', form, { headers: form.getHeaders(), timeout: 20000 })
+        const url = res.data?.data?.url?.replace('tmpfiles.org/', 'tmpfiles.org/dl/')
+        if (url) return url
+    } catch {}
+    return 'data:image/jpeg;base64,' + buf.toString('base64')
 }
 
 const handle = async (m, { conn, command, args, reply, prefix, text }) => {
 
     // ── YOUTUBE AUDIO ──────────────────────────────────────────────────────────
-    if (command === 'ytmp3' || command === 'yta' || command === 'ytaudio') {
+    if (['ytmp3','yta','ytaudio'].includes(command)) {
         const url = args[0]
         if (!url || !url.includes('youtu')) return reply(`Usage: *${prefix}ytmp3 <YouTube URL>*`)
         await react(conn, m, '⏳')
-        const r = await gt('/api/download/ytmp3', { url })
-        if (!r.success) {
-            await react(conn, m, '❌')
-            return reply(`❌ Download failed: ${r.error || 'Unknown error'}`)
-        }
-        const d = r.result
+        const d = await gtYtMp3(url)
+        if (!d) { await react(conn, m, '❌'); return reply('❌ YT audio download failed.') }
         const audioUrl = d?.download_url || d?.downloadUrl || d?.url || d?.audio || d?.link
-        if (!audioUrl) {
-            await react(conn, m, '❌')
-            return reply(`❌ No audio URL in response.`)
-        }
+        if (!audioUrl) { await react(conn, m, '❌'); return reply('❌ No audio URL in response.') }
         await react(conn, m, '✅')
-        await conn.sendMessage(m.chat, {
-            audio: { url: audioUrl },
-            mimetype: 'audio/mp4',
-            ptt: false,
-            fileName: `${d.title || 'audio'}.mp3`
-        }, { quoted: m })
-        return reply(`🎵 *${d.title || 'Audio'}*\n${d.channel ? `👤 ${d.channel}\n` : ''}${d.duration ? `⏱ ${d.duration}` : ''}`)
+        await conn.sendMessage(m.chat, { audio: { url: audioUrl }, mimetype: 'audio/mp4', ptt: false, fileName: `${d.title || 'audio'}.mp3` }, { quoted: m })
+        return reply(`🎵 *${d.title || 'Audio'}*${d.channel ? `\n👤 ${d.channel}` : ''}${d.duration ? `\n⏱ ${d.duration}` : ''}`)
     }
 
     // ── YOUTUBE VIDEO ──────────────────────────────────────────────────────────
-    if (command === 'ytmp4' || command === 'ytv' || command === 'ytvideo') {
+    if (['ytmp4','ytv','ytvideo'].includes(command)) {
         const url = args[0]
         if (!url || !url.includes('youtu')) return reply(`Usage: *${prefix}ytmp4 <YouTube URL>*`)
         await react(conn, m, '⏳')
-        const r = await gt('/api/download/ytmp4', { url, quality: '360p' })
-        if (!r.success) {
-            await react(conn, m, '❌')
-            return reply(`❌ Download failed: ${r.error || 'Unknown error'}`)
-        }
-        const d = r.result
+        const d = await gtYtMp4(url, '360p')
+        if (!d) { await react(conn, m, '❌'); return reply('❌ YT video download failed.') }
         const videoUrl = d?.download_url || d?.downloadUrl || d?.url || d?.video || d?.link
-        if (!videoUrl) {
-            await react(conn, m, '❌')
-            return reply(`❌ No video URL in response.`)
-        }
+        if (!videoUrl) { await react(conn, m, '❌'); return reply('❌ No video URL in response.') }
         await react(conn, m, '✅')
-        return conn.sendMessage(m.chat, {
-            video: { url: videoUrl },
-            caption: `🎬 *${d.title || 'Video'}*${d.channel ? `\n👤 ${d.channel}` : ''}${d.duration ? `\n⏱ ${d.duration}` : ''}`,
-            fileName: `${d.title || 'video'}.mp4`
-        }, { quoted: m })
+        return conn.sendMessage(m.chat, { video: { url: videoUrl }, caption: `🎬 *${d.title || 'Video'}*${d.channel ? `\n👤 ${d.channel}` : ''}${d.duration ? `\n⏱ ${d.duration}` : ''}`, fileName: `${d.title || 'video'}.mp4` }, { quoted: m })
     }
 
     // ── TIKTOK ────────────────────────────────────────────────────────────────
-    if (command === 'tiktok' || command === 'tt' || command === 'tiktokdl') {
+    if (['tiktok','tt','tiktokdl'].includes(command)) {
         const url = args[0]
         if (!url || !url.includes('tiktok')) return reply(`Usage: *${prefix}tiktok <TikTok URL>*`)
         await react(conn, m, '⏳')
-        const r = await gt('/api/download/tiktok', { url })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ TikTok download failed: ${r.error || 'No result'}`)
-        }
-        const d = r.result
+        const d = await gtTikTok(url)
+        if (!d) { await react(conn, m, '❌'); return reply('❌ TikTok download failed.') }
         const videoUrl = d?.video?.[0] || d?.nowm || d?.url || d?.download_url
         const audioUrl = d?.music
-        if (!videoUrl && !audioUrl) {
-            await react(conn, m, '❌')
-            return reply(`❌ Could not extract media from this TikTok.`)
-        }
+        if (!videoUrl && !audioUrl) { await react(conn, m, '❌'); return reply('❌ Could not extract media.') }
         await react(conn, m, '✅')
-        if (videoUrl) {
-            return conn.sendMessage(m.chat, {
-                video: { url: videoUrl },
-                caption: `🎵 *${d.title || d.desc || 'TikTok Video'}*\n👤 @${d.author?.nickname || d.author || 'unknown'}`
-            }, { quoted: m })
-        }
-        return conn.sendMessage(m.chat, {
-            audio: { url: audioUrl },
-            mimetype: 'audio/mp4',
-            fileName: 'tiktok_audio.mp3'
-        }, { quoted: m })
+        if (videoUrl) return conn.sendMessage(m.chat, { video: { url: videoUrl }, caption: `🎵 *${d.title || d.desc || 'TikTok'}*\n👤 @${d.author?.nickname || d.author || 'unknown'}` }, { quoted: m })
+        return conn.sendMessage(m.chat, { audio: { url: audioUrl }, mimetype: 'audio/mp4', fileName: 'tiktok.mp3' }, { quoted: m })
     }
 
     // ── INSTAGRAM ─────────────────────────────────────────────────────────────
-    if (command === 'igdl' || command === 'instagram' || command === 'insta') {
+    if (['igdl','instagram','insta'].includes(command)) {
         const url = args[0]
         if (!url || !/instagram|instagr\.am/.test(url)) return reply(`Usage: *${prefix}igdl <Instagram URL>*`)
         await react(conn, m, '⏳')
-        const r = await gt('/api/download/instadl', { url })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Instagram download failed: ${r.error || 'No result'}`)
-        }
-        const d = r.result
+        const d = await gtInstagram(url)
+        if (!d) { await react(conn, m, '❌'); return reply('❌ Instagram download failed.') }
         const medias = d.media || d.medias || [d]
         const first = Array.isArray(medias) ? medias[0] : d
         const mediaUrl = first?.url || first?.download_url || first?.video || first?.image
-        if (!mediaUrl) {
-            await react(conn, m, '❌')
-            return reply(`❌ Could not extract media from this post.`)
-        }
+        if (!mediaUrl) { await react(conn, m, '❌'); return reply('❌ Could not extract media.') }
         await react(conn, m, '✅')
         const caption = `📸 *${d.caption?.slice(0, 100) || 'Instagram Post'}*`
-        if (/video/.test(first?.type || '') || first?.video) {
+        if (/video/.test(first?.type || '') || first?.video)
             return conn.sendMessage(m.chat, { video: { url: mediaUrl }, caption }, { quoted: m })
-        }
         return conn.sendMessage(m.chat, { image: { url: mediaUrl }, caption }, { quoted: m })
     }
 
     // ── TWITTER/X ─────────────────────────────────────────────────────────────
-    if (command === 'twitter' || command === 'xdl' || command === 'twdl') {
+    if (['twitter','xdl','twdl'].includes(command)) {
         const url = args[0]
         if (!url || !/(twitter|x\.com)/.test(url)) return reply(`Usage: *${prefix}twitter <Tweet URL>*`)
         await react(conn, m, '⏳')
-        const r = await gt('/api/download/twitter', { url })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Twitter download failed: ${r.error || 'No result'}`)
-        }
-        const d = r.result
+        const d = await gtTwitter(url)
+        if (!d) { await react(conn, m, '❌'); return reply('❌ Twitter download failed.') }
         const videoUrl = d?.video?.[0]?.url || d?.url || d?.media?.[0]?.url
-        if (!videoUrl) {
-            await react(conn, m, '❌')
-            return reply(`❌ No video found in this tweet.`)
-        }
+        if (!videoUrl) { await react(conn, m, '❌'); return reply('❌ No video found in this tweet.') }
         await react(conn, m, '✅')
-        return conn.sendMessage(m.chat, {
-            video: { url: videoUrl },
-            caption: `🐦 *${d.text?.slice(0, 120) || 'Twitter Video'}*`
-        }, { quoted: m })
+        return conn.sendMessage(m.chat, { video: { url: videoUrl }, caption: `🐦 *${d.text?.slice(0, 120) || 'Twitter Video'}*` }, { quoted: m })
+    }
+
+    // ── FACEBOOK VIDEO ────────────────────────────────────────────────────────
+    if (['fbdl','facebook','fb'].includes(command)) {
+        const url = args[0]
+        if (!url || !/facebook|fb\.watch/.test(url)) return reply(`Usage: *${prefix}fbdl <Facebook video URL>*`)
+        await react(conn, m, '⏳')
+        const d = await gtFacebook(url)
+        if (!d) { await react(conn, m, '❌'); return reply('❌ Facebook download failed.') }
+        const videoUrl = d?.hd || d?.sd || d?.url || d?.download_url || (Array.isArray(d?.video) ? d.video[0] : null)
+        if (!videoUrl) { await react(conn, m, '❌'); return reply('❌ No video URL found.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { video: { url: videoUrl }, caption: `📘 *${d.title || 'Facebook Video'}*` }, { quoted: m })
     }
 
     // ── SPOTIFY DOWNLOAD ──────────────────────────────────────────────────────
-    if (command === 'spotifydl' || command === 'spdl') {
+    if (['spotifydl','spdl'].includes(command)) {
         const url = args[0]
         if (!url || !url.includes('spotify')) return reply(`Usage: *${prefix}spotifydl <Spotify Track URL>*`)
         await react(conn, m, '⏳')
-        const r = await gt('/api/download/spotifydl', { url })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Spotify download failed: ${r.error || 'No result'}`)
-        }
-        const d = r.result
+        const d = await gtSpotifyDl(url)
+        if (!d) { await react(conn, m, '❌'); return reply('❌ Spotify download failed.') }
         const audioUrl = d?.download_url || d?.url || d?.audio
-        if (!audioUrl) {
-            await react(conn, m, '❌')
-            return reply(`❌ No audio URL found.`)
-        }
+        if (!audioUrl) { await react(conn, m, '❌'); return reply('❌ No audio URL found.') }
         await react(conn, m, '✅')
-        await conn.sendMessage(m.chat, {
-            audio: { url: audioUrl },
-            mimetype: 'audio/mp4',
-            ptt: false,
-            fileName: `${d.title || 'spotify'}.mp3`
-        }, { quoted: m })
+        await conn.sendMessage(m.chat, { audio: { url: audioUrl }, mimetype: 'audio/mp4', ptt: false, fileName: `${d.title || 'spotify'}.mp3` }, { quoted: m })
         return reply(`🎵 *${d.title || d.name || 'Track'}*${d.artist ? `\n👤 ${d.artist}` : ''}${d.duration ? `\n⏱ ${fmtDuration(d.duration)}` : ''}`)
     }
 
     // ── LYRICS ────────────────────────────────────────────────────────────────
-    if (command === 'lyrics' || command === 'lyric') {
-        if (!text) return reply(`Usage: *${prefix}lyrics <song name>*`)
+    if (['lyrics','lyric'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}lyrics <song> [by artist]*\n_Example: ${prefix}lyrics Bohemian Rhapsody by Queen_`)
         await react(conn, m, '🎵')
-        const r = await gt('/api/search/lyrics', { query: text })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Could not find lyrics for: *${text}*\n_Try adding the artist name._`)
-        }
-        const d = r.result
-        const lyr = d.lyrics || d.lyric || d.result
-        if (!lyr) {
-            await react(conn, m, '❌')
-            return reply(`❌ Lyrics found but empty.`)
-        }
+        const d = await gtLyrics(text)
+        if (!d?.lyrics) { await react(conn, m, '❌'); return reply(`❌ No lyrics found for: *${text}*\n_Try: ${prefix}lyrics Song Title by Artist_`) }
         await react(conn, m, '✅')
         const header = `🎵 *${d.title || text}*${d.artist ? ` — ${d.artist}` : ''}\n${'─'.repeat(28)}\n\n`
-        const body = lyr.slice(0, 3500)
-        return reply(header + body + (lyr.length > 3500 ? '\n\n_...lyrics truncated_' : ''))
+        const body = d.lyrics.slice(0, 3500)
+        return reply(header + body + (d.lyrics.length > 3500 ? '\n\n_...lyrics truncated_' : ''))
     }
 
-    // ── DEFINE ────────────────────────────────────────────────────────────────
-    if (command === 'define' || command === 'meaning') {
+    // ── DEFINE / DICTIONARY ───────────────────────────────────────────────────
+    if (['define','meaning','dict','dictionary'].includes(command)) {
         if (!text) return reply(`Usage: *${prefix}define <word>*`)
         await react(conn, m, '📖')
-        const r = await gt('/api/search/define', { term: text })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ No definition found for: *${text}*`)
-        }
-        const d = r.result
-        await react(conn, m, '✅')
-        return reply(`📖 *${d.term || text}*\n\n${d.definition || d.meaning || JSON.stringify(d).slice(0, 500)}`)
-    }
-
-    // ── DICTIONARY ────────────────────────────────────────────────────────────
-    if (command === 'dict' || command === 'dictionary') {
-        if (!text) return reply(`Usage: *${prefix}dict <word>*`)
-        await react(conn, m, '📚')
-        const r = await gt('/api/search/dictionary', { word: text })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ No dictionary entry for: *${text}*`)
-        }
-        const d = r.result
+        const d = await gtDictionary(text.trim().split(' ')[0])
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ No definition found for: *${text}*`) }
         await react(conn, m, '✅')
         const phonetic = d.phonetic ? `  /${d.phonetic}/` : ''
-        const meanings = d.meanings || (d.meaning ? [d.meaning] : [])
-        let out = `📚 *${d.word || text}*${phonetic}\n\n`
-        if (Array.isArray(meanings)) {
-            meanings.slice(0, 3).forEach(m => {
-                const pos = m.partOfSpeech || m.pos || ''
-                const defs = m.definitions || (m.definition ? [{ definition: m.definition }] : [])
-                if (pos) out += `_${pos}_\n`
-                defs.slice(0, 2).forEach((def, i) => {
-                    out += `${i + 1}. ${def.definition || def}\n`
-                    if (def.example) out += `   _"${def.example}"_\n`
-                })
-                out += '\n'
+        const meanings = d.meaning ? [d.meaning] : (d.meanings || [])
+        let out = `📖 *${d.word || text}*${phonetic}\n\n`
+        if (d.meaning && typeof d.meaning === 'object') {
+            const pos = d.meaning.partOfSpeech || ''
+            const defs = d.meaning.definitions || (d.meaning.def ? [{ definition: d.meaning.def }] : [])
+            if (pos) out += `_${pos}_\n`
+            defs.slice(0, 3).forEach((def, i) => {
+                out += `${i + 1}. ${def.definition || def}\n`
+                if (def.example) out += `   _"${def.example}"_\n`
             })
-        } else {
-            out += JSON.stringify(meanings).slice(0, 400)
-        }
+        } else out += JSON.stringify(d).slice(0, 400)
         return reply(out.trim())
     }
 
     // ── GOOGLE SEARCH ─────────────────────────────────────────────────────────
-    if (command === 'google' || command === 'search') {
+    if (['google','search'].includes(command)) {
         if (!text) return reply(`Usage: *${prefix}google <query>*`)
         await react(conn, m, '🔍')
-        const r = await gt('/api/search/google', { query: text })
-        if (!r.success || !r.results?.length) {
-            await react(conn, m, '❌')
-            return reply(`❌ No results for: *${text}*`)
-        }
+        const results = await gtGoogle(text)
+        if (!results?.length) { await react(conn, m, '❌'); return reply(`❌ No results for: *${text}*`) }
         await react(conn, m, '✅')
-        const results = r.results.slice(0, 5)
-        const lines = results.map((x, i) =>
-            `*${i + 1}. ${x.title}*\n${x.snippet ? x.snippet.slice(0, 120) + '\n' : ''}🔗 ${x.link}`
-        )
+        const lines = results.slice(0, 5).map((x, i) =>
+            `*${i + 1}. ${x.title}*\n${x.snippet ? x.snippet.slice(0, 120) + '\n' : ''}🔗 ${x.link}`)
         return reply(`🔍 *Google: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
     }
 
     // ── WIKIPEDIA ─────────────────────────────────────────────────────────────
-    if (command === 'wiki' || command === 'wikipedia') {
+    if (['wiki','wikipedia'].includes(command)) {
         if (!text) return reply(`Usage: *${prefix}wiki <topic>*`)
         await react(conn, m, '🌐')
-        const r = await gt('/api/search/wikimedia', { title: text })
-        if (!r.success || !r.results) {
-            await react(conn, m, '❌')
-            return reply(`❌ No Wikipedia article found for: *${text}*`)
-        }
-        const d = r.results
+        const d = await gtWiki(text)
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ No Wikipedia article found for: *${text}*`) }
         await react(conn, m, '✅')
-        const extract = (d.extract || d.description || '').slice(0, 1200)
-        const url = d.url || d.fullurl || `https://en.wikipedia.org/wiki/${encodeURIComponent(text)}`
-        return reply(`🌐 *${d.title || text}*\n${'─'.repeat(28)}\n\n${extract}\n\n🔗 ${url}`)
+        const extract = (d.extract || '').slice(0, 1200)
+        return reply(`🌐 *${d.title}*\n${'─'.repeat(28)}\n\n${extract}\n\n🔗 ${d.url}`)
     }
 
-    // ── WEATHER ───────────────────────────────────────────────────────────────
-    if (command === 'weather' || command === 'clima') {
-        if (!text) return reply(`Usage: *${prefix}weather <city>*`)
+    // ── WEATHER (FIXED — uses wttr.in) ────────────────────────────────────────
+    if (['weather','clima','hali'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}weather <city>*\n_Example: ${prefix}weather Nairobi_`)
         await react(conn, m, '🌤')
-        const r = await gt('/api/search/weather', { city: text })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            const r2 = await gt('/api/search/weather', { location: text })
-            if (!r2.success || !r2.result) {
-                return reply(`❌ Couldn't fetch weather for: *${text}*`)
-            }
-            const w = r2.result
-            await react(conn, m, '✅')
-            return reply(formatWeather(w, text))
-        }
-        const w = r.result
+        const w = await gtWeather(text)
+        if (!w) { await react(conn, m, '❌'); return reply(`❌ Couldn't fetch weather for: *${text}*`) }
         await react(conn, m, '✅')
-        return reply(formatWeather(w, text))
+        const trend = w.forecast?.length ? '\n\n📅 *3-Day Forecast:*\n' + w.forecast.map(f =>
+            `  ${f.date}: ${f.desc} 🔺${f.maxC}° 🔻${f.minC}°`
+        ).join('\n') : ''
+        return reply(
+            `⛅ *Weather — ${w.city}${w.country ? ', ' + w.country : ''}*\n${'─'.repeat(30)}\n` +
+            `🌡 Temperature: *${w.temp}°C* (Feels ${w.feels}°C)\n` +
+            `☁️ ${w.desc}\n` +
+            `💧 Humidity: *${w.humidity}%*\n` +
+            `💨 Wind: *${w.wind} km/h*\n` +
+            `☀️ UV Index: *${w.uv}*` + trend
+        )
+    }
+
+    // ── TRANSLATE (NEW) ───────────────────────────────────────────────────────
+    if (['translate','tr','trans'].includes(command)) {
+        if (!text) return reply(
+            `Usage: *${prefix}translate [to:<lang>] <text>*\n` +
+            `_Example: ${prefix}translate to:sw Hello how are you_\n` +
+            `_Langs: sw=Swahili, fr=French, es=Spanish, de=German, ar=Arabic, zh=Chinese_`
+        )
+        await react(conn, m, '🌍')
+        let to = 'sw', phrase = text
+        const match = text.match(/^to:(\w+)\s+(.+)$/is)
+        if (match) { to = match[1].toLowerCase(); phrase = match[2] }
+        const result = await gtTranslate(phrase, to)
+        if (!result) { await react(conn, m, '❌'); return reply(`❌ Translation failed.`) }
+        await react(conn, m, '✅')
+        return reply(`🌍 *Translation → ${to.toUpperCase()}*\n\n_Original:_\n${phrase}\n\n_Translated:_\n*${result}*`)
+    }
+
+    // ── CRYPTO PRICES (NEW) ───────────────────────────────────────────────────
+    if (['crypto','coin','btc','eth','doge','bitcoin'].includes(command)) {
+        await react(conn, m, '📊')
+        const coins = text?.toLowerCase().split(/\s+/).filter(Boolean) || ['bitcoin', 'ethereum']
+        const data = await gtCrypto(coins.length > 0 ? coins : ['bitcoin', 'ethereum', 'solana', 'dogecoin'])
+        if (!data?.length) { await react(conn, m, '❌'); return reply(`❌ Could not fetch crypto prices.`) }
+        await react(conn, m, '✅')
+        const lines = data.slice(0, 8).map(c => {
+            const change = c.price_change_percentage_24h?.toFixed(2)
+            const arrow = change > 0 ? '📈' : '📉'
+            return `${arrow} *${c.name}* (${c.symbol?.toUpperCase()})\n   💵 $${c.current_price?.toLocaleString()} | ${change > 0 ? '+' : ''}${change}% 24h\n   Market Cap: $${(c.market_cap / 1e9).toFixed(2)}B`
+        })
+        return reply(`💹 *LIVE CRYPTO PRICES*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}\n\n_Powered by CoinGecko_`)
+    }
+
+    // ── STOCK PRICE (NEW) ─────────────────────────────────────────────────────
+    if (['stock','shares','equity'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}stock <symbol>*\n_Example: ${prefix}stock AAPL_\n_Example: ${prefix}stock TSLA_`)
+        await react(conn, m, '📈')
+        const d = await gtStock(text.trim())
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ Could not fetch stock: *${text.toUpperCase()}*\n_Make sure you're using the correct ticker symbol_`) }
+        await react(conn, m, '✅')
+        const arrow = +d.change >= 0 ? '📈' : '📉'
+        return reply(
+            `${arrow} *${d.name}* (${d.symbol})\n${'─'.repeat(28)}\n` +
+            `💵 Price: *${d.currency} ${d.price?.toFixed(2)}*\n` +
+            `📊 Change: *${d.change > 0 ? '+' : ''}${d.change}%*\n` +
+            `📋 Prev Close: ${d.prevClose?.toFixed(2)}\n` +
+            `🏛️ Exchange: ${d.exchange}\n\n_Data: Yahoo Finance_`
+        )
+    }
+
+    // ── CURRENCY CONVERTER (NEW) ──────────────────────────────────────────────
+    if (['convert','currency','forex','exchange'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}convert <amount> <FROM> to <TO>*\n_Example: ${prefix}convert 100 USD to KES_\n_Example: ${prefix}convert 5000 KES to USD_`)
+        await react(conn, m, '💱')
+        const match = text.match(/(\d+\.?\d*)\s+([a-z]+)\s+(?:to\s+)?([a-z]+)/i)
+        if (!match) return reply(`❌ Format: *${prefix}convert 100 USD to KES*`)
+        const [, amount, from, to] = match
+        const result = await gtCurrency(+amount, from, to)
+        if (!result) { await react(conn, m, '❌'); return reply(`❌ Conversion failed. Check currency codes.`) }
+        await react(conn, m, '✅')
+        return reply(
+            `💱 *Currency Conversion*\n${'─'.repeat(28)}\n` +
+            `*${amount} ${from.toUpperCase()}* = *${result.result} ${to.toUpperCase()}*\n` +
+            `📊 Rate: 1 ${from.toUpperCase()} = ${result.rate.toFixed(4)} ${to.toUpperCase()}\n\n_Powered by ExchangeRate-API_`
+        )
+    }
+
+    // ── MOVIE INFO (NEW) ──────────────────────────────────────────────────────
+    if (['movie','film','imdb'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}movie <title>*\n_Example: ${prefix}movie Inception_`)
+        await react(conn, m, '🎬')
+        const d = await gtMovie(text)
+        if (!d || d.Response === 'False') { await react(conn, m, '❌'); return reply(`❌ Movie not found: *${text}*`) }
+        await react(conn, m, '✅')
+        let out = `🎬 *${d.Title}* (${d.Year})\n${'─'.repeat(28)}\n`
+        if (d.Genre) out += `🎭 Genre: ${d.Genre}\n`
+        if (d.Director) out += `🎥 Director: ${d.Director}\n`
+        if (d.Actors) out += `👥 Cast: ${d.Actors}\n`
+        if (d.Runtime) out += `⏱ Runtime: ${d.Runtime}\n`
+        if (d.imdbRating) out += `⭐ IMDB: *${d.imdbRating}/10* (${d.imdbVotes} votes)\n`
+        if (d.Rated) out += `🔞 Rating: ${d.Rated}\n`
+        if (d.Language) out += `🌐 Language: ${d.Language}\n`
+        if (d.Plot) out += `\n📝 *Plot:*\n${d.Plot}`
+        if (d.Poster && d.Poster !== 'N/A') {
+            await conn.sendMessage(m.chat, { image: { url: d.Poster }, caption: out }, { quoted: m })
+        } else return reply(out)
+        return
+    }
+
+    // ── ANIME SEARCH (NEW) ────────────────────────────────────────────────────
+    if (['anime','animesearch'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}anime <name>*\n_Example: ${prefix}anime Naruto_`)
+        await react(conn, m, '🎌')
+        const data = await gtAnime(text)
+        if (!data?.length) { await react(conn, m, '❌'); return reply(`❌ No anime found: *${text}*`) }
+        await react(conn, m, '✅')
+        const top = data[0]
+        let out = `🎌 *${top.title}*`
+        if (top.title_english && top.title_english !== top.title) out += ` (${top.title_english})`
+        out += `\n${'─'.repeat(28)}\n`
+        if (top.type) out += `📺 Type: ${top.type}\n`
+        if (top.episodes) out += `📺 Episodes: ${top.episodes}\n`
+        if (top.status) out += `📡 Status: ${top.status}\n`
+        if (top.score) out += `⭐ Score: *${top.score}/10*\n`
+        if (top.rating) out += `🔞 Rating: ${top.rating}\n`
+        if (top.genres?.length) out += `🎭 Genres: ${top.genres.map(g => g.name).join(', ')}\n`
+        if (top.aired?.string) out += `📅 Aired: ${top.aired.string}\n`
+        if (top.synopsis) out += `\n📝 *Synopsis:*\n${top.synopsis.slice(0, 400)}${top.synopsis.length > 400 ? '...' : ''}`
+        if (top.images?.jpg?.image_url) {
+            await conn.sendMessage(m.chat, { image: { url: top.images.jpg.image_url }, caption: out }, { quoted: m })
+        } else return reply(out)
+        return
+    }
+
+    // ── IP INFO (NEW) ─────────────────────────────────────────────────────────
+    if (['ip','ipinfo','iplookup'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}ip <IP address>*\n_Example: ${prefix}ip 8.8.8.8_`)
+        await react(conn, m, '🌐')
+        const d = await gtIpInfo(text.trim())
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ Could not look up IP: *${text}*`) }
+        await react(conn, m, '✅')
+        return reply(
+            `🌐 *IP Lookup: ${d.query}*\n${'─'.repeat(28)}\n` +
+            `🏳️ Country: ${d.country} (${d.countryCode})\n` +
+            `🏙️ City: ${d.city}, ${d.regionName}\n` +
+            `📍 Coords: ${d.lat}, ${d.lon}\n` +
+            `⏰ Timezone: ${d.timezone}\n` +
+            `🏢 ISP: ${d.isp}\n` +
+            `🏛️ Org: ${d.org}`
+        )
+    }
+
+    // ── WHOIS (NEW) ───────────────────────────────────────────────────────────
+    if (['whois','domaininfo'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}whois <domain>*\n_Example: ${prefix}whois google.com_`)
+        await react(conn, m, '🔍')
+        const d = await gt('/api/tools/whois', { domain: text.trim() })
+        const result = d?.result
+        if (!result) { await react(conn, m, '❌'); return reply(`❌ WHOIS lookup failed for: *${text}*`) }
+        await react(conn, m, '✅')
+        const info = typeof result === 'string' ? result.slice(0, 800) : JSON.stringify(result, null, 2).slice(0, 800)
+        return reply(`🔍 *WHOIS: ${text}*\n${'─'.repeat(28)}\n\`\`\`\n${info}\n\`\`\``)
+    }
+
+    // ── NEWS (NEW) ────────────────────────────────────────────────────────────
+    if (['news','headlines','breaking'].includes(command)) {
+        const topic = text || 'Kenya'
+        await react(conn, m, '📰')
+        const articles = await gtNews(topic)
+        if (!articles?.length) { await react(conn, m, '❌'); return reply(`❌ No news found for: *${topic}*`) }
+        await react(conn, m, '✅')
+        const lines = articles.slice(0, 5).map((a, i) =>
+            `*${i + 1}. ${a.title || a.headline}*\n${a.description ? a.description.slice(0, 100) + '\n' : ''}${a.publishedAt ? `⏰ ${new Date(a.publishedAt).toLocaleDateString()}\n` : ''}🔗 ${a.url || a.link || ''}`
+        )
+        return reply(`📰 *News: "${topic}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+    }
+
+    // ── GITHUB REPO (NEW) ─────────────────────────────────────────────────────
+    if (['github','repo','ghrepo'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}github <owner/repo>*\n_Example: ${prefix}github microsoft/vscode_`)
+        await react(conn, m, '🐙')
+        const d = await gtGithub(text.trim())
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ GitHub repo not found: *${text}*`) }
+        await react(conn, m, '✅')
+        return reply(
+            `🐙 *${d.full_name}*\n${'─'.repeat(28)}\n` +
+            `📝 ${d.description || 'No description'}\n\n` +
+            `⭐ Stars: ${d.stargazers_count?.toLocaleString()}\n` +
+            `🍴 Forks: ${d.forks_count?.toLocaleString()}\n` +
+            `👁️ Watchers: ${d.subscribers_count || d.watchers_count}\n` +
+            `🐛 Issues: ${d.open_issues_count}\n` +
+            `📦 Language: ${d.language || 'N/A'}\n` +
+            `📅 Updated: ${new Date(d.updated_at).toLocaleDateString()}\n` +
+            `🔗 ${d.html_url}${d.homepage ? `\n🌐 ${d.homepage}` : ''}`
+        )
     }
 
     // ── SHAZAM / MUSIC IDENTIFY ────────────────────────────────────────────────
-    if (command === 'shazam' || command === 'identify') {
+    if (['shazam','identify'].includes(command)) {
         const url = args[0]
-        if (!url || !url.startsWith('http')) return reply(`Usage: *${prefix}shazam <audio/video URL>*`)
+        if (!url?.startsWith('http')) return reply(`Usage: *${prefix}shazam <audio/video URL>*`)
         await react(conn, m, '🎵')
-        const r = await gt('/api/search/shazam', { url })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Couldn't identify music from that URL.`)
-        }
-        const d = r.result
+        const d = await gtShazam(url)
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ Couldn't identify music from that URL.`) }
         await react(conn, m, '✅')
         return reply(`🎵 *Identified!*\n\n*Title:* ${d.title || 'Unknown'}\n*Artist:* ${d.artist || d.subtitle || 'Unknown'}${d.album ? `\n*Album:* ${d.album}` : ''}${d.genre ? `\n*Genre:* ${d.genre}` : ''}`)
     }
 
-    // ── SPOTIFY SEARCH ────────────────────────────────────────────────────────
-    if (command === 'spotifysearch' || command === 'spsearch') {
-        if (!text) return reply(`Usage: *${prefix}spotifysearch <song name>*`)
-        await react(conn, m, '🎵')
-        const r = await gt('/api/search/spotifysearch', { query: text })
-        if (!r.success || !r.results?.length) {
-            await react(conn, m, '❌')
-            return reply(`❌ No Spotify results for: *${text}*`)
-        }
+    // ── YOUTUBE SEARCH ────────────────────────────────────────────────────────
+    if (['yts','ytsearch','yousearch'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}yts <video or song name>*`)
+        await react(conn, m, '🔍')
+        const results = await gtYtSearch(text)
+        if (!results?.length) { await react(conn, m, '❌'); return reply(`❌ No YouTube results for: *${text}*`) }
         await react(conn, m, '✅')
-        const tracks = r.results.slice(0, 5)
-        const lines = tracks.map((t, i) =>
-            `*${i + 1}. ${t.title || t.name}* — ${t.artist || t.artists}\n🔗 ${t.url || t.link || ''}`
+        const lines = results.map((v, i) =>
+            `*${i + 1}.* ${v.title}${v.channel ? `\n   👤 ${v.channel}` : ''}\n   🔗 ${v.url}`
+        )
+        return reply(`🎬 *YouTube: "${text}"*\n${'─'.repeat(30)}\n\n${lines.join('\n\n')}\n\n💡 _Use *${prefix}ytmp3 <url>* or *${prefix}ytmp4 <url>* to download_`)
+    }
+
+    // ── SPOTIFY SEARCH ────────────────────────────────────────────────────────
+    if (['spotifysearch','spsearch','spfind'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}spsearch <song or artist>*`)
+        await react(conn, m, '🎵')
+        const results = await gtSpotifySearch(text)
+        if (!results?.length) { await react(conn, m, '❌'); return reply(`❌ No Spotify results for: *${text}*`) }
+        await react(conn, m, '✅')
+        const lines = results.slice(0, 5).map((t, i) =>
+            `*${i + 1}.* ${t.name || t.title}${t.artist ? ` — ${t.artist}` : ''}${t.duration ? ` ⏱ ${fmtDuration(t.duration)}` : ''}${t.url ? `\n   🔗 ${t.url}` : ''}`
         )
         return reply(`🎵 *Spotify: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
     }
 
-    // ── REMOVE BACKGROUND ─────────────────────────────────────────────────────
-    if (command === 'removebg' || command === 'rmbg' || command === 'nobg') {
-        let imgUrl = args[0]
-        if (!imgUrl && m.quoted && hasMedia(m.quoted)) {
-            await react(conn, m, '⏳')
-            const buf = await conn.downloadMediaMessage(m.quoted).catch(() => null)
-            if (buf) {
-                const tmpUrl = `data:image/jpeg;base64,${buf.toString('base64')}`
-                imgUrl = tmpUrl
-            }
-        }
-        if (!imgUrl) return reply(`Usage: *${prefix}removebg <image URL>* or reply to an image.`)
-        await react(conn, m, '⏳')
-        const r = await gt('/api/tools/removebgv2', { url: imgUrl })
-        if (!r.success || (!r.result && !r.url)) {
-            await react(conn, m, '❌')
-            return reply(`❌ Background removal failed: ${r.error || 'No result'}`)
-        }
-        const outUrl = r.result || r.url
+    // ── AI IMAGE GENERATE ─────────────────────────────────────────────────────
+    if (['imagine','gen','aigen','flux','ai4k'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}imagine <prompt>*\n_Example: ${prefix}imagine a cyberpunk city at night_`)
+        await react(conn, m, '🎨')
+        const imgUrl = await gtImage(text)
+        if (!imgUrl) { await react(conn, m, '❌'); return reply('❌ Image generation failed. Try a different prompt.') }
         await react(conn, m, '✅')
-        if (outUrl.startsWith('http')) {
-            return conn.sendMessage(m.chat, { image: { url: outUrl }, caption: '✅ *Background removed!*' }, { quoted: m })
-        }
-        return conn.sendMessage(m.chat, { image: Buffer.from(outUrl.split(',')[1] || outUrl, 'base64'), caption: '✅ *Background removed!*' }, { quoted: m })
+        return conn.sendMessage(m.chat, { image: { url: imgUrl }, caption: `🎨 *${text}*` }, { quoted: m })
     }
 
-    // ── CREATE QR CODE ────────────────────────────────────────────────────────
-    if (command === 'createqr' || command === 'qr' || command === 'qrcode') {
+    // ── AI VISION / SEE IMAGE ─────────────────────────────────────────────────
+    if (['see','vision','describe','airead'].includes(command)) {
+        const target = m.quoted || m
+        if (!hasMedia(target)) return reply(`Reply to an image with *${prefix}see* or use *${prefix}see <image URL>*`)
+        await react(conn, m, '👁')
+        let imageUrl = args[0]
+        if (!imageUrl?.startsWith('http')) {
+            const buf = await conn.downloadMediaMessage(target).catch(() => null)
+            if (!buf) return reply('❌ Could not download the image.')
+            imageUrl = 'data:image/jpeg;base64,' + buf.toString('base64')
+        }
+        const description = await gtVision(imageUrl, text || 'Describe this image in detail. What do you see?')
+        if (!description) { await react(conn, m, '❌'); return reply('❌ Could not analyze image.') }
+        await react(conn, m, '✅')
+        return reply(`👁️ *Image Analysis*\n${'─'.repeat(28)}\n\n${description}`)
+    }
+
+    // ── REMOVE BG ─────────────────────────────────────────────────────────────
+    if (['removebg','rmbg','nobg'].includes(command)) {
+        const imgUrl = await resolveImageUrl(m, conn, args)
+        if (!imgUrl) return reply(`Usage: *${prefix}removebg <image URL>* or reply to an image`)
+        await react(conn, m, '✂️')
+        const outUrl = await gtRemoveBg(imgUrl)
+        if (!outUrl) { await react(conn, m, '❌'); return reply('❌ Remove background failed. Try uploading to a public URL first.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { image: { url: outUrl }, caption: '✅ *Background removed!*' }, { quoted: m })
+    }
+
+    // ── QR CODE CREATE (FIXED — uses qrserver.com) ────────────────────────────
+    if (['createqr','qr','qrcode'].includes(command)) {
         if (!text) return reply(`Usage: *${prefix}qr <text or URL>*`)
-        await react(conn, m, '⏳')
-        const r = await gt('/api/tools/createqr', { url: text })
-        if (!r.success && !r.result) {
-            const r2 = await gt('/api/tools/createqr', { text, q: text })
-            if (!r2.success) {
-                await react(conn, m, '❌')
-                return reply(`❌ QR generation failed: ${r2.error || r.error}`)
-            }
-            const qrUrl = r2.result || r2.url || r2.image
-            if (!qrUrl) {
-                await react(conn, m, '❌')
-                return reply(`❌ QR generation returned no image.`)
-            }
-            await react(conn, m, '✅')
-            return conn.sendMessage(m.chat, { image: { url: qrUrl }, caption: `📱 QR Code for: _${text.slice(0, 60)}_` }, { quoted: m })
-        }
-        const qrUrl = r.result || r.url || r.image
+        await react(conn, m, '📱')
+        const qrUrl = gtCreateQr(text)
         await react(conn, m, '✅')
-        if (qrUrl.startsWith('http')) {
-            return conn.sendMessage(m.chat, { image: { url: qrUrl }, caption: `📱 QR Code for: _${text.slice(0, 60)}_` }, { quoted: m })
-        }
-        return conn.sendMessage(m.chat, { image: Buffer.from(qrUrl.split(',')[1] || qrUrl, 'base64'), caption: `📱 QR Code for: _${text.slice(0, 60)}_` }, { quoted: m })
+        return conn.sendMessage(m.chat, { image: { url: qrUrl }, caption: `📱 *QR Code*\n${text.slice(0, 100)}` }, { quoted: m })
     }
 
-    // ── READ QR CODE ──────────────────────────────────────────────────────────
-    if (command === 'readqr' || command === 'scanqr') {
-        let imgUrl = args[0]
-        if (!imgUrl && m.quoted && hasMedia(m.quoted)) {
-            imgUrl = `quoted_image`
-        }
-        if (!imgUrl) return reply(`Usage: *${prefix}readqr <image URL>* or reply to a QR code image.`)
-        if (imgUrl === 'quoted_image') {
-            await react(conn, m, '❌')
-            return reply(`❌ Please provide an image URL: *${prefix}readqr <URL>*`)
-        }
-        await react(conn, m, '⏳')
-        const r = await gt('/api/tools/readqr', { url: imgUrl })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Could not read QR code: ${r.error || 'No data'}`)
-        }
+    // ── QR CODE READ ──────────────────────────────────────────────────────────
+    if (['readqr','scanqr'].includes(command)) {
+        const imgUrl = await resolveImageUrl(m, conn, args)
+        if (!imgUrl) return reply(`Usage: *${prefix}readqr <image URL>* or reply to a QR image`)
+        await react(conn, m, '📷')
+        const result = await gtReadQr(imgUrl)
+        if (!result) { await react(conn, m, '❌'); return reply('❌ Could not read QR code.') }
         await react(conn, m, '✅')
-        return reply(`📱 *QR Code Content:*\n\n${r.result}`)
+        return reply(`📷 *QR Content:*\n${result}`)
     }
 
     // ── SCREENSHOT WEBSITE ────────────────────────────────────────────────────
-    if (command === 'ssweb' || command === 'screenshot' || command === 'webss') {
+    if (['ssweb','screenshot','webss'].includes(command)) {
         const url = args[0]
-        if (!url || !url.startsWith('http')) return reply(`Usage: *${prefix}ssweb <URL>*\n_Example: ${prefix}ssweb https://google.com_`)
-        await react(conn, m, '⏳')
-        try {
-            const r = await axios.get(`${GT}/api/tools/ssweb`, {
-                params: { apikey: KEY, url },
-                responseType: 'arraybuffer',
-                timeout: 30000
-            })
-            await react(conn, m, '✅')
-            return conn.sendMessage(m.chat, {
-                image: Buffer.from(r.data),
-                caption: `📸 *Screenshot of:*\n🔗 ${url}`
-            }, { quoted: m })
-        } catch (e) {
-            await react(conn, m, '❌')
-            return reply(`❌ Screenshot failed: ${e.message}`)
-        }
-    }
-
-    // ── OCR (Image to Text) ───────────────────────────────────────────────────
-    if (command === 'ocr' || command === 'readtext' || command === 'img2txt') {
-        let imgUrl = args[0]
-        if (!imgUrl && m.quoted && hasMedia(m.quoted)) {
-            await react(conn, m, '⏳')
-            const buf = await conn.downloadMediaMessage(m.quoted).catch(() => null)
-            if (buf) imgUrl = 'data:image/jpeg;base64,' + buf.toString('base64')
-        }
-        if (!imgUrl) return reply(`Usage: *${prefix}ocr <image URL>* or reply to an image.`)
-        await react(conn, m, '⏳')
-        const r = await gt('/api/tools/ocr', { url: imgUrl })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ OCR failed: ${r.error || 'No text found'}`)
-        }
+        if (!url?.startsWith('http')) return reply(`Usage: *${prefix}screenshot <URL>*`)
+        await react(conn, m, '📸')
+        const buf = await gtScreenshot(url)
+        if (!buf) { await react(conn, m, '❌'); return reply('❌ Screenshot failed.') }
         await react(conn, m, '✅')
-        return reply(`📝 *Text Extracted:*\n\n${r.result.slice(0, 2000)}`)
+        return conn.sendMessage(m.chat, { image: buf, caption: `📸 *${url}*` }, { quoted: m })
     }
 
-    // ── IMAGE UPSCALER ────────────────────────────────────────────────────────
-    if (command === 'upscale' || command === 'enhance' || command === 'hd') {
-        let imgUrl = args[0]
-        if (!imgUrl && m.quoted && hasMedia(m.quoted)) {
-            await react(conn, m, '⏳')
-            const buf = await conn.downloadMediaMessage(m.quoted).catch(() => null)
-            if (buf) imgUrl = 'data:image/jpeg;base64,' + buf.toString('base64')
-        }
-        if (!imgUrl) return reply(`Usage: *${prefix}upscale <image URL>* or reply to an image.`)
-        await react(conn, m, '⏳')
-        const r = await gt('/api/tools/imageupscaler', { url: imgUrl, model: 'upscale' })
-        if (!r.success || (!r.result && !r.url)) {
-            await react(conn, m, '❌')
-            return reply(`❌ Upscale failed: ${r.error || 'No result'}`)
-        }
-        const outUrl = r.result || r.url
-        await react(conn, m, '✅')
-        return conn.sendMessage(m.chat, { image: { url: outUrl }, caption: '✨ *Image Enhanced!*' }, { quoted: m })
-    }
-
-    // ── PHOTO EDITING SUITE (all Gifted Tech endpoints) ───────────────────────
-    if (command === 'cartoon' || command === 'cartoonify' || command === 'tooncartoon') {
-        return photoEdit(m, conn, reply, args, prefix, 'cartoon', 'Cartoonified',
-            ['/api/tools/imagecartoonifier', '/api/imageedit/cartoon', '/api/ai/cartoon'])
-    }
-
-    if (command === 'colorize' || command === 'colorizeimage' || command === 'colorise') {
-        return photoEdit(m, conn, reply, args, prefix, 'colorize', 'Colorized',
-            ['/api/tools/colorizeimage', '/api/imageedit/colorize', '/api/ai/colorize'])
-    }
-
-    if (command === 'blur' || command === 'blurimage') {
-        return photoEdit(m, conn, reply, args, prefix, 'blur', 'Blurred',
-            ['/api/imageedit/blur', '/api/tools/imageblur', '/api/imageedit/blurimage'])
-    }
-
-    if (command === 'sepia' || command === 'sepiafilter') {
-        return photoEdit(m, conn, reply, args, prefix, 'sepia', 'Sepia Filter',
-            ['/api/imageedit/sepia', '/api/tools/imagesepia'])
-    }
-
-    if (command === 'bw' || command === 'blackwhite' || command === 'bnw') {
-        return photoEdit(m, conn, reply, args, prefix, 'bw', 'Black & White',
-            ['/api/imageedit/blackwhite', '/api/imageedit/bw', '/api/tools/imageblackwhite'])
-    }
-
-    if (command === 'grayscale' || command === 'greyscale' || command === 'gray') {
-        return photoEdit(m, conn, reply, args, prefix, 'grayscale', 'Grayscale',
-            ['/api/imageedit/grayscale', '/api/imageedit/greyscale', '/api/tools/imagegrayscale'])
-    }
-
-    if (command === 'sharpen' || command === 'sharp') {
-        return photoEdit(m, conn, reply, args, prefix, 'sharpen', 'Sharpened',
-            ['/api/imageedit/sharpen', '/api/tools/imagesharpen'])
-    }
-
-    if (command === 'invert' || command === 'invertcolors' || command === 'negative') {
-        return photoEdit(m, conn, reply, args, prefix, 'invert', 'Inverted Colors',
-            ['/api/imageedit/invert', '/api/tools/imageinvert', '/api/imageedit/negative'])
-    }
-
-    if (command === 'sketch' || command === 'pencilsketch' || command === 'pencil') {
-        return photoEdit(m, conn, reply, args, prefix, 'sketch', 'Pencil Sketch',
-            ['/api/imageedit/sketch', '/api/tools/imagesketch', '/api/ai/pencilsketch'])
-    }
-
-    if (command === 'pixelate' || command === 'pixel' || command === 'pixelize') {
-        return photoEdit(m, conn, reply, args, prefix, 'pixelate', 'Pixelated',
-            ['/api/imageedit/pixelate', '/api/tools/imagepixelate'])
-    }
-
-    if (command === 'anime' || command === 'toanime' || command === 'animify') {
-        return photoEdit(m, conn, reply, args, prefix, 'anime', 'Anime Style',
-            ['/api/ai/img2anime', '/api/tools/imagetoanime', '/api/ai/animeify'])
-    }
-
-    if (command === 'img2img' || command === 'imgedit' || command === 'restyle') {
+    // ── OCR / READ TEXT ───────────────────────────────────────────────────────
+    if (['ocr','readtext','img2txt'].includes(command)) {
         const imgUrl = await resolveImageUrl(m, conn, args)
-        if (!imgUrl) return reply(`Usage: reply to an image with *${prefix}img2img <prompt>*\nExample: reply with *${prefix}img2img make it look like a Studio Ghibli scene*`)
-        if (!text || text.length < 3) return reply(`❌ Add a prompt. Example: *${prefix}img2img turn this into a watercolor painting*`)
-        await react(conn, m, '🎨')
-        const endpoints = ['/api/ai/img2img', '/api/ai/imageremix', '/api/tools/img2img']
-        let outUrl = null, lastErr = ''
-        for (const ep of endpoints) {
-            const r = await gt(ep, { url: imgUrl, prompt: text })
-            const candidate = r?.result?.url || r?.result || r?.url || r?.image
-            if (typeof candidate === 'string' && candidate.startsWith('http')) { outUrl = candidate; break }
-            lastErr = r?.error || r?.message || 'no result'
-        }
-        if (!outUrl) {
-            await react(conn, m, '❌')
-            return reply(`❌ Image-to-image failed: ${lastErr}`)
-        }
+        if (!imgUrl) return reply(`Usage: *${prefix}ocr* (reply to image) or *${prefix}ocr <image URL>*`)
+        await react(conn, m, '📄')
+        const result = await gtOcr(imgUrl)
+        if (!result) { await react(conn, m, '❌'); return reply('❌ Could not extract text from image.') }
         await react(conn, m, '✅')
-        return conn.sendMessage(m.chat, { image: { url: outUrl }, caption: `🎨 *${text.slice(0, 80)}*` }, { quoted: m })
+        return reply(`📄 *Text from Image:*\n\n${result}`)
     }
 
-    // ── AI IMAGE GENERATION (Gifted) ──────────────────────────────────────────
-    if (command === 'imagine' || command === 'ai4k' || command === 'aigen' || command === 'flux') {
-        if (!text) return reply(`Usage: *${prefix}imagine <description>*\n_Example: ${prefix}imagine a sunset over Nairobi_`)
-        await react(conn, m, '🎨')
-        const endpoints = ['/api/ai/fluximg', '/api/ai/deepimg', '/api/ai/txt2img', '/api/ai/magicstudio']
-        let success = false
-        for (const ep of endpoints) {
-            const r = await gt(ep, { prompt: text })
-            const imgUrl = r?.result || r?.url || r?.image || r?.imageUrl
-            if (imgUrl && imgUrl.startsWith('http')) {
-                await react(conn, m, '✅')
-                await conn.sendMessage(m.chat, { image: { url: imgUrl }, caption: `🎨 *${text.slice(0, 80)}*` }, { quoted: m })
-                success = true
-                break
-            }
-        }
-        if (!success) {
-            await react(conn, m, '❌')
-            return reply(`❌ Image generation failed. All providers unavailable.`)
-        }
-        return
+    // ── UPSCALE / ENHANCE ─────────────────────────────────────────────────────
+    if (['upscale','enhance','hd'].includes(command)) {
+        const imgUrl = await resolveImageUrl(m, conn, args)
+        if (!imgUrl) return reply(`Usage: *${prefix}upscale* (reply to image) or *${prefix}upscale <URL>*`)
+        await react(conn, m, '🔍')
+        const outUrl = await gtUpscale(imgUrl)
+        if (!outUrl) { await react(conn, m, '❌'); return reply('❌ Upscale failed.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { image: { url: outUrl }, caption: '🔍 *Image Enhanced!*' }, { quoted: m })
     }
 
-    // ── YOUTUBE TRANSCRIPT ────────────────────────────────────────────────────
-    if (command === 'transcript' || command === 'ytscript' || command === 'captions') {
+    // ── TRANSCRIPT ────────────────────────────────────────────────────────────
+    if (['transcript','ytscript','captions'].includes(command)) {
         const url = args[0]
-        if (!url || !url.includes('youtu')) return reply(`Usage: *${prefix}transcript <YouTube URL>*`)
-        await react(conn, m, '⏳')
-        const r = await gt('/api/ai/transcript', { url })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Could not get transcript: ${r.error || 'No captions found'}`)
-        }
+        if (!url?.includes('youtu')) return reply(`Usage: *${prefix}transcript <YouTube URL>*`)
+        await react(conn, m, '📝')
+        const result = await gtTranscript(url)
+        if (!result) { await react(conn, m, '❌'); return reply('❌ No transcript found for this video.') }
         await react(conn, m, '✅')
-        const txt = String(r.result).slice(0, 3000)
-        return reply(`📝 *YouTube Transcript*\n${'─'.repeat(28)}\n\n${txt}${txt.length === 3000 ? '\n\n_...truncated_' : ''}`)
+        const body = typeof result === 'string' ? result.slice(0, 3500) : JSON.stringify(result).slice(0, 3500)
+        return reply(`📝 *YouTube Transcript*\n${'─'.repeat(28)}\n\n${body}${body.length >= 3500 ? '\n\n_...truncated_' : ''}`)
     }
 
-    // ── FOOTBALL LIVE SCORES ──────────────────────────────────────────────────
-    if (command === 'livescore' || command === 'live' || command === 'scores') {
+    // ── LIVE SCORES ───────────────────────────────────────────────────────────
+    if (['livescore','live','scores'].includes(command)) {
         await react(conn, m, '⚽')
-        const r = await gt('/api/football/livescore')
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Could not fetch live scores.`)
-        }
+        const data = await gtLiveScore()
+        if (!data) { await react(conn, m, '❌'); return reply('❌ No live scores right now.') }
         await react(conn, m, '✅')
-        const matches = Array.isArray(r.result) ? r.result.slice(0, 10) : Object.values(r.result || {}).flat().slice(0, 10)
-        if (!matches.length) return reply(`⚽ No live matches right now.`)
-        const lines = matches.map(g => {
-            const score = (g.score || g.result || `${g.homeScore || 0} - ${g.awayScore || 0}`).toString()
-            const status = g.status || g.minute || g.time || ''
-            return `⚽ *${g.homeTeam}* ${score} *${g.awayTeam}*${status ? ` _(${status})_` : ''}\n   ${g.league || g.competition || ''}`
+        const matches = Array.isArray(data) ? data.slice(0, 10) : (data.matches || data.events || []).slice(0, 10)
+        if (!matches.length) return reply('⚽ No live matches right now. Try again during match hours.')
+        const lines = matches.map(mat => {
+            const home = mat.homeTeam || mat.home || mat.team1 || '?'
+            const away = mat.awayTeam || mat.away || mat.team2 || '?'
+            const score = mat.score || mat.result || (mat.homeScore !== undefined ? `${mat.homeScore} - ${mat.awayScore}` : 'vs')
+            const time = mat.minute ? ` [${mat.minute}']` : (mat.status || '')
+            return `⚽ *${home}* ${score} *${away}*${time}`
         })
-        return reply(`⚽ *Live Scores*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+        return reply(`⚽ *Live Scores*\n${'─'.repeat(28)}\n\n${lines.join('\n')}`)
     }
 
-    // ── FOOTBALL PREDICTIONS ──────────────────────────────────────────────────
-    if (command === 'predictions' || command === 'predict' || command === 'tips') {
-        await react(conn, m, '🔮')
-        const r = await gt('/api/football/predictions')
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Could not fetch predictions.`)
-        }
+    // ── PREDICTIONS ───────────────────────────────────────────────────────────
+    if (['predictions','predict','tips','betika'].includes(command)) {
+        await react(conn, m, '🎯')
+        const data = await gtPredictions()
+        if (!data) { await react(conn, m, '❌'); return reply('❌ No predictions available today.') }
         await react(conn, m, '✅')
-        const games = Array.isArray(r.result) ? r.result.slice(0, 8) : []
-        if (!games.length) return reply(`🔮 No predictions available right now.`)
-        const lines = games.map(g => {
-            const p = g.predictions || {}
-            const ft = p.fulltime || {}
-            const best = ft.home > ft.away ? `${g.match?.split(' vs ')[0] || 'Home'} to win (${Math.round(ft.home)}%)` :
-                         ft.away > ft.home ? `${g.match?.split(' vs ')[1] || 'Away'} to win (${Math.round(ft.away)}%)` :
-                         `Draw (${Math.round(ft.draw || 33)}%)`
-            return `🔮 *${g.match}*\n   📅 ${g.time?.split(' ')[0] || 'TBD'} · _${g.league}_\n   💡 ${best}`
+        const tips = Array.isArray(data) ? data.slice(0, 8) : []
+        if (!tips.length) return reply('🎯 No predictions available at this time.')
+        const lines = tips.map((t, i) => {
+            const home = t.homeTeam || t.home || '?'
+            const away = t.awayTeam || t.away || '?'
+            const pick = t.prediction || t.tip || t.pick || '?'
+            const odds = t.odds ? ` | Odds: ${t.odds}` : ''
+            return `${i + 1}. *${home} vs ${away}*\n   🎯 Pick: *${pick}*${odds}`
         })
-        return reply(`🔮 *Today's Predictions*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+        return reply(`🎯 *Today's Predictions*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}\n\n_⚠️ Bet responsibly. For entertainment only._`)
     }
 
     // ── LEAGUE STANDINGS ──────────────────────────────────────────────────────
     const leagueMap = {
-        epl: { path: '/api/football/epl/standings', name: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 EPL Standings' },
-        laliga: { path: '/api/football/laliga/standings', name: '🇪🇸 La Liga Standings' },
-        ucl: { path: '/api/football/ucl/standings', name: '🏆 UCL Standings' },
-        bundesliga: { path: '/api/football/bundesliga/standings', name: '🇩🇪 Bundesliga Standings' },
-        seriea: { path: '/api/football/seriea/standings', name: '🇮🇹 Serie A Standings' },
-        ligue1: { path: '/api/football/ligue1/standings', name: '🇫🇷 Ligue 1 Standings' },
-        euros: { path: '/api/football/euros/standings', name: '🇪🇺 Euros Standings' },
+        epl: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 EPL', laliga: '🇪🇸 La Liga', ucl: '🏆 UCL',
+        bundesliga: '🇩🇪 Bundesliga', seriea: '🇮🇹 Serie A',
+        ligue1: '🇫🇷 Ligue 1', euros: '🇪🇺 Euros'
     }
     if (leagueMap[command]) {
-        const { path, name } = leagueMap[command]
         await react(conn, m, '⚽')
-        const r = await gt(path)
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Could not fetch standings.`)
-        }
+        const teams = await gtStandings(command)
+        if (!teams) { await react(conn, m, '❌'); return reply('❌ Could not fetch standings.') }
         await react(conn, m, '✅')
-        const teams = Array.isArray(r.result) ? r.result.slice(0, 10) : (r.result?.standings || []).slice(0, 10)
-        if (!teams.length) return reply(`⚽ No standings data available.`)
-        const header = `*${name}* (Top 10)\n${'─'.repeat(30)}\n*# Team         Pts  W  D  L*\n`
-        const rows = teams.map(t => {
-            const pos = String(t.position || t.rank || t.pos || teams.indexOf(t) + 1).padStart(2)
-            const name_ = (t.team || t.name || t.club || '?').padEnd(14).slice(0, 14)
-            const pts = String(t.points || t.pts || 0).padStart(3)
-            const w = String(t.won || t.w || 0).padStart(2)
-            const d = String(t.draw || t.d || 0).padStart(2)
-            const l = String(t.lost || t.l || 0).padStart(2)
-            return `${pos} ${name_} ${pts} ${w} ${d} ${l}`
+        const list = Array.isArray(teams) ? teams.slice(0, 10) : []
+        if (!list.length) return reply('⚽ No standings data available.')
+        const header = `*${leagueMap[command]} Standings* (Top 10)\n${'─'.repeat(30)}\n*Pos Team           Pts  W  D  L*\n`
+        const rows = list.map(t => {
+            const pos = String(t.position || t.rank || t.pos || list.indexOf(t) + 1).padStart(3)
+            const name_ = (t.team || t.name || t.club || '?').padEnd(15).slice(0, 15)
+            const pts = String(t.points || t.pts || 0).padStart(4)
+            const w = String(t.won || t.w || 0).padStart(3)
+            const d = String(t.draw || t.d || 0).padStart(3)
+            const l = String(t.lost || t.l || 0).padStart(3)
+            return `${pos} ${name_}${pts}${w}${d}${l}`
         })
         return reply('```\n' + header + rows.join('\n') + '\n```')
     }
 
     // ── FOOTBALL NEWS ─────────────────────────────────────────────────────────
-    if (command === 'fnews' || command === 'footballnews') {
+    if (['fnews','footballnews'].includes(command)) {
         await react(conn, m, '📰')
-        const r = await gt('/api/football/news')
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Could not fetch football news.`)
-        }
+        const articles = await gtFootballNews()
+        if (!articles) { await react(conn, m, '❌'); return reply('❌ Could not fetch football news.') }
         await react(conn, m, '✅')
-        const articles = Array.isArray(r.result) ? r.result.slice(0, 5) : []
-        if (!articles.length) return reply(`📰 No news articles found.`)
-        const lines = articles.map((a, i) =>
+        const list = Array.isArray(articles) ? articles.slice(0, 5) : []
+        if (!list.length) return reply('📰 No football news right now.')
+        const lines = list.map((a, i) =>
             `*${i + 1}. ${a.title || a.headline}*\n${a.summary || a.description || ''}\n🔗 ${a.url || a.link || ''}`
         )
         return reply(`📰 *Football News*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
     }
 
     // ── BIBLE VERSE ────────────────────────────────────────────────────────────
-    if (command === 'bible' || command === 'verse') {
+    if (['bible','verse'].includes(command)) {
         if (!text) return reply(`Usage: *${prefix}bible <verse>*\n_Example: ${prefix}bible John 3:16_`)
         await react(conn, m, '📖')
-        const r = await gt('/api/search/bible', { verse: text })
-        if (!r.success || !r.result) {
-            await react(conn, m, '❌')
-            return reply(`❌ Could not find verse: *${text}*`)
-        }
+        const d = await gtBible(text)
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ Could not find verse: *${text}*`) }
         await react(conn, m, '✅')
-        const d = r.result
-        return reply(`📖 *${d.verse || text}*\n\n_${d.text || d.content || d.result}_\n\n${d.translation ? `📌 ${d.translation}` : ''}`)
-    }
-
-    // ── YOUTUBE SEARCH ────────────────────────────────────────────────────────
-    if (command === 'yts' || command === 'ytsearch' || command === 'yousearch') {
-        if (!text) return reply(`Usage: *${prefix}yts <song or video name>*\n_Example: ${prefix}yts Afrobeats 2024_`)
-        await react(conn, m, '🔍')
-
-        // Try multiple API keys for search — 'gifted' works for search, numeric keys for downloads
-        let results = null
-        for (const key of ['gifted', '_0u5aff45,_0l1876s8qc']) {
-            try {
-                const r = await gt('/api/search/yts', { query: text, apikey: key })
-                const items = r?.results || r?.data || r?.videos || []
-                if (Array.isArray(items) && items.length) { results = items.slice(0, 6); break }
-                // Also accept top-level success object
-                if (r?.success && r?.result) {
-                    const flat = Array.isArray(r.result) ? r.result : [r.result]
-                    if (flat.length) { results = flat.slice(0, 6); break }
-                }
-            } catch {}
-        }
-
-        if (!results || !results.length) {
-            // Fallback: yt.lemnoslife (no key required)
-            try {
-                const res = await axios.get(
-                    `https://yt.lemnoslife.com/noKey/search?part=snippet&q=${encodeURIComponent(text)}&type=video&maxResults=6`,
-                    { timeout: 10000 }
-                )
-                const items = res.data?.items || []
-                if (items.length) {
-                    results = items.map(it => ({
-                        title: it.snippet?.title || 'Unknown',
-                        videoId: it.id?.videoId,
-                        channel: it.snippet?.channelTitle || '',
-                        url: `https://youtube.com/watch?v=${it.id?.videoId}`
-                    })).filter(v => v.videoId)
-                }
-            } catch {}
-        }
-
-        if (!results || !results.length) {
-            await react(conn, m, '❌')
-            return reply(`❌ No YouTube results found for: *${text}*\n\nTip: Try a shorter or different search term.`)
-        }
-
-        await react(conn, m, '✅')
-        const lines = results.map((v, i) => {
-            const title = v.title || v.name || 'Unknown'
-            const id = v.videoId || v.id || (v.url?.match(/v=([A-Za-z0-9_-]{11})/)?.[1])
-            const channel = v.channel || v.channelTitle || v.author?.name || v.uploader || ''
-            const dur = v.duration || v.lengthSeconds ? (
-                typeof v.lengthSeconds === 'number'
-                    ? `${Math.floor(v.lengthSeconds/60)}:${String(v.lengthSeconds%60).padStart(2,'0')}`
-                    : v.duration
-            ) : ''
-            const link = id ? `https://youtu.be/${id}` : (v.url || '')
-            return `*${i+1}.* ${title}${channel ? `\n   👤 ${channel}` : ''}${dur ? `  ⏱ ${dur}` : ''}${link ? `\n   🔗 ${link}` : ''}`
-        })
-
-        return reply(
-            `🎬 *YouTube Search: "${text}"*\n${'─'.repeat(30)}\n\n${lines.join('\n\n')}\n\n` +
-            `💡 _Copy a link above then use *${prefix}play <url>* or *${prefix}song <url>* to download_`
-        )
+        const content = d.data || d.text || d.content || d.result || JSON.stringify(d)
+        return reply(`📖 *${d.verse || text}*\n\n_${content}_`)
     }
 
     // ── WALLPAPER ──────────────────────────────────────────────────────────────
-    if (command === 'wallpaper' || command === 'wp' || command === 'wallp') {
+    if (['wallpaper','wp','wallp'].includes(command)) {
         if (!text) return reply(`Usage: *${prefix}wallpaper <keyword>*`)
         await react(conn, m, '🖼')
-        const r = await gt('/api/search/wallpaper', { query: text })
-        if (!r.success || !r.results?.length) {
-            await react(conn, m, '❌')
-            return reply(`❌ No wallpapers found for: *${text}*`)
-        }
+        const results = await gtWallpaper(text)
+        if (!results?.length) { await react(conn, m, '❌'); return reply(`❌ No wallpapers found for: *${text}*`) }
         await react(conn, m, '✅')
-        const img = r.results[Math.floor(Math.random() * Math.min(r.results.length, 5))]
+        const img = results[Math.floor(Math.random() * Math.min(results.length, 5))]
         const imgUrl = img.url || img.imageUrl || img.image || img.full || img.src
         return conn.sendMessage(m.chat, { image: { url: imgUrl }, caption: `🖼 *${text}*` }, { quoted: m })
     }
 }
 
-const formatWeather = (w, query) => {
-    if (!w || typeof w !== 'object') return `⛅ Weather for *${query}*:\n${JSON.stringify(w).slice(0, 200)}`
-    const loc = w.location || w.city || w.name || query
-    const temp = w.temperature || w.temp || w.current?.temp_c || w.main?.temp || '?'
-    const desc = w.condition || w.description || w.weather?.[0]?.description || w.current?.condition?.text || ''
-    const feels = w.feels_like || w.feelsLike || w.current?.feelslike_c || ''
-    const humidity = w.humidity || w.current?.humidity || ''
-    const wind = w.wind_speed || w.wind || w.current?.wind_kph || ''
-    return `⛅ *Weather — ${loc}*\n${'─'.repeat(28)}\n🌡 Temperature: *${temp}°C*\n☁️ ${desc}${feels ? `\n🤔 Feels like: *${feels}°C*` : ''}${humidity ? `\n💧 Humidity: *${humidity}%*` : ''}${wind ? `\n💨 Wind: *${wind} km/h*` : ''}`
-}
-
 handle.command = [
-    'ytmp3', 'yta', 'ytaudio', 'ytmp4', 'ytv', 'ytvideo',
-    'tiktok', 'tt', 'tiktokdl',
-    'igdl', 'instagram', 'insta',
-    'twitter', 'xdl', 'twdl',
-    'spotifydl', 'spdl',
-    'lyrics', 'lyric',
-    'define', 'meaning',
-    'dict', 'dictionary',
-    'google', 'search',
-    'wiki', 'wikipedia',
-    'weather', 'clima',
-    'shazam', 'identify',
-    'spotifysearch', 'spsearch',
-    'removebg', 'rmbg', 'nobg',
-    'createqr', 'qr', 'qrcode',
-    'readqr', 'scanqr',
-    'ssweb', 'screenshot', 'webss',
-    'ocr', 'readtext', 'img2txt',
-    'upscale', 'enhance', 'hd',
-    'imagine', 'ai4k', 'aigen', 'flux',
-    // Photo editing suite
-    'cartoon', 'cartoonify', 'tooncartoon',
-    'colorize', 'colorizeimage', 'colorise',
-    'blur', 'blurimage',
-    'sepia', 'sepiafilter',
-    'bw', 'blackwhite', 'bnw',
-    'grayscale', 'greyscale', 'gray',
-    'sharpen', 'sharp',
-    'invert', 'invertcolors', 'negative',
-    'sketch', 'pencilsketch', 'pencil',
-    'pixelate', 'pixel', 'pixelize',
-    'anime', 'toanime', 'animify',
-    'img2img', 'imgedit', 'restyle',
-    'yts', 'ytsearch', 'yousearch',
-    'transcript', 'ytscript', 'captions',
-    'livescore', 'live', 'scores',
-    'predictions', 'predict', 'tips',
-    'epl', 'laliga', 'ucl', 'bundesliga', 'seriea', 'ligue1', 'euros',
-    'fnews', 'footballnews',
-    'bible', 'verse',
-    'wallpaper', 'wp', 'wallp',
+    // Media downloads
+    'ytmp3','yta','ytaudio','ytmp4','ytv','ytvideo',
+    'tiktok','tt','tiktokdl',
+    'igdl','instagram','insta',
+    'twitter','xdl','twdl',
+    'fbdl','facebook','fb',
+    'spotifydl','spdl',
+    // Search & info
+    'lyrics','lyric',
+    'define','meaning','dict','dictionary',
+    'google','search',
+    'wiki','wikipedia',
+    'weather','clima','hali',
+    'shazam','identify',
+    'spotifysearch','spsearch','spfind',
+    'yts','ytsearch','yousearch',
+    'bible','verse',
+    'wallpaper','wp','wallp',
+    // NEW commands
+    'translate','tr','trans',
+    'crypto','coin','btc','eth','doge','bitcoin',
+    'stock','shares','equity',
+    'convert','currency','forex','exchange',
+    'movie','film','imdb',
+    'anime','animesearch',
+    'ip','ipinfo','iplookup',
+    'whois','domaininfo',
+    'news','headlines','breaking',
+    'github','repo','ghrepo',
+    // AI & Image tools
+    'imagine','gen','aigen','flux','ai4k',
+    'see','vision','describe','airead',
+    'removebg','rmbg','nobg',
+    'createqr','qr','qrcode',
+    'readqr','scanqr',
+    'ssweb','screenshot','webss',
+    'ocr','readtext','img2txt',
+    'upscale','enhance','hd',
+    'transcript','ytscript','captions',
+    // Football
+    'livescore','live','scores',
+    'predictions','predict','tips','betika',
+    'epl','laliga','ucl','bundesliga','seriea','ligue1','euros',
+    'fnews','footballnews',
 ]
-handle.tags = ['media', 'search', 'sports', 'tools']
+handle.tags = ['media', 'search', 'sports', 'tools', 'info', 'ai']
 
 module.exports = handle
