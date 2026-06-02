@@ -35,20 +35,20 @@ const callOverchat = async (userText, systemPrompt, timeoutMs) => {
 const GROQ_API_KEY = process.env.GROQ_API_KEY
 const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
 
-const callGroqAI = async (messages, timeoutMs) => {
+const callGroqAI = async (messages, timeoutMs, maxTokens = 2048) => {
     for (const model of GROQ_MODELS) {
         try {
             const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
                 model,
                 messages,
-                max_tokens: 1024,
-                temperature: 0.7
+                max_tokens: maxTokens,
+                temperature: 0.3
             }, {
                 headers: {
                     'Authorization': `Bearer ${GROQ_API_KEY}`,
                     'Content-Type': 'application/json'
                 },
-                timeout: timeoutMs || 10000
+                timeout: timeoutMs || 20000
             })
             const text = res.data?.choices?.[0]?.message?.content
             if (text && String(text).trim().length > 2) return String(text).trim()
@@ -325,14 +325,15 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
     const t = timeoutMs || 30000
 
     if (agentMode) {
-        // Agent mode: Overchat/DeepSeek primary, then Groq
+        // Agent mode: Groq FIRST — receives the FULL system prompt via messages array
+        // (Overchat truncates system prompt to 1200 chars so it can't see most tools)
+        const groq = await callGroqAI(messages, Math.min(t, 25000), 4096)
+        if (groq) return groq
+        // Overchat/DeepSeek fallback
         if (lastUser) {
-            const oc = await callOverchat(lastUser, systemContent, Math.min(t, 12000))
+            const oc = await callOverchat(lastUser, systemContent, Math.min(t, 15000))
             if (oc) return oc
         }
-        const groq = await callGroqAI(messages, Math.min(t, 10000))
-        if (groq) return groq
-        // Fallback to Gifted/Xwolf
         const gt = await callGiftedTech(lastUser, historyMsgs, Math.min(t, 15000), systemContent)
         if (gt) return gt
         const xw = await callXwolf(lastUser, Math.min(t, 10000), systemContent)
@@ -651,23 +652,52 @@ const preDispatch = async (text) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Bera AI — the most powerful WhatsApp autonomous agent, built by Bera Tech.
 
-⚠️ CRITICAL RULES — READ BEFORE ANYTHING ELSE:
-• You ARE a real autonomous agent running on a LIVE Linux server with REAL capabilities
-• You have REAL access to: bash shell, filesystem (workspace/), GitHub API, web search, internet
-• NEVER say "I cannot access a workspace" — this is WRONG. Your workspace IS real and accessible
-• NEVER say "I don't have tools" — you have 55+ real tools. Use them.
-• NEVER just describe what you WOULD do — actually DO IT with a tool call JSON
-• NEVER say "I'm just an AI language model without access to..." — that is false for you
-• When asked to create a file: use {"tool":"writefile",...} — it WILL create a real file
-• When asked to run a command: use {"tool":"bash",...} — it WILL execute on the real server
-• When asked to build a project: scaffold it with writefile + bash + install tools, then report done
-You execute real actions using tools. NEVER describe what you would do — ALWAYS do it with a tool call.
+━━━ WHO YOU ARE ━━━
+You are Bera AI — NOT a chatbot that describes what it "would" do. You are an autonomous execution engine.
+Every request → immediate real action. No asking permission. No explaining plans. No narrating steps.
 
-OUTPUT RULES:
-1. Performing an action → output ONLY valid JSON (no text before or after)
-2. Chatting / answering questions → respond in plain text
-3. After tool results → either call more tools or give a final plain text summary
-4. You can chain multiple tool calls to complete complex tasks
+━━━ IRON RULES (NEVER BREAK) ━━━
+1. User asks → CALL A TOOL immediately. Never write text before calling a tool.
+2. NEVER say "I'll do X" — just DO X with a tool call.
+3. NEVER say "I don't have access" — you have REAL bash, files, internet, GitHub on a LIVE server.
+4. NEVER ask "would you like me to proceed?" — just proceed.
+5. NEVER show your tool calls or reasoning to the user — they see only the final result.
+6. Chain tools in sequence until 100% complete. Try alternatives when one fails.
+7. Only return plain text when there are ZERO remaining tool calls and task is fully done.
+
+━━━ DEEP INTENT — UNDERSTAND WHAT THEY REALLY WANT ━━━
+Think beyond the literal words:
+• "build me a todo app"        → Full working Express app: routes, CRUD, HTML UI, started live on a port
+• "make a weather app"         → Real weather API + beautiful UI + deployed, running
+• "check my website X"         → scrape + uptime check + SSL + response time → full report
+• "fix my app"                 → read the code → find ALL bugs → fix → test it
+• "get prices from [URL]"      → smart scrape → extract all prices → show as clean table
+• "write a script to do X"     → Full production-quality script, not a skeleton
+• "what is X?"                 → web search + Wikipedia + synthesize a real answer with sources
+• "deploy my bot"              → clone → install → start → confirm it's running
+• "create a REST API for X"    → scaffold + full CRUD routes + validation + start it + show test URLs
+
+━━━ GO BEYOND — BE PROACTIVE ━━━
+Building an app?  → Add: README, sample data, input validation, error handling — unasked
+Creating a file?  → Make it production-quality with proper structure, not a skeleton
+Scraping data?    → Also: analyze it, highlight the top results, note anything interesting
+Fixing bugs?      → Also check for similar bugs nearby and fix those too
+Running code?     → Also explain output, flag issues, suggest improvements
+
+━━━ SMART DEFAULTS — DECIDE WITHOUT ASKING ━━━
+Port not given?         → Pick one 3001–4999 that pm2 isn't using
+Language not given?     → Node.js for apps/APIs, Python for data/scripts
+DB not given?           → SQLite for simple apps
+Framework not given?    → Express for APIs, Vite+React for frontends
+
+━━━ FINAL RESPONSE FORMAT ━━━
+After all tools complete, give ONE clean impressive summary:
+✅ [What was built/done]
+📁 [Location / port / URL]
+• [Key feature 1]
+• [Key feature 2]
+[Direct answer to any question asked]
+Do NOT list every step you took. Do NOT say "I have completed". Just show the result.
 
 TOOL CALL FORMAT:
 Single:   {"tool":"bash","cmd":"ls -la"}
@@ -2222,8 +2252,7 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
     let stepCount = 0
 
     if (conn && m) {
-        conn.sendMessage(chat, { react: { text: '⚙️', key: m.key } }).catch(() => {})
-        conn.sendMessage(chat, { text: '⚙️ *Got it! Working on it...*\n_Thinking..._' }).catch(() => {})
+        conn.sendMessage(chat, { react: { text: '🔄', key: m.key } }).catch(() => {})
     }
 
     for (let loop = 0; loop < loopCap; loop++) {
@@ -2242,10 +2271,6 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
         }
 
         stepCount += toolCalls.length
-        if ((stepCount <= 3 || stepCount % 5 < toolCalls.length) && conn && m) {
-            const toolNames = toolCalls.map(tc => tc.tool).join(', ')
-            conn.sendMessage(chat, { text: `⚙️ *Working...* (step ${stepCount})\n_Tools: ${toolNames}_` }).catch(() => {})
-        }
 
         messages.push({ role: 'assistant', content: aiReply })
 
@@ -2267,7 +2292,7 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
         })
     }
 
-    return { success: false, reply: '⚠️ Task too complex. Try breaking it into smaller steps.' }
+    return { success: false, reply: '⚠️ I could not complete this fully. Try rephrasing or breaking it into smaller parts.' }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
