@@ -59,11 +59,18 @@ const callGroqAI = async (messages, timeoutMs, maxTokens = 2048) => {
     return null
 }
 
-// ── Memory store (per-chat, persists in process memory) ──────────────────────
-const MEMORY = {}
+// ── Memory store — persists to disk so it survives bot restarts ───────────────
+const _MEM_FILE = require('path').join(__dirname, '../../bera-ai/Database/agent_memory.json')
+let MEMORY = {}
+try { MEMORY = JSON.parse(require('fs').readFileSync(_MEM_FILE, 'utf8')) } catch {}
+
+const _saveMEMORY = () => {
+    try { require('fs').writeFileSync(_MEM_FILE, JSON.stringify(MEMORY, null, 2)) } catch {}
+}
+
 const remember = (chat, key, val) => {
     if (!MEMORY[chat]) MEMORY[chat] = {}
-    if (val !== undefined) MEMORY[chat][key] = val
+    if (val !== undefined) { MEMORY[chat][key] = val; _saveMEMORY() }
     return MEMORY[chat][key]
 }
 const getMemory = (chat) => MEMORY[chat] || {}
@@ -361,12 +368,13 @@ const pushHistory = (chat, role, content) => {
 }
 const getHistory = (chat) => HISTORY[chat] || []
 const clearHistory = (chat) => { delete HISTORY[chat] }
-const clearMemory = (chat) => { delete MEMORY[chat] }
+const clearMemory = (chat) => { delete MEMORY[chat]; _saveMEMORY() }
 const saveMemory = (chat, key, value) => remember(chat, key, value)
 const setMemory = (chat, value, key) => {
     if (!MEMORY[chat]) MEMORY[chat] = {}
     const k = key || `note_${Object.keys(MEMORY[chat]).length + 1}`
     MEMORY[chat][k] = String(value).slice(0, 300)
+    _saveMEMORY()
 }
 const deleteMemory = (chat, key) => {
     if (!MEMORY[chat]) return
@@ -381,6 +389,18 @@ const deleteMemory = (chat, key) => {
     } else {
         delete MEMORY[chat]
     }
+    _saveMEMORY()
+}
+
+// ── Auto-record completed agent actions to persistent memory ──────────────────
+const _autoMemorize = (chat, task, summary) => {
+    if (!chat || !task || !summary) return
+    if (!MEMORY[chat]) MEMORY[chat] = {}
+    // Keep rolling log of last 10 completed tasks
+    const log = MEMORY[chat]._action_log || []
+    log.push({ task: task.slice(0, 120), done: summary.slice(0, 200), at: new Date().toISOString() })
+    MEMORY[chat]._action_log = log.slice(-10)
+    _saveMEMORY()
 }
 
 // ── PM2 process management ───────────────────────────────────────────────────
@@ -954,6 +974,46 @@ User: "what 2+2?" → Plain text: "2 + 2 = 4"
 // ─────────────────────────────────────────────────────────────────────────────
 // PARSE TOOL CALLS
 // ─────────────────────────────────────────────────────────────────────────────
+const _ACTION_TO_TOOL = {
+    'execute_shell': 'bash', 'shell': 'bash', 'run_shell': 'bash', 'run_command': 'bash',
+    'bash': 'bash', 'exec': 'bash', 'execute': 'bash', 'execute_command': 'bash',
+    'create_directory': 'mkdir', 'make_directory': 'mkdir', 'mkdir': 'mkdir',
+    'read_file': 'readfile', 'file_read': 'readfile', 'get_file': 'readfile',
+    'write_file': 'writefile', 'file_write': 'writefile', 'create_file': 'writefile', 'save_file': 'writefile',
+    'list_files': 'listfiles', 'file_list': 'listfiles', 'ls': 'listfiles',
+    'delete_file': 'deletefile', 'remove_file': 'deletefile',
+    'web_scrape': 'web_scrape', 'scrape': 'web_scrape', 'scrape_web': 'web_scrape',
+    'web_search': 'search', 'search': 'search', 'google': 'search',
+    'http': 'api', 'http_request': 'api', 'fetch': 'api', 'api_call': 'api',
+    'install_packages': 'install', 'npm_install': 'install', 'pip_install': 'install',
+    'run_code': 'runcode', 'execute_code': 'runcode', 'code': 'runcode'
+}
+
+const _normalizeToolObj = (obj) => {
+    if (!obj || typeof obj !== 'object') return null
+    if (obj.tool) return obj
+    const action = obj.action || obj.type || obj.name
+    if (!action) return null
+    const tool = _ACTION_TO_TOOL[String(action).toLowerCase()] || String(action).toLowerCase()
+    const norm = { tool }
+    if (obj.command !== undefined) norm.cmd = obj.command
+    else if (obj.cmd !== undefined) norm.cmd = obj.cmd
+    if (obj.path || obj.directory || obj.dir || obj.folder) norm.path = obj.path || obj.directory || obj.dir || obj.folder
+    if (obj.content !== undefined) norm.content = obj.content
+    if (obj.url !== undefined) norm.url = obj.url
+    if (obj.method !== undefined) norm.method = obj.method
+    if (obj.body !== undefined) norm.body = obj.body
+    if (obj.lang !== undefined) norm.lang = obj.lang
+    if (obj.code !== undefined) norm.code = obj.code
+    if (obj.query !== undefined) norm.query = obj.query
+    if (obj.packages !== undefined) norm.packages = obj.packages
+    for (const k of Object.keys(obj)) {
+        const skip = ['action', 'type', 'name', 'command', 'directory', 'dir', 'folder']
+        if (!skip.includes(k) && !(k in norm)) norm[k] = obj[k]
+    }
+    return norm
+}
+
 const parseToolCalls = (text) => {
     if (!text) return null
     const t = text.trim()
@@ -962,10 +1022,20 @@ const parseToolCalls = (text) => {
 
     for (const src of [stripped, t]) {
         if (src.startsWith('[')) {
-            try { const p = JSON.parse(src); if (Array.isArray(p) && p.length && p[0]?.tool) return p } catch {}
+            try {
+                const p = JSON.parse(src)
+                if (Array.isArray(p) && p.length) {
+                    const tools = p.map(_normalizeToolObj).filter(Boolean)
+                    if (tools.length) return tools
+                }
+            } catch {}
         }
         if (src.startsWith('{')) {
-            try { const p = JSON.parse(src); if (p?.tool) return [p] } catch {}
+            try {
+                const p = JSON.parse(src)
+                const norm = _normalizeToolObj(p)
+                if (norm) return [norm]
+            } catch {}
         }
     }
 
@@ -983,9 +1053,12 @@ const parseToolCalls = (text) => {
             try {
                 const parsed = JSON.parse(chunk)
                 if (Array.isArray(parsed)) {
-                    const tools = parsed.filter(p => p?.tool)
+                    const tools = parsed.map(_normalizeToolObj).filter(Boolean)
                     if (tools.length) { tools.forEach(tc => matches.push(tc)); return }
-                } else if (parsed?.tool) { matches.push(parsed); return }
+                } else {
+                    const norm = _normalizeToolObj(parsed)
+                    if (norm) { matches.push(norm); return }
+                }
             } catch {}
         }
     }
@@ -2147,10 +2220,12 @@ try {
                 return `📋 *PM2 Logs — ${tc.name} (last ${lines} lines):*\n\n\`\`\`\n${out.slice(-2000)}\n\`\`\``
             }
             if (action === 'monit') {
-                const out = run('pm2 jlist')
-                const procs = JSON.parse(out)
-                const lines = procs.map(p => `• *${p.name}*: CPU ${p.monit?.cpu || 0}% | RAM ${Math.round((p.monit?.memory || 0)/1024/1024)}MB | ${p.pm2_env?.status}`).join('\n')
-                return `📈 *PM2 Monitor:*\n\n${lines || 'No processes running.'}`
+                try {
+                    const out = run('pm2 jlist')
+                    const procs = JSON.parse(out)
+                    const lines = procs.map(p => `• *${p.name}*: CPU ${p.monit?.cpu || 0}% | RAM ${Math.round((p.monit?.memory || 0)/1024/1024)}MB | ${p.pm2_env?.status}`).join('\n')
+                    return `📈 *PM2 Monitor:*\n\n${lines || 'No processes running.'}`
+                } catch { return `📭 PM2 monitor unavailable. Is PM2 running? Try: \`pm2 list\`` }
             }
             return `❓ Unknown PM2 action: ${action}\n\nAvailable: list, start, stop, restart, delete, logs, monit`
         } catch (e) {
@@ -2213,7 +2288,22 @@ try {
         }
     }
 
-    return `❓ unknown tool: *${t}*\nAvailable tools listed in help. Ask "what tools do you have?" for the full list.`
+    if (t === 'list_tools' || t === 'help' || t === 'tools' || t === 'capabilities') {
+        return `🛠️ *Bera AI — Available Tools (65+)*\n\n` +
+            `*🖥️ Shell & Code:*\nbash, multi_bash, runcode (js/python/go/rust/...), install (npm/pip)\n\n` +
+            `*📁 Files & Workspace:*\nwritefile, readfile, listfiles, mkdir, deletefile, zipfolder, pastebin\n\n` +
+            `*🌐 Web & Scraping:*\nweb_scrape, smart_extract, deep_scrape, crawl_site, extract_links, extract_table, bulk_scrape, read_page, api\n\n` +
+            `*📊 Data & Analysis:*\nanalyze_data, format_convert (json/csv/yaml/xml), data_pipeline, nl_to_sql\n\n` +
+            `*🐙 GitHub:*\ngithub_manage (whoami/list_repos/create_repo/commit_file/...), create_repo, git_push, git_clone\n\n` +
+            `*⚙️ PM2 & Processes:*\npm2_manage (list/start/stop/restart/logs/monit)\n\n` +
+            `*🤖 AI & Generation:*\nsearch, image_gen, code_review, code_explain, bug_finder, code_gen\n\n` +
+            `*🚀 App Builder:*\nscaffold, build_webapp, generate_api, self_test_fix, mock_server\n\n` +
+            `*🌍 Live Data:*\ncrypto_price, stock_price, weather_gt, news_fetch, translate, lyrics_fetch, wiki_search\n\n` +
+            `*🏗️ BeraHost Deploy:*\nberahost (list/status/start/stop/logs/deploy/coins/bots)\n\n` +
+            `Use: Agent <task> — I'll pick the right tools automatically.`
+    }
+
+    return `❓ unknown tool: *${t}*\nSay "Agent what tools do you have?" to see the full list.`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2244,8 +2334,9 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
     pushHistory(chat, 'user', text)
 
     const mem = getMemory(chat)
-    const memStr = Object.keys(mem).length
-        ? '\n\nStored memory:\n' + Object.entries(mem).map(([k, v]) => `${k}: ${v}`).join('\n') : ''
+    const memEntries = Object.entries(mem).filter(([k]) => k !== '_action_log')
+    const memStr = memEntries.length
+        ? '\n\nStored memory:\n' + memEntries.map(([k, v]) => `${k}: ${v}`).join('\n') : ''
 
     let wsCtx = ''
     try {
@@ -2261,8 +2352,18 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 
     const groupCtx = (m?.isGroup && chat?.endsWith('@g.us')) ? `\n\nCurrent group JID: ${chat}` : ''
 
+    // ── Inject persistent action log so agent recalls what it did before ────────
+    let actionLogCtx = ''
+    try {
+        const log = (getMemory(chat)._action_log || []).slice(-5)
+        if (log.length) {
+            actionLogCtx = '\n\nRecent completed tasks (for context, do NOT repeat unless asked):\n' +
+                log.map(e => `• [${e.at?.slice(0,10)}] ${e.task} → ${e.done}`).join('\n')
+        }
+    } catch {}
+
     const messages = [
-        { role: 'system', content: SYSTEM_PROMPT + memStr + wsCtx + mentionCtx + groupCtx },
+        { role: 'system', content: SYSTEM_PROMPT + memStr + wsCtx + mentionCtx + groupCtx + actionLogCtx },
         ...getHistory(chat).slice(-12)
     ]
 
@@ -2285,6 +2386,8 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 
         if (!toolCalls || !toolCalls.length) {
             pushHistory(chat, 'assistant', aiReply)
+            // Auto-memorize: record this completed task so future sessions remember it
+            try { _autoMemorize(chat, text, aiReply) } catch {}
             return { success: true, reply: aiReply }
         }
 

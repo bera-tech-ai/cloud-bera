@@ -1150,6 +1150,13 @@ Start immediately with the code — no lengthy intro.`
         return reply(`❌ Could not analyze the code. Try quoting a message with code first.`)
     }
 
+    if (intent === 'list_tools') {
+        await react(conn, m, '🛠️')
+        const { executeToolCall } = require('../Library/actions/beraai')
+        const result = await executeToolCall({ tool: 'list_tools' }, m.chat, conn, m)
+        return reply(result)
+    }
+
     if (intent === 'agent') {
         await react(conn, m, '🤖')
         const task = text.replace(/\b(agent|automate|plan and execute|do the following|step by step)\b/gi, '').trim() || text

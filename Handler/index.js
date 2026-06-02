@@ -815,7 +815,8 @@ const handleMessage = async (conn, rawMsg) => {
             'code_gen', 'image_gen', 'music', 'yt_audio', 'yt_video', 'download',
             'lyrics', 'media_lyrics', 'fun_joke', 'fun_fact', 'fun_quote', 'fun_coin',
             'fun_8ball', 'fun_truth', 'fun_dare', 'fun_ship', 'fun_trivia', 'fun_roast',
-            'fun_story', 'fun_rap', 'fun_riddle', 'fun_motivate', 'gen_password'])
+            'fun_story', 'fun_rap', 'fun_riddle', 'fun_motivate', 'gen_password',
+            'list_tools'])
         if (isCmd && command === 'agent' && body && authorized) {
             const { detectIntent: _di } = require('../Library/router')
             const _preIntent = _di(body)

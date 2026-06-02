@@ -99,6 +99,14 @@ const INTENT_EXAMPLES = {
     docker: [
         'list docker containers', 'docker ps', 'docker status',
         'show containers', 'container logs', 'docker stats', 'manage containers'
+    ],
+    list_tools: [
+        'what tools do you have', 'show your tools', 'list your tools',
+        'what can you do', 'list capabilities', 'show capabilities',
+        'what are your tools', 'available tools', 'show all tools',
+        'what commands do you have', 'what tools are available',
+        'list your commands', 'show me your tools', 'your capabilities',
+        'what features do you have', 'what are you capable of'
     ]
 }
 
