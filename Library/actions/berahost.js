@@ -7,8 +7,8 @@ const axios = require('axios')
 
 // API base — try multiple known URLs for BeraHost, configurable via env or DB
 const BH_FALLBACK_URLS = [
-    'https://bera-host-bot--berahost15.replit.app',
-    'https://bera-host-bot--berahost15.replit.app',
+    'https://bera-host--nelimadinah22.replit.app',
+    'https://bera-host--nelimadinah22.replit.app',
 ]
 const getBhBaseUrl = () => {
     const fromDb  = global.db?.data?.settings?.bhApiUrl
@@ -109,16 +109,28 @@ const updateEnv = async (id, envVars) => {
 const getDeploymentLogs = async (id) => {
     try {
         const r = await bh().get(`/deployments/${id}/logs`)
-        const logs = r.data?.logs || r.data || ''
-        return { success: true, logs: typeof logs === 'string' ? logs : JSON.stringify(logs) }
+        const raw = r.data?.logs || r.data || []
+        let logs = ''
+        if (Array.isArray(raw)) {
+            logs = raw.map(l => `[${l.logType||'out'}] ${l.logLine||''}`).join('\n')
+        } else {
+            logs = typeof raw === 'string' ? raw : JSON.stringify(raw)
+        }
+        return { success: true, logs }
     } catch (e) { return { success: false, error: bhErr(e) } }
 }
 
 const exportLogs = async (id) => {
     try {
         const r = await bh().get('/deployments/' + id + '/logs/export')
-        const logs = r.data?.logs || r.data || ''
-        return { success: true, logs: typeof logs === 'string' ? logs : JSON.stringify(logs) }
+        const raw = r.data?.logs || r.data || []
+        let logs = ''
+        if (Array.isArray(raw)) {
+            logs = raw.map(l => `[${l.logType||'out'}] ${l.logLine||''}`).join('\n')
+        } else {
+            logs = typeof raw === 'string' ? raw : JSON.stringify(raw)
+        }
+        return { success: true, logs }
     } catch (e) { return { success: false, error: bhErr(e) } }
 }
 
@@ -128,10 +140,13 @@ const getDeploymentMetrics = async (id) => {
         const m = r.data?.metrics || r.data || {}
         return {
             success: true,
-            cpu:    m.cpu    ? (m.cpu * 100).toFixed(1) + '%' : 'N/A',
-            ram:    m.memory ? ((m.memory / 1024 / 1024).toFixed(0) + ' MB') : 'N/A',
-            uptime: m.uptime ? Math.floor(m.uptime / 60) + ' min' : 'N/A',
+            cpu:    m.cpu    != null ? m.cpu + '%' : 'N/A',
+            ram:    m.memMb  != null ? m.memMb + ' MB' : (m.memory ? ((m.memory/1024/1024).toFixed(0)+' MB') : 'N/A'),
+            uptime: m.uptime != null ? (m.uptime >= 3600 ? (m.uptime/3600).toFixed(1)+'h' : Math.floor(m.uptime/60)+' min') : 'N/A',
             status: m.status || 'unknown',
+            pid:    m.pid || null,
+            threads: m.threads || null,
+            logsLastHour: m.logsLastHour || 0,
             data:   m
         }
     } catch (e) { return { success: false, error: bhErr(e) } }
@@ -155,7 +170,7 @@ const pollDeployment = async (id, maxWait = 120000, interval = 5000) => {
 const getCoins = async () => {
     try {
         const r = await bh().get('/coins/balance')
-        const raw = r.data?.balance ?? r.data?.coins ?? r.data
+        const raw = r.data?.coins ?? r.data?.balance ?? r.data
         const balance = typeof raw === 'object' && raw !== null
             ? (raw.amount ?? raw.coins ?? raw.current ?? raw.value ?? raw.balance ?? JSON.stringify(raw))
             : raw
