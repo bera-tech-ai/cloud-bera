@@ -1158,22 +1158,21 @@ Start immediately with the code — no lengthy intro.`
         // Workspace path for this user so created files persist
         const wsDir = getUserWorkspace(sender)
 
-        await reply(`🤖 *Planning...*\n_"${task}"_`)
+        // Execute silently — no plan narration, no step-by-step, just the result
+        react(conn, m, '🔄')
+        conn.sendPresenceUpdate('composing', m.chat).catch(() => {})
+
         const plan = await planTask(task)
-        if (!plan.success) return reply(`❌ Couldn't plan this task: ${plan.error}`)
+        if (!plan.success) {
+            await react(conn, m, '❌')
+            return reply(`❌ Could not plan: ${plan.error}`)
+        }
 
-        const { plan: planData } = plan
-        const steps = planData.steps || []
+        const steps = (plan.plan?.steps || plan.steps || [])
 
-        // Show chain-of-thought reasoning + step list
-        const reasoning = planData.reasoning ? `\n\n💭 _${planData.reasoning.slice(0, 300)}_` : ''
-        await reply(`📋 *Plan:* ${planData.plan}${reasoning}\n\n${steps.map((s, i) => `${i + 1}. ${s.desc}`).join('\n')}\n\n_Executing ${steps.length} step(s)..._`)
-
-        // Run steps with parallelism + self-correction, passing userId for workspace paths
         const results = await runAgentParallel(steps, conn, m.chat, m,
             { userId: sender },
             (stepResult) => {
-                // Send media results inline as they complete
                 if (stepResult._media === 'image' && stepResult._url) {
                     conn.sendMessage(m.chat, { image: { url: stepResult._url }, caption: stepResult.desc }, { quoted: m }).catch(() => {})
                 } else if (stepResult._media === 'audio' && stepResult._url) {
@@ -1182,19 +1181,10 @@ Start immediately with the code — no lengthy intro.`
             }
         )
 
-        // Build step summary
-        const stepLines = results.map((r, i) =>
-            `${r.success ? '✅' : '❌'} ${r.desc}${r.success ? '' : `\n   _${String(r.output || '').slice(0, 100)}_`}`
-        ).join('\n')
-
+        const ok = results.filter(r => r.success).length
         const summary = await summarizeResults(task, results)
-
-        await react(conn, m, '✅')
-        return reply(
-            `✅ *Done!*\n\n📁 *Workspace:* ${wsDir}\n\n` +
-            `📊 *Steps:*\n${stepLines}\n\n` +
-            `📝 *Summary:*\n${summary}`
-        )
+        await react(conn, m, ok === results.length ? '✅' : ok > 0 ? '⚠️' : '❌')
+        return reply(summary || `✅ Done! (${ok}/${results.length} steps succeeded)`)
     }
 
     if (intent === 'workspace_cmd') {
