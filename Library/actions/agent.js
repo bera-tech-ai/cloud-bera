@@ -620,9 +620,16 @@ PROJECT MANAGEMENT:
 - git_status     → args: { folder }
 - github_token   → args: {}
 - docker_manage  → args: { action, name }
-- berahost_deploy→ args: { botName, repoUrl, ram, disk, cpu }
-- berahost_list  → args: {}
-- berahost_power → args: { serverId, action }
+- berahost       → args: { action("list"|"status"|"start"|"stop"|"logs"|"metrics"|"deploy"|"coins"|"bots"|"delete"), id, botId, envVars }
+  Examples: list all → {"tool":"berahost","action":"list"}
+            status   → {"tool":"berahost","action":"status","id":8}
+            start    → {"tool":"berahost","action":"start","id":8}
+            stop     → {"tool":"berahost","action":"stop","id":8}
+            logs     → {"tool":"berahost","action":"logs","id":8}
+            metrics  → {"tool":"berahost","action":"metrics","id":8}
+            deploy   → {"tool":"berahost","action":"deploy","botId":3,"envVars":{"OWNER_NUMBER":"254712345678"}}
+            coins    → {"tool":"berahost","action":"coins"}
+            bots     → {"tool":"berahost","action":"bots"}
 
 AI:
 - search         → args: { query }
@@ -887,21 +894,76 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 const r = await githubTokenRegen()
                 return { success: r.success, output: r.message||r.error, desc }
             }
-            case 'berahost_deploy': {
-                const { deployBot } = require('./berahost')
-                const r = await deployBot(args.botName, args.repoUrl, null, args.ram||512, args.disk||2048, args.cpu||100)
-                return { success: r.success, output: r.success ? r.message : r.error, desc }
-            }
-            case 'berahost_list': {
-                const { listServers } = require('./berahost')
-                const r = await listServers()
-                if (!r.success) return { success: false, output: r.error, desc }
-                return { success: true, output: r.servers.map(s=>`${s.name} (${s.status}) RAM:${s.ram}MB`).join('\n'), desc }
-            }
-            case 'berahost_power': {
-                const { serverPower } = require('./berahost')
-                const r = await serverPower(args.serverId, args.action)
-                return { success: r.success, output: r.output||r.error, desc }
+            case 'berahost_deploy':
+            case 'berahost_list':
+            case 'berahost_power':
+            case 'berahost': {
+                const bh = require('./berahost')
+                const action = args.action || tc.action || 'list'
+                const id = args.id || tc.id
+                try {
+                    switch(action) {
+                        case 'list': {
+                            const r = await bh.listDeployments()
+                            if (!r.success) return { success: false, output: r.error, desc }
+                            const deploys = r.deployments || []
+                            if (!deploys.length) return { success: true, output: '📭 No deployments found', desc }
+                            const lines = deploys.map(d => {
+                                const em = {running:'🟢',starting:'🟡',installing:'🔵',stopped:'🔴',failed:'❌'}[d.status] || '⚪'
+                                return `${em} [${d.id}] ${d.bot?.name||'Bot '+d.botId} — ${d.status}`
+                            })
+                            return { success: true, output: '🤖 *BeraHost Deployments*\n' + lines.join('\n'), desc }
+                        }
+                        case 'status': {
+                            const r = await bh.getDeployment(id)
+                            if (!r.success) return { success: false, output: r.error, desc }
+                            const d = r.deployment
+                            const em = {running:'🟢',starting:'🟡',stopped:'🔴',failed:'❌'}[d.status] || '⚪'
+                            return { success: true, output: `${em} Bot: ${d.bot?.name||d.botId} | Status: ${d.status} | Last active: ${d.lastActive ? new Date(d.lastActive).toLocaleTimeString() : 'N/A'}`, desc }
+                        }
+                        case 'start': {
+                            const r = await bh.startDeployment(id)
+                            return { success: r.success, output: r.success ? `🟢 Deployment ${id} starting...` : r.error, desc }
+                        }
+                        case 'stop': {
+                            const r = await bh.stopDeployment(id)
+                            return { success: r.success, output: r.success ? `🔴 Deployment ${id} stopped` : r.error, desc }
+                        }
+                        case 'logs': {
+                            const r = await bh.getDeploymentLogs(id)
+                            if (!r.success) return { success: false, output: r.error, desc }
+                            const logLines = (r.logs || '').split('\n').slice(-20).join('\n')
+                            return { success: true, output: `📋 *Logs (last 20 lines)*:\n\`\`\`\n${logLines}\n\`\`\``, desc }
+                        }
+                        case 'metrics': {
+                            const r = await bh.getDeploymentMetrics(id)
+                            if (!r.success) return { success: false, output: r.error, desc }
+                            return { success: true, output: `📊 *Metrics*\n• CPU: ${r.cpu}\n• RAM: ${r.ram}\n• Uptime: ${r.uptime}\n• Status: ${r.status}\n• Threads: ${r.threads||'N/A'}`, desc }
+                        }
+                        case 'deploy': {
+                            const r = await bh.deployBot(args.botId||tc.botId||3, null, args.envVars||tc.envVars||{})
+                            if (!r.success) return { success: false, output: r.error, desc }
+                            return { success: true, output: `🚀 Deployed! ID: ${r.id} | Status: ${r.status}`, desc }
+                        }
+                        case 'delete': {
+                            const r = await bh.deleteDeployment(id)
+                            return { success: r.success, output: r.output||r.error, desc }
+                        }
+                        case 'coins': {
+                            const r = await bh.getCoins()
+                            if (!r.success) return { success: false, output: r.error, desc }
+                            return { success: true, output: `💰 BeraHost Coins: *${r.balance}* coins`, desc }
+                        }
+                        case 'bots': {
+                            const r = await bh.listBots()
+                            if (!r.success) return { success: false, output: r.error, desc }
+                            const bots = (r.bots||[]).map(b => `• [${b.id}] ${b.name} — ${(b.description||'').slice(0,60)}...`).join('\n')
+                            return { success: true, output: `🤖 *Available Bots*:\n${bots}`, desc }
+                        }
+                        default:
+                            return { success: false, output: `Unknown berahost action: ${action}. Use: list, status, start, stop, logs, metrics, deploy, coins, bots`, desc }
+                    }
+                } catch(e) { return { success: false, output: `BeraHost error: ${e.message}`, desc } }
             }
             case 'search': {
                 const r = await axios.get(`https://ddg-api.rasa.gg/search?q=${encodeURIComponent(args.query)}&max_results=3`, { timeout: 15000 })
