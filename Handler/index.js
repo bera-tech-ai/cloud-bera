@@ -12,7 +12,7 @@ try { require('gifted-btns') } catch {}
 
 const _seenMsgIds = new Set()
 
-const commandFiles = ['general', 'bera', 'group', 'admin', 'media', 'berahost', 'gifted', 'key', 'pterodactyl']
+const commandFiles = ['general', 'bera', 'group', 'admin', 'media', 'berahost', 'gifted', 'key', 'pterodactyl', 'tools']
 const handlers = commandFiles.map(f => require(`../Commands/${f}`))
 
 const loadPlugins = () => {
@@ -36,6 +36,12 @@ const loadPlugins = () => {
     }
 }
 loadPlugins()
+
+// Init background monitor engine
+try {
+    const { init: initMonitor } = require('../Library/lib/monitor')
+    initMonitor()
+} catch (e) { console.error('[monitor] init error:', e.message) }
 
 const buildCommandMap = () => {
     const map = new Map()

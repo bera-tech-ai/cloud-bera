@@ -271,6 +271,14 @@ const callXwolf = async (userText, timeoutMs, systemPrompt) => {
 
 // ── Pollinations rotation ─────────────────────────────────────────────────────
 const callPollinations = async (messages, timeoutMs) => {
+    // Try preferred model first if user/owner has set one
+    const preferred = global.db?.data?.settings?.aiModel
+    if (preferred) {
+        try {
+            const r = await callPollinationsModel(messages, preferred, Math.min(timeoutMs, 25000))
+            if (r && r !== 'RATELIMIT' && r !== 'ERROR' && r.length > 1) return r
+        } catch {}
+    }
     for (let i = 0; i < AI_MODELS.length; i++) {
         const model = AI_MODELS[(_modelIdx + i) % AI_MODELS.length]
         try {
@@ -2362,8 +2370,19 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
         }
     } catch {}
 
+    // Custom system prompt per user
+    let customSysPrompt = ''
+    try {
+        const _uSender = m?.sender?.replace(/:[0-9]+@/, '@') || ''
+        customSysPrompt = global.db?.data?.users?.[_uSender]?.systemPrompt || ''
+    } catch {}
+
     const messages = [
-        { role: 'system', content: SYSTEM_PROMPT + memStr + wsCtx + mentionCtx + groupCtx + actionLogCtx },
+        { role: 'system', content: (customSysPrompt ? customSysPrompt + '
+
+---
+
+' : '') + SYSTEM_PROMPT + memStr + wsCtx + mentionCtx + groupCtx + actionLogCtx },
         ...getHistory(chat).slice(-12)
     ]
 
@@ -2377,6 +2396,12 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
     for (let loop = 0; loop < loopCap; loop++) {
         let aiReply
         try { aiReply = await callAI(messages, 60000, true) } catch {}
+        // Record last AI call for .debug command
+        try {
+            const _dSender = m?.sender?.replace(/:[0-9]+@/, '@') || chat
+            if (!global._lastAIDebug) global._lastAIDebug = {}
+            if (aiReply) global._lastAIDebug[_dSender] = { input: text, output: aiReply, model: global.db?.data?.settings?.aiModel || 'auto', at: Date.now() }
+        } catch {}
         if (!aiReply) {
             const fb = localFallback(text)
             return { success: false, reply: fb }

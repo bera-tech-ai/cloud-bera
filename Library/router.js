@@ -955,6 +955,29 @@ const detectIntent = (text) => {
         /\bwhat tools? (do you have|can you use|are available|you got)\b/i.test(t) ||
         /\b(do you have any tools?|your (tools?|capabilities?)|can you use tools?)\b/i.test(t)) return 'list_tools'
 
+    // ── URL shortener ─────────────────────────────────────────────────────────
+    if (/\b(shorten|make.{0,10}short(er)?|tinyurl|short.{0,10}link)\b/i.test(t) &&
+        /https?:\/\//i.test(t)) return 'shorten_url'
+
+    // ── Site monitor ──────────────────────────────────────────────────────────
+    if (/\b(monitor|watch|track|alert me|notify me)\b.{0,30}\bhttps?:\/\//i.test(t) ||
+        /\b(add monitor|site monitor|uptime check|check if.{0,20}is (up|down|online))\b/i.test(t)) return 'monitor_cmd'
+
+    // ── Health alert setup ────────────────────────────────────────────────────
+    if (/\b(alert|notify|warn).{0,20}(cpu|ram|memory|disk|storage)\b/i.test(t) ||
+        /\bset.{0,15}(cpu|ram|disk).{0,10}(alert|threshold|limit)\b/i.test(t)) return 'alert_cmd'
+
+    // ── Switch AI model ───────────────────────────────────────────────────────
+    if (/\b(switch|change|use).{0,15}(model|ai model|llm)\b/i.test(t) ||
+        /\b(beramodel|switch model|change model)\b/i.test(t)) return 'switch_model'
+
+    // ── Custom system prompt ──────────────────────────────────────────────────
+    if (/\b(set.{0,15}(persona|personality|system prompt|custom prompt|my prompt)|mysys|my (ai |bot )?(style|prompt|persona))\b/i.test(t)) return 'custom_sys'
+
+    // ── Password generator ────────────────────────────────────────────────────
+    if (/\b(generate|create|make|give me).{0,15}(a )?(strong |secure |random )?password\b/i.test(t) ||
+        /\b(password generator|random password|new password)\b/i.test(t)) return 'password_gen'
+
     // ── Semantic fallback — catch natural-language intent the regex missed ──────
     try {
         const { semanticRoute } = require('./lib/semanticRouter')
