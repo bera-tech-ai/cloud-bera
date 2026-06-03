@@ -676,19 +676,19 @@ const preDispatch = async (text) => {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SYSTEM PROMPT — Full Agent Mode (46 tools)
+// SYSTEM PROMPT — Full Agent Mode (65+ tools)
 // ─────────────────────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Bera AI — the most powerful WhatsApp autonomous agent, built by Bera Tech.
 
 ━━━ WHO YOU ARE ━━━
 You are Bera AI — an autonomous execution engine that DOES things. You run on BeraHost (https://bera-host--nelimadinah22.replit.app) — a LIVE Linux server.
 Every request → immediate real action. No asking permission. No explaining plans. No narrating steps.
-You have REAL: bash shell, file system, web scraping, HTTP client, GitHub API, BeraHost deployment API — USE THEM.
+You have REAL: bash shell, file system, web scraping (4-strategy auto-fallback), HTTP client, GitHub API, BeraHost deployment API — USE THEM.
 
 ━━━ IRON RULES (NEVER BREAK) ━━━
 1. User asks → CALL A TOOL immediately. NEVER write text before acting.
 2. NEVER say "I'll do X" — just DO X with a JSON tool call.
-3. NEVER say "I can't scrape websites" — use web_scrape or smart_extract IMMEDIATELY.
+3. NEVER say "I can't scrape websites" — you have 4-strategy scraping: Jina.ai + Chrome curl + Google Cache + Wayback Machine. Use web_scrape IMMEDIATELY.
 4. NEVER say "I'm a text-based AI" or "I can't access the internet/files/shell" — you CAN and you WILL.
 5. NEVER say "I don't have tools" — you have 65+ real tools on a LIVE server. Use them.
 6. NEVER ask "should I proceed?" — just proceed silently.
@@ -696,18 +696,34 @@ You have REAL: bash shell, file system, web scraping, HTTP client, GitHub API, B
 8. Chain tools until 100% done. When one approach fails → try another immediately.
 9. Only write plain text when ALL tool calls are complete and the task is fully done.
 
-━━━ WEB SCRAPING — YOU CAN ALWAYS DO THIS ━━━
-Scrape any public website right now. Never refuse. Just pick the right tool:
-• Single page scrape:      {"tool":"web_scrape","url":"https://example.com"}
-• Extract prices/products: {"tool":"smart_extract","url":"https://shop.com","hint":"price"}
-• Deep AI analysis:        {"tool":"deep_scrape","url":"https://site.com","question":"what are the prices?"}
-• Full site crawl:         {"tool":"crawl_site","url":"https://site.com","maxDepth":2,"maxPages":10}
-• Extract all tables:      {"tool":"extract_table","url":"https://site.com"}
-• Extract all links:       {"tool":"extract_links","url":"https://site.com"}
-• Multi-URL pipeline:      {"tool":"data_pipeline","sources":["url1","url2"],"hint":"product","format":"json"}
-• Raw page fetch:          {"tool":"read_page","url":"https://site.com"}
-• HTTP API call:           {"tool":"api","method":"GET","url":"https://api.example.com"}
-When scraping, ALWAYS go all the way: extract → analyze → show clean formatted result.
+━━━ WEB SCRAPING — YOU CAN ALWAYS DO THIS (REPLIT-LEVEL) ━━━
+You scrape ANY website. Multiple strategies, automatic fallback. Never refuse. Never say you can't.
+• Single page (auto-fallback):  {"tool":"web_scrape","url":"https://example.com"}
+• Extract specific data:         {"tool":"smart_extract","url":"https://shop.com","hint":"price list"}
+• Deep AI page analysis:         {"tool":"deep_scrape","url":"https://site.com","question":"what are the prices?"}
+• Full site crawl:               {"tool":"crawl_site","url":"https://site.com","maxDepth":2,"maxPages":8}
+• Extract all tables → markdown: {"tool":"extract_table","url":"https://site.com","index":0}
+• Extract all links:             {"tool":"extract_links","url":"https://site.com","filter":"product"}
+• Scrape multiple URLs:          {"tool":"bulk_scrape","urls":["url1","url2","url3"]}
+• Multi-source pipeline:         {"tool":"data_pipeline","sources":["url1","url2"],"hint":"price","format":"json"}
+• Raw text + markdown:           {"tool":"read_page","url":"https://site.com"}
+• Screenshot (visual):           {"tool":"screenshot","url":"https://site.com"}
+• HTTP API call:                 {"tool":"api","method":"GET","url":"https://api.example.com"}
+• Extract with regex:            {"tool":"regex_extract","text":"...","pattern":"\\d+\\.\\d+"}
+• Parse HTML tags:               {"tool":"parse_html","html":"...","selector":"table"}
+Scraping pipeline: web_scrape → (if blocked) → read_page → (if blocked) → screenshot + vision analysis.
+ALWAYS complete the full pipeline: fetch → extract → analyze → present clean result.
+
+━━━ ADVANCED DATA TOOLS ━━━
+• Analyze JSON arrays:    {"tool":"analyze_data","data":[...],"action":"stats","key":"price"}
+• Filter data:            {"tool":"analyze_data","data":[...],"action":"filter","key":"country","value":"Kenya"}
+• Sort data:              {"tool":"analyze_data","data":[...],"action":"sort","key":"price","dir":"asc"}
+• Group & count:          {"tool":"analyze_data","data":[...],"action":"group","key":"category"}
+• SSL certificate check:  {"tool":"ssl_check","host":"example.com"}
+• Text diff:              {"tool":"diff_text","a":"original text","b":"modified text"}
+• Hash/encrypt text:      {"tool":"hash_text","text":"hello","algo":"sha256"}
+• Summarize long text:    {"tool":"summarize_text","text":"very long text here"}
+• Send WhatsApp message:  {"tool":"send_whatsapp","to":"254700000000","text":"hello"}
 
 ━━━ DEEP INTENT — UNDERSTAND WHAT THEY REALLY WANT ━━━
 Think beyond the literal words:
@@ -990,11 +1006,26 @@ const _ACTION_TO_TOOL = {
     'write_file': 'writefile', 'file_write': 'writefile', 'create_file': 'writefile', 'save_file': 'writefile',
     'list_files': 'listfiles', 'file_list': 'listfiles', 'ls': 'listfiles',
     'delete_file': 'deletefile', 'remove_file': 'deletefile',
-    'web_scrape': 'web_scrape', 'scrape': 'web_scrape', 'scrape_web': 'web_scrape',
-    'web_search': 'search', 'search': 'search', 'google': 'search',
-    'http': 'api', 'http_request': 'api', 'fetch': 'api', 'api_call': 'api',
+    'web_scrape': 'web_scrape', 'scrape': 'web_scrape', 'scrape_web': 'web_scrape', 'scrape_url': 'web_scrape', 'fetch_page': 'web_scrape',
+    'web_search': 'search', 'search': 'search', 'google': 'search', 'find': 'search',
+    'http': 'api', 'http_request': 'api', 'fetch': 'api', 'api_call': 'api', 'curl': 'api',
     'install_packages': 'install', 'npm_install': 'install', 'pip_install': 'install',
-    'run_code': 'runcode', 'execute_code': 'runcode', 'code': 'runcode'
+    'run_code': 'runcode', 'execute_code': 'runcode', 'code': 'runcode',
+    'extract': 'smart_extract', 'smart_extract': 'smart_extract', 'extract_data': 'smart_extract',
+    'deep_scrape': 'deep_scrape', 'analyze_page': 'deep_scrape', 'scrape_analyze': 'deep_scrape',
+    'crawl': 'crawl_site', 'crawl_site': 'crawl_site', 'spider': 'crawl_site',
+    'get_links': 'extract_links', 'extract_links': 'extract_links', 'find_links': 'extract_links',
+    'get_table': 'extract_table', 'extract_table': 'extract_table', 'scrape_table': 'extract_table',
+    'bulk_scrape': 'bulk_scrape', 'multi_scrape': 'bulk_scrape', 'scrape_urls': 'bulk_scrape',
+    'pipeline': 'data_pipeline', 'data_pipeline': 'data_pipeline',
+    'parse_html': 'parse_html', 'html_parse': 'parse_html', 'css_select': 'parse_html',
+    'regex': 'regex_extract', 'regex_extract': 'regex_extract', 'extract_pattern': 'regex_extract',
+    'ssl': 'ssl_check', 'ssl_check': 'ssl_check', 'cert_check': 'ssl_check',
+    'send_msg': 'send_whatsapp', 'send_whatsapp': 'send_whatsapp', 'whatsapp': 'send_whatsapp', 'send_message': 'send_whatsapp',
+    'diff': 'diff_text', 'diff_text': 'diff_text', 'compare_text': 'diff_text',
+    'analyze': 'analyze_data', 'analyze_data': 'analyze_data', 'data_analysis': 'analyze_data',
+    'hash': 'hash_text', 'hash_text': 'hash_text', 'md5': 'hash_text', 'sha': 'hash_text',
+    'summarize': 'summarize_text', 'summarize_text': 'summarize_text', 'tldr': 'summarize_text'
 }
 
 const _normalizeToolObj = (obj) => {
@@ -2296,12 +2327,466 @@ try {
         }
     }
 
+
+    // ── web_scrape — FIXED: full 4-strategy scraper ───────────────────────────
+    if (t === 'web_scrape' || t === 'scrape_url' || t === 'fetch_page') {
+        const url = tc.url || ''
+        if (!url) return 'ERROR: no URL'
+        const maxLen = tc.maxLen || 8000
+
+        // Strategy 1: Jina.ai reader (best for articles, blogs, docs)
+        try {
+            const r = await axios2.get(`https://r.jina.ai/${url}`, {
+                headers: { 'Accept': 'text/markdown', 'X-Return-Format': 'markdown', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36', 'X-No-Cache': 'true', 'X-With-Links-Summary': 'true' },
+                timeout: 25000
+            })
+            if (r.status === 200 && r.data && String(r.data).length > 80) {
+                const content = String(r.data)
+                return `🌐 *${url}*
+
+${content.slice(0, maxLen)}${content.length > maxLen ? '\n\n[...truncated]' : ''}`
+            }
+        } catch {}
+
+        // Strategy 2: curl with real Chrome headers (beats most bot-detection)
+        try {
+            const curlCmd = `curl -sL --max-time 20 --compressed -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" -H "Accept-Language: en-US,en;q=0.5" "${url}"`
+            const r = await runBash(`${curlCmd} 2>/dev/null | sed 's/<script[^>]*>[^<]*<\/script>//gI; s/<style[^>]*>[^<]*<\/style>//gI; s/<[^>]*>/ /g; s/  */ /g' | head -c ${maxLen}`, 28000)
+            if (r.output && r.output.trim().length > 80) {
+                return `🌐 *${url}*
+
+${r.output.trim().slice(0, maxLen)}`
+            }
+        } catch {}
+
+        // Strategy 3: Google Cache
+        try {
+            const cacheUrl = `https://webcache.googleusercontent.com/search?q=cache:${encodeURIComponent(url)}`
+            const r = await axios2.get(cacheUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }, timeout: 15000, validateStatus: () => true })
+            if (r.status === 200 && r.data) {
+                let html = String(r.data).replace(/<script[^>]*>[sS]*?</script>/gi, '').replace(/<style[^>]*>[sS]*?</style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/s+/g, ' ').trim()
+                if (html.length > 80) return `🌐 *${url}* (Google Cache)\n\n${html.slice(0, maxLen)}`
+            }
+        } catch {}
+
+        // Strategy 4: Wayback Machine fallback
+        try {
+            const wb = await axios2.get(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`, { timeout: 10000 })
+            const snapshot = wb.data?.archived_snapshots?.closest?.url
+            if (snapshot) {
+                const r = await axios2.get(`https://r.jina.ai/${snapshot}`, { headers: { 'Accept': 'text/markdown', 'User-Agent': 'Mozilla/5.0' }, timeout: 20000 })
+                if (r.status === 200 && r.data && String(r.data).length > 80) {
+                    return `🌐 *${url}* (Archived Snapshot)\n\n${String(r.data).slice(0, maxLen)}`
+                }
+            }
+        } catch {}
+
+        return `❌ Could not scrape ${url}\nThe site may block all bots. Try: {"tool":"screenshot","url":"${url}"} to see it visually, or {"tool":"deep_scrape","url":"${url}","question":"what is on this page?"}`
+    }
+
+    // ── smart_extract — scrape + AI-targeted field extraction ─────────────────
+    if (t === 'smart_extract') {
+        const url = tc.url || ''
+        const hint = tc.hint || tc.extract || tc.field || tc.what || ''
+        if (!url) return 'ERROR: no URL'
+
+        let pageText = ''
+        try {
+            const r = await axios2.get(`https://r.jina.ai/${url}`, { headers: { 'Accept': 'text/markdown', 'User-Agent': 'Mozilla/5.0', 'X-No-Cache': 'true' }, timeout: 25000 })
+            if (r.status === 200 && r.data) pageText = String(r.data)
+        } catch {}
+        if (!pageText) {
+            try {
+                const r = await axios2.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, timeout: 15000 })
+                pageText = String(r.data || '').replace(/<script[^>]*>[sS]*?</script>/gi, '').replace(/<style[^>]*>[sS]*?</style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/s+/g, ' ').trim().slice(0, 12000)
+            } catch {}
+        }
+        if (!pageText) return `❌ Could not fetch ${url}`
+
+        const extractPrompt = hint
+            ? `From this webpage, extract ONLY: ${hint}\n\nReturn the data clean and structured. No intro, no fluff.\n\nPage: ${url}\n\nContent:\n${pageText.slice(0, 5500)}`
+            : `Summarize all key data from this webpage in a clean, structured format.\n\nPage: ${url}\n\nContent:\n${pageText.slice(0, 5500)}`
+
+        try {
+            const extracted = await callPollinations([ { role: 'system', content: 'You are a precise data extraction engine. Extract exactly what is asked. Return ONLY the requested data, structured clearly.' }, { role: 'user', content: extractPrompt } ], 35000)
+            if (extracted) return `🎯 *Extracted from ${url}:*\n\n${extracted}`
+        } catch {}
+
+        // Fallback: keyword search
+        const lines = pageText.split(/[\n.!?]+/).filter(l => hint ? l.toLowerCase().includes(hint.toLowerCase()) : l.trim().length > 30)
+        return `🎯 *${hint || 'Key data'} from ${url}:*\n\n${lines.slice(0, 25).join('\n')}`
+    }
+
+    // ── deep_scrape — scrape + full AI analysis ───────────────────────────────
+    if (t === 'deep_scrape') {
+        const url = tc.url || ''
+        const question = tc.question || tc.ask || tc.analyze || 'What is the main content, key data, and important information on this page?'
+        if (!url) return 'ERROR: no URL'
+
+        let pageText = ''
+        try {
+            const r = await axios2.get(`https://r.jina.ai/${url}`, { headers: { 'Accept': 'text/markdown', 'User-Agent': 'Mozilla/5.0', 'X-No-Cache': 'true' }, timeout: 30000 })
+            if (r.status === 200 && r.data) pageText = String(r.data)
+        } catch {}
+        if (!pageText) {
+            try {
+                const r = await axios2.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, timeout: 15000 })
+                pageText = String(r.data || '').replace(/<script[^>]*>[sS]*?</script>/gi, '').replace(/<style[^>]*>[sS]*?</style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/s+/g, ' ').trim()
+            } catch {}
+        }
+        if (!pageText) return `❌ Could not fetch ${url}`
+
+        try {
+            const answer = await callPollinations([
+                { role: 'system', content: 'You are an expert web researcher and analyst. Answer questions about webpage content with precision and depth. Structure your response clearly.' },
+                { role: 'user', content: `Question: ${question}\n\nURL: ${url}\n\nPage content:\n${pageText.slice(0, 6000)}` }
+            ], 45000)
+            if (answer) return `🔍 *Deep Analysis: ${url}*\n\n❓ ${question}\n\n${answer}`
+        } catch {}
+
+        return `📄 *Content from ${url}:*\n\n${pageText.slice(0, 5000)}`
+    }
+
+    // ── extract_links — get all links from a page ─────────────────────────────
+    if (t === 'extract_links') {
+        const url = tc.url || ''
+        const filter = tc.filter || ''
+        if (!url) return 'ERROR: no URL'
+        try {
+            const r = await axios2.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, timeout: 20000 })
+            const html = String(r.data || '')
+            const titleRegex = /<a[^>]+href=["']([^"'#javascript][^"']*)["'][^>]*>([sS]*?)</a>/gi
+            const links = []
+            let match
+            while ((match = titleRegex.exec(html)) !== null) {
+                let href = match[1].trim()
+                const title = match[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+                if (!href || href.startsWith('javascript') || href.startsWith('mailto')) continue
+                if (!href.startsWith('http')) {
+                    try { const base = new URL(url); href = new URL(href, base.origin).href } catch { continue }
+                }
+                if (filter && !href.toLowerCase().includes(filter.toLowerCase()) && !title.toLowerCase().includes(filter.toLowerCase())) continue
+                if (!links.find(l => l.url === href)) links.push({ url: href, title: (title || href).slice(0, 100) })
+                if (links.length >= 60) break
+            }
+            if (!links.length) return `No links found on ${url}${filter ? ` matching "${filter}"` : ''}`
+            return `🔗 *Links on ${url}* (${links.length}):${filter ? ` [filter: ${filter}]` : ''}\n\n${links.map((l, i) => `${i+1}. ${l.title}\n   ${l.url}`).join('\n\n').slice(0, 6000)}`
+        } catch (e) { return `extract_links error: ${e.message}` }
+    }
+
+    // ── extract_table — HTML tables → markdown ────────────────────────────────
+    if (t === 'extract_table') {
+        const url = tc.url || ''
+        const html_input = tc.html || ''
+        const tableIdx = tc.index !== undefined ? parseInt(tc.index) : 'all'
+        if (!url && !html_input) return 'ERROR: provide url or html'
+
+        let html = html_input
+        if (!html && url) {
+            try {
+                const r = await axios2.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, timeout: 20000 })
+                html = String(r.data || '')
+            } catch (e) { return `extract_table fetch error: ${e.message}` }
+        }
+
+        const tableRegex = /<table[\s\S]*?<\/table>/gi
+        const tables = html.match(tableRegex) || []
+        if (!tables.length) return `No <table> elements found on ${url || '(provided html)'}`
+
+        const parseTable = (tableHtml) => {
+            const rows = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || []
+            const parsed = rows.map(row => {
+                const cells = row.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi) || []
+                return cells.map(c => c.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim()).join(' | ')
+            }).filter(r => r.trim())
+            // Add header separator after first row
+            if (parsed.length > 1) parsed.splice(1, 0, parsed[0].replace(/[^|]/g, '-').replace(/--+/g, '---'))
+            return parsed.join('\n')
+        }
+
+        const target = tableIdx === 'all' ? tables.slice(0, 5) : [tables[tableIdx] || tables[0]]
+        const result = target.map((t, i) => `**Table ${tableIdx === 'all' ? i+1 : (tableIdx||0)+1}:**\n${parseTable(t)}`).join('\n\n---\n\n')
+        return `📊 *${tables.length} table(s) found on ${url || 'html input'}:*\n\n${result.slice(0, 6000)}`
+    }
+
+    // ── crawl_site — multi-page BFS crawler ───────────────────────────────────
+    if (t === 'crawl_site') {
+        const startUrl = tc.url || ''
+        if (!startUrl) return 'ERROR: no URL'
+        const maxDepth = Math.min(parseInt(tc.maxDepth) || 1, 2)
+        const maxPages = Math.min(parseInt(tc.maxPages) || 5, 10)
+        const topic = tc.topic || tc.filter || ''
+
+        const visited = new Set()
+        const results = []
+        const queue = [{ url: startUrl, depth: 0 }]
+        let baseHost = ''
+        try { baseHost = new URL(startUrl).hostname } catch {}
+
+        while (queue.length && results.length < maxPages) {
+            const { url, depth } = queue.shift()
+            if (visited.has(url)) continue
+            visited.add(url)
+            try {
+                const r = await axios2.get(`https://r.jina.ai/${url}`, { headers: { 'Accept': 'text/markdown', 'User-Agent': 'Mozilla/5.0', 'X-No-Cache': 'true' }, timeout: 18000 })
+                if (r.status === 200 && r.data) {
+                    const content = String(r.data)
+                    if (!topic || content.toLowerCase().includes(topic.toLowerCase())) {
+                        results.push({ url, content: content.slice(0, 1200) })
+                    }
+                    if (depth < maxDepth) {
+                        const linkMatches = content.match(/https?:\/\/[^\s)\]>",]+/g) || []
+                        for (const link of linkMatches.slice(0, 30)) {
+                            try { if (new URL(link).hostname === baseHost && !visited.has(link)) queue.push({ url: link, depth: depth + 1 }) } catch {}
+                        }
+                    }
+                }
+            } catch {}
+        }
+
+        if (!results.length) return `🕷️ Crawled ${visited.size} pages from ${startUrl}, no content found${topic ? ` matching "${topic}"` : ''}`
+        return `🕷️ *Crawled ${results.length} pages from ${startUrl}:*\n\n${results.map((p, i) => `**${i+1}. ${p.url}**\n${p.content}`).join('\n\n---\n\n').slice(0, 8000)}`
+    }
+
+    // ── bulk_scrape — scrape multiple URLs in parallel ────────────────────────
+    if (t === 'bulk_scrape') {
+        const urls = Array.isArray(tc.urls) ? tc.urls : [tc.url].filter(Boolean)
+        if (!urls.length) return 'ERROR: provide urls array. Example: {"tool":"bulk_scrape","urls":["url1","url2"]}'
+        const maxUrls = Math.min(urls.length, 8)
+        const results = await Promise.allSettled(
+            urls.slice(0, maxUrls).map(async (url) => {
+                try {
+                    const r = await axios2.get(`https://r.jina.ai/${url}`, { headers: { 'Accept': 'text/markdown', 'User-Agent': 'Mozilla/5.0', 'X-No-Cache': 'true' }, timeout: 20000 })
+                    if (r.status === 200 && r.data) return { url, content: String(r.data).slice(0, 1500), ok: true }
+                } catch {}
+                try {
+                    const r = await axios2.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, timeout: 12000 })
+                    const text = String(r.data || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+                    if (text.length > 50) return { url, content: text.slice(0, 1500), ok: true }
+                } catch {}
+                return { url, content: 'failed to fetch', ok: false }
+            })
+        )
+        const mapped = results.map(r => r.value || { url: '?', content: 'error', ok: false })
+        return `🌐 *Bulk Scrape (${mapped.length} URLs):*\n\n${mapped.map((r, i) => `**${i+1}. ${r.url}** ${r.ok ? '✅' : '❌'}\n${r.content}`).join('\n\n---\n\n').slice(0, 8000)}`
+    }
+
+    // ── data_pipeline — multi-source extraction pipeline ─────────────────────
+    if (t === 'data_pipeline') {
+        const sources = Array.isArray(tc.sources) ? tc.sources : [tc.url].filter(Boolean)
+        const hint = tc.hint || ''
+        const format = (tc.format || 'text').toLowerCase()
+        if (!sources.length) return 'ERROR: no sources. Use {"tool":"data_pipeline","sources":["url1","url2"],"hint":"price"}'
+        const items = []
+        for (const src of sources.slice(0, 6)) {
+            try {
+                const r = await axios2.get(`https://r.jina.ai/${src}`, { headers: { 'Accept': 'text/markdown', 'User-Agent': 'Mozilla/5.0', 'X-No-Cache': 'true' }, timeout: 20000 })
+                if (r.status === 200 && r.data) {
+                    const content = String(r.data)
+                    const relevant = hint ? content.split('\n').filter(l => l.toLowerCase().includes(hint.toLowerCase())).join('\n') : content
+                    items.push({ source: src, content: (relevant || content).slice(0, 2000) })
+                }
+            } catch {}
+        }
+        if (!items.length) return 'Pipeline: failed to fetch any source'
+        if (format === 'json') return `📦 *Pipeline Result (${items.length} sources):*\n\n${JSON.stringify(items.map(i => ({ url: i.source, data: i.content.slice(0, 500) })), null, 2).slice(0, 5000)}`
+        return `📦 *Pipeline Result (${items.length} sources):*${hint ? ` [filtered: ${hint}]` : ''}\n\n${items.map((i, idx) => `**Source ${idx+1}: ${i.source}**\n${i.content}`).join('\n\n---\n\n').slice(0, 7000)}`
+    }
+
+    // ── parse_html — CSS tag selector extraction ──────────────────────────────
+    if (t === 'parse_html') {
+        const html = tc.html || tc.content || ''
+        const selector = (tc.selector || tc.tag || 'p').replace(/^[.#]/, '')
+        if (!html) return 'ERROR: provide html content or url'
+        const pattern = new RegExp(`<${selector}[^>]*>([\\s\\S]*?)<\/${selector}>`, 'gi')
+        const matches = []
+        let m
+        while ((m = pattern.exec(html)) !== null) {
+            const text = m[1].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim()
+            if (text.length > 2) matches.push(text)
+            if (matches.length >= 30) break
+        }
+        if (!matches.length) return `No <${selector}> elements found`
+        return `📋 *<${selector}> elements (${matches.length} found):*\n\n${matches.map((t, i) => `${i+1}. ${t.slice(0, 300)}`).join('\n\n')}`
+    }
+
+    // ── regex_extract — extract data with regex pattern ───────────────────────
+    if (t === 'regex_extract') {
+        const text = tc.text || tc.content || tc.input || ''
+        const pattern = tc.pattern || tc.regex || ''
+        const flags = (tc.flags || 'g').replace(/[^gimsuy]/g, '')
+        if (!text || !pattern) return 'ERROR: provide text and pattern'
+        try {
+            const re = new RegExp(pattern, flags.includes('g') ? flags : flags + 'g')
+            const matches = []
+            let m
+            while ((m = re.exec(text)) !== null) {
+                matches.push(m[0])
+                if (matches.length >= 100) break
+            }
+            if (!matches.length) return `No matches for pattern: /${pattern}/${flags}`
+            return `🔍 *${matches.length} matches for /${pattern}/${flags}:*\n\n${matches.map((m, i) => `${i+1}. `${m}``).join('\n')}`
+        } catch (e) { return `regex error: ${e.message}` }
+    }
+
+    // ── analyze_data — JSON data analysis (count/filter/sort/group/stats) ─────
+    if (t === 'analyze_data') {
+        let data = tc.data || tc.input || tc.json || []
+        if (typeof data === 'string') { try { data = JSON.parse(data) } catch { return 'ERROR: could not parse data as JSON array' } }
+        if (!Array.isArray(data)) return 'ERROR: data must be a JSON array. Example: {"tool":"analyze_data","data":[{"price":10},{"price":20}],"action":"stats","key":"price"}'
+        const count = data.length
+        if (!count) return 'Empty dataset (0 items)'
+        const action = (tc.action || tc.op || 'describe').toLowerCase()
+        const key = tc.key || tc.field
+
+        if (action === 'count') return `📊 Total items: *${count}*`
+
+        if (action === 'filter') {
+            const value = String(tc.value || '')
+            const op = (tc.op2 || tc.operator || 'equals').toLowerCase()
+            if (!key) return 'ERROR: provide key and value for filter'
+            const filtered = data.filter(item => {
+                const v = item[key]
+                if (op === 'contains') return String(v).toLowerCase().includes(value.toLowerCase())
+                if (op === 'gt' || op === '>') return Number(v) > Number(value)
+                if (op === 'lt' || op === '<') return Number(v) < Number(value)
+                if (op === 'gte' || op === '>=') return Number(v) >= Number(value)
+                if (op === 'lte' || op === '<=') return Number(v) <= Number(value)
+                if (op === 'not') return String(v) !== value
+                return String(v).toLowerCase() === value.toLowerCase()
+            })
+            return `📊 *Filter: ${key} ${op} "${value}"*\n${filtered.length}/${count} items matched:\n\n${JSON.stringify(filtered.slice(0, 15), null, 2).slice(0, 3000)}`
+        }
+
+        if (action === 'sort') {
+            if (!key) return 'ERROR: provide key for sort'
+            const dir = (tc.dir || tc.order || 'asc').toLowerCase()
+            const sorted = [...data].sort((a, b) => {
+                const va = a[key], vb = b[key]
+                const na = Number(va), nb = Number(vb)
+                if (!isNaN(na) && !isNaN(nb)) return dir === 'desc' ? nb - na : na - nb
+                return dir === 'desc' ? (vb > va ? 1 : -1) : (va > vb ? 1 : -1)
+            })
+            return `📊 *Sorted by ${key} (${dir}):*\n\n${JSON.stringify(sorted.slice(0, 15), null, 2).slice(0, 3000)}`
+        }
+
+        if (action === 'group') {
+            if (!key) return 'ERROR: provide key for group'
+            const groups = {}
+            for (const item of data) { const v = String(item[key] ?? 'null'); groups[v] = (groups[v] || 0) + 1 }
+            const sorted = Object.entries(groups).sort((a, b) => b[1] - a[1])
+            return `📊 *Grouped by ${key} (${Object.keys(groups).length} groups):*\n\n${sorted.map(([k, c]) => `• ${k}: ${c}`).join('\n')}`
+        }
+
+        if (action === 'stats' || action === 'sum' || action === 'avg') {
+            if (!key) return 'ERROR: provide key for stats'
+            const nums = data.map(i => Number(i[key])).filter(n => !isNaN(n))
+            if (!nums.length) return `No numeric values found for key: ${key}`
+            const sum = nums.reduce((a, b) => a + b, 0)
+            const avg = sum / nums.length
+            const sorted = [...nums].sort((a, b) => a - b)
+            const median = sorted[Math.floor(sorted.length / 2)]
+            return `📊 *Stats for ${key} (${nums.length} values):*\nSum: ${sum}\nAvg: ${avg.toFixed(3)}\nMedian: ${median}\nMin: ${Math.min(...nums)}\nMax: ${Math.max(...nums)}`
+        }
+
+        // Default: describe
+        const sample = data[0]
+        const keys = sample && typeof sample === 'object' ? Object.keys(sample) : []
+        return `📊 *Dataset:* ${count} items\n*Fields:* ${keys.join(', ') || 'N/A'}\n\n*Sample (first 3):*\n${JSON.stringify(data.slice(0, 3), null, 2).slice(0, 2000)}`
+    }
+
+    // ── ssl_check — SSL certificate info ─────────────────────────────────────
+    if (t === 'ssl_check') {
+        const host = (tc.host || tc.url || tc.domain || '').replace(/https?:\/\//, '').split('/')[0].split(':')[0]
+        if (!host) return 'ERROR: provide host'
+        try {
+            const r = await runBash(`echo | openssl s_client -connect ${host}:443 -servername ${host} 2>/dev/null | openssl x509 -noout -dates -subject -issuer 2>/dev/null`, 15000)
+            if (r.output && r.output.includes('notAfter')) {
+                const notAfter = r.output.match(/notAfter=(.*)/)?.[1]?.trim()
+                const notBefore = r.output.match(/notBefore=(.*)/)?.[1]?.trim()
+                const subject = r.output.match(/subject=(.*)/)?.[1]?.trim()
+                const issuer = r.output.match(/issuer=(.*)/)?.[1]?.trim()
+                const expiry = notAfter ? new Date(notAfter) : null
+                const daysLeft = expiry ? Math.round((expiry - Date.now()) / 86400000) : 0
+                const status = daysLeft > 30 ? '✅ Valid' : daysLeft > 7 ? '⚠️ Expiring soon' : daysLeft > 0 ? '🔴 Critical' : '❌ Expired'
+                return `🔒 *SSL Certificate: ${host}*\n\n${status} (${daysLeft} days left)\n📅 Expires: ${notAfter}\n📅 Issued: ${notBefore}\n📋 Subject: ${subject || '?'}\n🏢 Issuer: ${issuer || '?'}`
+            }
+        } catch {}
+        try {
+            const r = await runBash(`curl -vI --max-time 10 https://${host} 2>&1 | grep -iE "expire|issuer|SSL|TLS|verify|cert" | head -8`, 12000)
+            return r.output || `ssl_check: could not verify ${host}`
+        } catch (e) { return `ssl_check error: ${e.message}` }
+    }
+
+    // ── send_whatsapp — send message to another WA number ────────────────────
+    if (t === 'send_whatsapp' || t === 'send_message' || t === 'whatsapp_send') {
+        if (!conn) return 'ERROR: no WhatsApp connection context'
+        const rawNum = (tc.to || tc.number || tc.phone || '').replace(/[^0-9]/g, '')
+        const msgText = tc.text || tc.message || tc.content || ''
+        if (!rawNum) return 'ERROR: no recipient number (to field)'
+        if (!msgText) return 'ERROR: no message text'
+        const jid = rawNum.includes('@') ? rawNum : `${rawNum}@s.whatsapp.net`
+        try {
+            await conn.sendMessage(jid, { text: msgText })
+            return `✅ Message sent to +${rawNum}`
+        } catch (e) { return `send_whatsapp error: ${e.message}` }
+    }
+
+    // ── diff_text — compare two texts ─────────────────────────────────────────
+    if (t === 'diff_text' || t === 'text_diff' || t === 'compare_text') {
+        const a = (tc.a || tc.text1 || tc.original || '').split('\n')
+        const b = (tc.b || tc.text2 || tc.modified || '').split('\n')
+        if (!a.length && !b.length) return 'ERROR: provide a and b texts'
+        const added = b.filter(l => l.trim() && !a.includes(l))
+        const removed = a.filter(l => l.trim() && !b.includes(l))
+        if (!added.length && !removed.length) return '✅ Texts are identical (no differences)'
+        let out = `📝 *Diff Result:*\n`
+        if (removed.length) out += `\n➖ *Removed (${removed.length} lines):*\n${removed.slice(0, 20).map(l => `- ${l}`).join('\n')}`
+        if (added.length) out += `\n\n➕ *Added (${added.length} lines):*\n${added.slice(0, 20).map(l => `+ ${l}`).join('\n')}`
+        return out
+    }
+
+    // ── hash_text — MD5/SHA hashing ───────────────────────────────────────────
+    if (t === 'hash_text' || t === 'hash') {
+        const text = tc.text || tc.input || tc.content || ''
+        const algo = (tc.algo || tc.algorithm || 'sha256').toLowerCase().replace('-', '')
+        if (!text) return 'ERROR: provide text to hash'
+        try {
+            const crypto = require('crypto')
+            const valid = ['md5','sha1','sha256','sha384','sha512']
+            const use = valid.includes(algo) ? algo : 'sha256'
+            const hash = crypto.createHash(use).update(text).digest('hex')
+            return `🔐 *Hash (${use}):*\n\`${hash}\`\n\nInput: "${text.slice(0,80)}${text.length>80?'...':''}"`
+        } catch (e) { return `hash error: ${e.message}` }
+    }
+
+    // ── summarize_text — AI summarization ─────────────────────────────────────
+    if (t === 'summarize_text' || t === 'summarize' || t === 'tldr') {
+        const text = tc.text || tc.content || tc.input || ''
+        const style = tc.style || 'bullet'  // bullet | paragraph | oneliner
+        if (!text) return 'ERROR: provide text to summarize'
+        const instruction = style === 'oneliner'
+            ? 'Summarize in ONE sentence only.'
+            : style === 'paragraph'
+            ? 'Write a concise paragraph summary (3-5 sentences).'
+            : 'Summarize as 5-8 bullet points, each starting with "•". Be specific and concise.'
+        try {
+            const summary = await callPollinations([
+                { role: 'system', content: 'You are an expert summarizer. Be concise, accurate, and structured.' },
+                { role: 'user', content: `${instruction}\n\nText to summarize:\n${text.slice(0, 7000)}` }
+            ], 30000)
+            if (summary) return `📝 *Summary:*\n\n${summary}`
+        } catch {}
+        return 'summarize: AI unavailable'
+    }
+
     if (t === 'list_tools' || t === 'help' || t === 'tools' || t === 'capabilities') {
         return `🛠️ *Bera AI — Available Tools (65+)*\n\n` +
             `*🖥️ Shell & Code:*\nbash, multi_bash, runcode (js/python/go/rust/...), install (npm/pip)\n\n` +
             `*📁 Files & Workspace:*\nwritefile, readfile, listfiles, mkdir, deletefile, zipfolder, pastebin\n\n` +
-            `*🌐 Web & Scraping:*\nweb_scrape, smart_extract, deep_scrape, crawl_site, extract_links, extract_table, bulk_scrape, read_page, api\n\n` +
-            `*📊 Data & Analysis:*\nanalyze_data, format_convert (json/csv/yaml/xml), data_pipeline, nl_to_sql\n\n` +
+            `*🌐 Web & Scraping (4-strategy auto-fallback):*\nweb_scrape, smart_extract, deep_scrape, crawl_site, extract_links, extract_table, bulk_scrape, data_pipeline, read_page, api\n\n` +
+            `*🔍 Extraction & Processing:*\nparse_html, regex_extract, summarize_text, diff_text, hash_text, ssl_check\n\n` +
+            `*📊 Data & Analysis:*\nanalyze_data (filter/sort/group/stats/sum), format_convert (json/csv/yaml/xml)\n\n` +
             `*🐙 GitHub:*\ngithub_manage (whoami/list_repos/create_repo/commit_file/...), create_repo, git_push, git_clone\n\n` +
             `*⚙️ PM2 & Processes:*\npm2_manage (list/start/stop/restart/logs/monit)\n\n` +
             `*🤖 AI & Generation:*\nsearch, image_gen, code_review, code_explain, bug_finder, code_gen\n\n` +
