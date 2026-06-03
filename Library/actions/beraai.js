@@ -2364,7 +2364,7 @@ ${r.output.trim().slice(0, maxLen)}`
             const cacheUrl = `https://webcache.googleusercontent.com/search?q=cache:${encodeURIComponent(url)}`
             const r = await axios2.get(cacheUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }, timeout: 15000, validateStatus: () => true })
             if (r.status === 200 && r.data) {
-                let html = String(r.data).replace(/<script[^>]*>[sS]*?</script>/gi, '').replace(/<style[^>]*>[sS]*?</style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/s+/g, ' ').trim()
+                let html = String(r.data).replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
                 if (html.length > 80) return `🌐 *${url}* (Google Cache)\n\n${html.slice(0, maxLen)}`
             }
         } catch {}
@@ -2398,7 +2398,7 @@ ${r.output.trim().slice(0, maxLen)}`
         if (!pageText) {
             try {
                 const r = await axios2.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, timeout: 15000 })
-                pageText = String(r.data || '').replace(/<script[^>]*>[sS]*?</script>/gi, '').replace(/<style[^>]*>[sS]*?</style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/s+/g, ' ').trim().slice(0, 12000)
+                pageText = String(r.data || '').replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 12000)
             } catch {}
         }
         if (!pageText) return `❌ Could not fetch ${url}`
@@ -2431,7 +2431,7 @@ ${r.output.trim().slice(0, maxLen)}`
         if (!pageText) {
             try {
                 const r = await axios2.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, timeout: 15000 })
-                pageText = String(r.data || '').replace(/<script[^>]*>[sS]*?</script>/gi, '').replace(/<style[^>]*>[sS]*?</style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/s+/g, ' ').trim()
+                pageText = String(r.data || '').replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
             } catch {}
         }
         if (!pageText) return `❌ Could not fetch ${url}`
@@ -2455,7 +2455,7 @@ ${r.output.trim().slice(0, maxLen)}`
         try {
             const r = await axios2.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, timeout: 20000 })
             const html = String(r.data || '')
-            const titleRegex = /<a[^>]+href=["']([^"'#javascript][^"']*)["'][^>]*>([sS]*?)</a>/gi
+            const titleRegex = /<a[^>]+href=["']([^"'#javascript][^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi
             const links = []
             let match
             while ((match = titleRegex.exec(html)) !== null) {
@@ -2625,7 +2625,7 @@ ${r.output.trim().slice(0, maxLen)}`
                 if (matches.length >= 100) break
             }
             if (!matches.length) return `No matches for pattern: /${pattern}/${flags}`
-            return `🔍 *${matches.length} matches for /${pattern}/${flags}:*\n\n${matches.map((m, i) => `${i+1}. `${m}``).join('\n')}`
+            return `🔍 *${matches.length} matches for /${pattern}/${flags}:*\n\n${matches.map((m, i) => `${i+1}. ${m}`).join('\n')}`
         } catch (e) { return `regex error: ${e.message}` }
     }
 
@@ -2863,11 +2863,7 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
     } catch {}
 
     const messages = [
-        { role: 'system', content: (customSysPrompt ? customSysPrompt + '
-
----
-
-' : '') + SYSTEM_PROMPT + memStr + wsCtx + mentionCtx + groupCtx + actionLogCtx },
+        { role: 'system', content: (customSysPrompt ? customSysPrompt + '\n\n---\n\n' : '') + SYSTEM_PROMPT + memStr + wsCtx + mentionCtx + groupCtx + actionLogCtx },
         ...getHistory(chat).slice(-12)
     ]
 
