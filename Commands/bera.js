@@ -1212,8 +1212,8 @@ Start immediately with the code — no lengthy intro.`
             return reply(r.output)
         }
 
-        // create folder in workspace
-        const mkMatch = text.match(/\b(?:create|make|mkdir)\b.{0,20}(?:folder|dir(?:ectory)?)\b.*?["\s](\S+)/i)
+        // create folder in workspace — regex handles: 'named X', 'called X', bare 'folder X'
+        const mkMatch = text.match(/\b(?:create|make|mkdir)\b.{0,30}(?:folder|dir(?:ectory)?)\s+(?:(?:named?|called?)\s+)?["']?(\S+?)["']?(?=\s|$)/i)
         if (mkMatch) {
             const r = mkdirWorkspace(sender, mkMatch[1])
             await react(conn, m, r.success ? '✅' : '❌')

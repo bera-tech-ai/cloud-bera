@@ -949,6 +949,12 @@ const detectIntent = (text) => {
           /\bhow\s+much\s+(disk|storage|space)\b/i.test(t)) return 'disk_stats'
   
 
+    // ── List tools / capabilities ──────────────────────────────────────────────
+    if (/\b(what|which|list|show|display|tell me)\b.{0,25}\b(tools?|capabilities?|features?|functions?|abilities?)\b/i.test(t) ||
+        /\b(what can you do|what do you (do|have|know)|show me what you (can do|have))\b/i.test(t) ||
+        /\bwhat tools? (do you have|can you use|are available|you got)\b/i.test(t) ||
+        /\b(do you have any tools?|your (tools?|capabilities?)|can you use tools?)\b/i.test(t)) return 'list_tools'
+
     // ── Semantic fallback — catch natural-language intent the regex missed ──────
     try {
         const { semanticRoute } = require('./lib/semanticRouter')
