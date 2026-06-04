@@ -727,15 +727,24 @@ ALWAYS complete the full pipeline: fetch → extract → analyze → present cle
 
 ━━━ DEEP INTENT — UNDERSTAND WHAT THEY REALLY WANT ━━━
 Think beyond the literal words:
-• "build me a todo app"        → Full working Express app: routes, CRUD, HTML UI, started live on a port
-• "make a weather app"         → Real weather API + beautiful UI + deployed, running
+• "build me a portfolio"       → {"tool":"scaffold","type":"portfolio","name":"my-portfolio"} — static HTML/CSS/JS, NO clone, NO Express
+• "make a landing page"        → {"tool":"scaffold","type":"landing","name":"my-site"} — static HTML/CSS/JS
+• "build a website"            → {"tool":"scaffold","type":"static","name":"my-website"} — static HTML/CSS/JS
+• "build me a todo app"        → {"tool":"scaffold","type":"express","name":"todo-app"} — Express + SQLite
+• "make a weather app"         → {"tool":"scaffold","type":"react","name":"weather-app"} — React + weather API
 • "check my website X"         → scrape + uptime check + SSL + response time → full report
-• "fix my app"                 → read the code → find ALL bugs → fix → test it
+• "fix my app"                 → scan_project first → find ALL bugs → edit_file surgically → test
 • "get prices from [URL]"      → smart scrape → extract all prices → show as clean table
 • "write a script to do X"     → Full production-quality script, not a skeleton
 • "what is X?"                 → web search + Wikipedia + synthesize a real answer with sources
-• "deploy my bot"              → clone → install → start → confirm it's running
-• "create a REST API for X"    → scaffold + full CRUD routes + validation + start it + show test URLs
+• "deploy my bot"              → git_push_folder → skyhost deploy → confirm live URL
+• "create a REST API for X"    → scaffold express → full CRUD routes → validation → start → show test URLs
+
+⚠️ CRITICAL RULES FOR BUILDING:
+- "portfolio" / "website" / "landing page" = ALWAYS use scaffold with type "portfolio" or "static" — writes HTML/CSS/JS directly. NEVER git clone for these.
+- NEVER use git clone to "build" something — clone is ONLY for when the user provides an existing repo URL.
+- "build" means WRITE FILES. "deploy" means push to hosting. These are two separate steps.
+- ALWAYS scaffold or multi_write first. Ask nothing. Write the code, THEN optionally deploy.
 
 ━━━ GO BEYOND — BE PROACTIVE ━━━
 Building an app?  → Add: README, sample data, input validation, error handling — unasked
@@ -2365,8 +2374,181 @@ try {
         }
         TEMPLATES.electron = electron
 
+        // ── static / portfolio / landing / html ───────────────────────────────
+        const staticSite = () => {
+            const title = rawName.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+            write('index.html', `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>${title}</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <header class="header">
+    <nav class="nav">
+      <span class="logo">${title}</span>
+      <ul>
+        <li><a href="#about">About</a></li>
+        <li><a href="#projects">Projects</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="hero-content">
+      <h1>Hi, I'm <span class="highlight">${title}</span> 👋</h1>
+      <p>Full-Stack Developer · Designer · Problem Solver</p>
+      <a href="#projects" class="btn">View My Work</a>
+    </div>
+  </section>
+
+  <section id="about" class="section">
+    <h2>About Me</h2>
+    <p>I build clean, fast, and modern web applications. Passionate about great user experiences and elegant code.</p>
+  </section>
+
+  <section id="projects" class="section dark">
+    <h2>Projects</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Project One</h3>
+        <p>A full-stack web app built with React and Node.js.</p>
+        <a href="#" class="btn-sm">View →</a>
+      </div>
+      <div class="card">
+        <h3>Project Two</h3>
+        <p>Mobile-first responsive landing page with animations.</p>
+        <a href="#" class="btn-sm">View →</a>
+      </div>
+      <div class="card">
+        <h3>Project Three</h3>
+        <p>REST API with authentication and real-time updates.</p>
+        <a href="#" class="btn-sm">View →</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact" class="section">
+    <h2>Contact</h2>
+    <p>Open to work! Reach out at <a href="mailto:hello@example.com">hello@example.com</a></p>
+    <div class="socials">
+      <a href="#">GitHub</a>
+      <a href="#">LinkedIn</a>
+      <a href="#">Twitter</a>
+    </div>
+  </section>
+
+  <footer><p>© ${new Date().getFullYear()} ${title}. Built with ❤️</p></footer>
+
+  <script src="script.js"></script>
+</body>
+</html>`)
+            write('style.css', `* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #0f0f0f;
+  --bg2: #1a1a1a;
+  --text: #f0f0f0;
+  --muted: #888;
+  --accent: #6c63ff;
+  --accent2: #a89cff;
+}
+html { scroll-behavior: smooth; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+
+/* NAV */
+.header { position: fixed; top: 0; width: 100%; background: rgba(15,15,15,0.9); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid #222; }
+.nav { max-width: 1100px; margin: 0 auto; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+.logo { font-size: 1.2rem; font-weight: 700; color: var(--accent); }
+.nav ul { list-style: none; display: flex; gap: 2rem; }
+.nav a { color: var(--muted); text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
+.nav a:hover { color: var(--text); }
+
+/* HERO */
+.hero { min-height: 100vh; display: flex; align-items: center; justify-content: center; text-align: center; padding: 6rem 2rem 4rem; background: radial-gradient(ellipse at 50% 0%, #1e1b4b 0%, var(--bg) 60%); }
+.hero h1 { font-size: clamp(2rem, 6vw, 4rem); font-weight: 800; margin-bottom: 1rem; }
+.highlight { color: var(--accent); }
+.hero p { color: var(--muted); font-size: 1.2rem; margin-bottom: 2rem; }
+.btn { display: inline-block; padding: 0.85rem 2.2rem; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; transition: transform 0.2s, opacity 0.2s; }
+.btn:hover { opacity: 0.85; transform: translateY(-2px); }
+
+/* SECTIONS */
+.section { max-width: 1100px; margin: 0 auto; padding: 5rem 2rem; }
+.section.dark { max-width: 100%; background: var(--bg2); }
+.section.dark > * { max-width: 1100px; margin-left: auto; margin-right: auto; }
+h2 { font-size: 2rem; font-weight: 700; margin-bottom: 1.5rem; }
+h2::after { content: ''; display: block; width: 50px; height: 3px; background: var(--accent); margin-top: 0.5rem; border-radius: 2px; }
+
+/* GRID */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+.card { background: var(--bg); border: 1px solid #2a2a2a; border-radius: 12px; padding: 1.8rem; transition: border-color 0.2s, transform 0.2s; }
+.card:hover { border-color: var(--accent); transform: translateY(-4px); }
+.card h3 { margin-bottom: 0.75rem; font-size: 1.15rem; }
+.card p { color: var(--muted); font-size: 0.95rem; margin-bottom: 1.2rem; }
+.btn-sm { color: var(--accent2); text-decoration: none; font-size: 0.9rem; font-weight: 600; }
+.btn-sm:hover { color: var(--accent); }
+
+/* CONTACT */
+#contact p { color: var(--muted); font-size: 1.05rem; }
+#contact a { color: var(--accent2); }
+.socials { display: flex; gap: 1.5rem; margin-top: 1.5rem; }
+.socials a { color: var(--muted); text-decoration: none; font-weight: 500; transition: color 0.2s; }
+.socials a:hover { color: var(--text); }
+
+/* FOOTER */
+footer { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.85rem; border-top: 1px solid #1e1e1e; }
+
+/* RESPONSIVE */
+@media (max-width: 600px) {
+  .nav ul { gap: 1rem; }
+  .hero h1 { font-size: 2rem; }
+}`)
+            write('script.js', `// Smooth nav highlight on scroll
+const sections = document.querySelectorAll('section[id]')
+const navLinks = document.querySelectorAll('.nav a')
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'))
+      const link = document.querySelector(\`.nav a[href="#\${e.target.id}"]\`)
+      if (link) link.style.color = 'var(--text)'
+    }
+  })
+}, { threshold: 0.4 })
+
+sections.forEach(s => observer.observe(s))
+
+// Animate cards on scroll
+const cards = document.querySelectorAll('.card')
+const cardObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.style.opacity = '1'
+      e.target.style.transform = 'translateY(0)'
+    }
+  })
+}, { threshold: 0.1 })
+
+cards.forEach(card => {
+  card.style.opacity = '0'
+  card.style.transform = 'translateY(30px)'
+  card.style.transition = 'opacity 0.5s ease, transform 0.5s ease'
+  cardObserver.observe(card)
+})`)
+            write('README.md', `# ${title}\n\nStatic portfolio site — no build step needed.\n\n## Run locally\n\`\`\`bash\nnpx serve .\n# or just open index.html in your browser\n\`\`\`\n\n## Deploy\nDrop the folder on Netlify, Vercel, or GitHub Pages.`)
+            return ['index.html', 'style.css', 'script.js', 'README.md']
+        }
+        TEMPLATES.static = staticSite
+        TEMPLATES.portfolio = staticSite
+        TEMPLATES.landing = staticSite
+        TEMPLATES.html = staticSite
+        TEMPLATES.website = staticSite
+
         const builder = TEMPLATES[type]
-        if (!builder) return `❌ Unknown scaffold type: *${type}*\n\nAvailable: react, next, express, fastapi, fullstack, discord, telegram, electron, cli, flask`
+        if (!builder) return `❌ Unknown scaffold type: *${type}*\n\nAvailable: react, next, express, fastapi, fullstack, discord, telegram, electron, cli, flask, static, portfolio, landing`
 
         try {
             nodeFsS.mkdirSync(dest, { recursive: true })
