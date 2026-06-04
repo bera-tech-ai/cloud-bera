@@ -34,7 +34,7 @@ const pingURL = (url, timeoutMs = 8000) => new Promise(resolve => {
 
 const sendAlert = async (msg) => {
     try {
-        const conn = global._conn
+        const conn = global._conn || global.conn
         if (!conn) return
         const ownerNum = (
             global.db?.data?.settings?.owner ||
@@ -69,7 +69,7 @@ const startMonitor = (id, url, notifyJid, intervalMs = DEFAULT_INTERVAL) => {
                 : `🔴 *Monitor Alert*\n⚠️ *${url}* is *DOWN*\n⏰ ${new Date().toLocaleString()}`
             if (notifyJid) {
                 try {
-                    const conn = global._conn
+                    const conn = global._conn || global.conn
                     if (conn) await conn.sendMessage(notifyJid, { text: msg })
                 } catch {}
             }
@@ -121,7 +121,7 @@ const checkHealth = async () => {
 }
 
 const init = (conn) => {
-    if (conn) global._conn = conn
+    if (conn) { global._conn = conn; global.conn = global.conn || conn }
     const monitors = getMonitors()
     for (const mon of monitors) {
         if (mon.active !== false) {
