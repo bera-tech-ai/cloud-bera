@@ -2,6 +2,14 @@ const detectIntent = (text) => {
     if (!text) return 'chat'
     const t = text.toLowerCase().trim()
 
+    // ── Sky Hosting — PRIORITY (must be first, URL contains "github" which would match github catch-all) ──
+    if (/sky.?host/i.test(t) ||
+        /\b(to|on|via)\s+sky(-hosting)?\b/i.test(t) ||
+        /\bdeploy\b.{0,80}sky(-hosting)?\b/i.test(t) ||
+        /\bsky(-hosting)?\b.{0,40}\bdeploy\b/i.test(t) ||
+        /\b(list|show)\b.{0,20}\bsky\b.{0,20}\b(project|deploy)/i.test(t) ||
+        /\bsky\b.{0,10}\b(status|logs?|project)/i.test(t)) return 'sky_deploy'
+
     // ── Menu / Help ─────────────────────────────────────────────────────────
     if (/\b(open|show|see|view|get|give|display)\b.{0,15}\b(menu|commands?|help|list)\b/.test(t) ||
         /\b(what('s| is| are)? (the )?commands?|what can you do|how (do i|to) use|available commands?)\b/.test(t) ||
