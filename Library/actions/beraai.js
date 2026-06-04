@@ -60,7 +60,7 @@ const callGroqAI = async (messages, timeoutMs, maxTokens = 2048) => {
 }
 
 // ── Memory store — persists to disk so it survives bot restarts ───────────────
-const _MEM_FILE = require('path').join(__dirname, '../../bera-ai/Database/agent_memory.json')
+const _MEM_FILE = require('path').join(__dirname, '../../Database/agent_memory.json')
 let MEMORY = {}
 try { MEMORY = JSON.parse(require('fs').readFileSync(_MEM_FILE, 'utf8')) } catch {}
 
@@ -948,6 +948,20 @@ DEPLOY & HOSTING
 ══════════════════════════════════════════════
 {"tool":"deploy_vercel","folder":"workspace/myapp","name":"my-app"}
 {"tool":"deploy_railway","folder":"workspace/myapp","name":"my-app"}
+{"tool":"skyhost","action":"deploy","repoUrl":"https://github.com/user/repo","name":"my-app","branch":"main","envVars":{"PORT":"3000"}}
+{"tool":"skyhost","action":"list"}                     → list all Sky Hosting projects
+{"tool":"skyhost","action":"status","deploymentId":"dep_xyz"}
+{"tool":"skyhost","action":"logs","deploymentId":"dep_xyz"}
+{"tool":"skyhost","action":"stop","deploymentId":"dep_xyz"}
+{"tool":"skyhost","action":"health"}                   → check if Sky Hosting API is online
+
+NEW POWER TOOLS (use these instead of old slow alternatives):
+{"tool":"multi_write","files":[{"path":"workspace/app/index.html","content":"..."},{"path":"workspace/app/style.css","content":"..."}]}
+  → Writes ALL files in PARALLEL in one step. Use this instead of multiple writefile calls.
+{"tool":"edit_file","path":"workspace/app/index.js","edits":[{"find":"old text","replace":"new text"}]}
+  → Surgically edits ONE specific part of a file without rewriting it. Use for targeted changes.
+{"tool":"scan_project","path":"workspace/myapp","read_contents":true}
+  → Scans entire project folder — file tree + file contents. Use at START of every coding task.
 
 ══════════════════════════════════════════════
 SCHEDULING & MONITORING
@@ -1179,6 +1193,85 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         _nodeFsSync.mkdirSync(_nodePath.dirname(p), { recursive: true })
         await _nodeFsPromises.writeFile(p, tc.content || '', 'utf8')
         return `written: ${p} (${(tc.content||'').length} bytes)`
+    }
+
+    // ── multi_write — write many files simultaneously (parallel) ─────────────
+    if (t === 'multi_write') {
+        const files = Array.isArray(tc.files) ? tc.files : []
+        if (!files.length) return 'ERROR: files array required [{path, content}]'
+        const results = await Promise.all(files.map(async (f) => {
+            try {
+                const p = _safeWsPath(f.path)
+                if (!p) return `ERROR: invalid path: ${f.path}`
+                _nodeFsSync.mkdirSync(_nodePath.dirname(p), { recursive: true })
+                await _nodeFsPromises.writeFile(p, f.content || '', 'utf8')
+                return `✅ ${f.path} (${(f.content||'').length} bytes)`
+            } catch (e) { return `❌ ${f.path}: ${e.message}` }
+        }))
+        return `Written ${files.length} files in parallel:\n` + results.join('\n')
+    }
+
+    // ── edit_file — surgical find-and-replace (never rewrites the whole file) ─
+    if (t === 'edit_file') {
+        const p = _safeWsPath(tc.path)
+        if (!p) return 'ERROR: invalid path'
+        if (!_nodeFsSync.existsSync(p)) return `ERROR: file not found: ${p}`
+        let content = await _nodeFsPromises.readFile(p, 'utf8')
+        const edits = Array.isArray(tc.edits) ? tc.edits : (tc.find ? [{ find: tc.find, replace: tc.replace || '' }] : [])
+        if (!edits.length) return 'ERROR: edits array required [{find, replace}]'
+        let changes = 0
+        for (const edit of edits) {
+            const before = content
+            if (edit.find_regex) {
+                content = content.replace(new RegExp(edit.find_regex, edit.flags || 'g'), edit.replace || '')
+            } else {
+                content = content.split(edit.find).join(edit.replace || '')
+            }
+            if (content !== before) changes++
+        }
+        if (!changes) return `WARNING: no matches found — file unchanged: ${p}`
+        await _nodeFsPromises.writeFile(p, content, 'utf8')
+        return `✅ edited ${p}: ${changes}/${edits.length} edit(s) applied`
+    }
+
+    // ── scan_project — read all files in a workspace folder (project awareness)
+    if (t === 'scan_project') {
+        const dir = _safeWsPath(tc.path || 'workspace/')
+        if (!dir || !_nodeFsSync.existsSync(dir)) return `ERROR: directory not found: ${tc.path || 'workspace/'}`
+        const walk = (d, prefix = '') => {
+            let out = []
+            try {
+                const entries = _nodeFsSync.readdirSync(d, { withFileTypes: true })
+                for (const e of entries) {
+                    if (e.name.startsWith('.') || e.name === 'node_modules') continue
+                    const rel = prefix ? prefix + '/' + e.name : e.name
+                    if (e.isDirectory()) { out = out.concat(walk(_nodePath.join(d, e.name), rel)) }
+                    else { out.push(rel) }
+                }
+            } catch {}
+            return out
+        }
+        const files = walk(dir)
+        if (!files.length) return `📂 ${tc.path || 'workspace/'} is empty.`
+        const maxPreview = tc.preview !== false
+        const lines = [`📂 Project: ${tc.path || 'workspace/'} (${files.length} files)\n`]
+        let charBudget = 5000
+        for (const f of files) {
+            lines.push(`• ${f}`)
+            if (maxPreview && charBudget > 0 && tc.read_contents !== false) {
+                try {
+                    const fp = _nodePath.join(dir, f)
+                    const stat = _nodeFsSync.statSync(fp)
+                    if (stat.size < 8000) {
+                        const c = await _nodeFsPromises.readFile(fp, 'utf8')
+                        const snippet = c.slice(0, Math.min(400, charBudget))
+                        if (snippet.trim()) { lines.push(`\`\`\`\n${snippet}${c.length > 400 ? '\n...' : ''}\n\`\`\``) }
+                        charBudget -= snippet.length
+                    }
+                } catch {}
+            }
+        }
+        return lines.join('\n')
     }
 
     // ── readfile ──────────────────────────────────────────────────────────────
@@ -1788,6 +1881,70 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         const folder = tc.folder || 'workspace/'
         const r = await runBash(`cd "${folder}" && npx @railway/cli up 2>&1`, 120000)
         return (r.output || 'deployment attempted').slice(0, 2000)
+    }
+
+    // ── skyhost — Sky Hosting API (create project, deploy, monitor, list) ─────
+    if (t === 'skyhost') {
+        const sh = require('./skyhost')
+        const action = tc.action || 'list'
+        try {
+            switch (action) {
+                case 'list': {
+                    const r = await sh.listProjects()
+                    if (!r.success) return `❌ Sky Hosting error: ${r.error}`
+                    const projects = r.projects || []
+                    if (!projects.length) return '📭 No Sky Hosting projects yet.'
+                    return projects.map(p =>
+                        `• *${p.name}* [${p.status}]\n  ID: ${p.id}\n  ${p.liveUrl ? '🌐 ' + p.liveUrl : 'Not deployed'}`
+                    ).join('\n\n')
+                }
+                case 'deploy': {
+                    if (!tc.repoUrl) return 'ERROR: repoUrl required'
+                    const result = await sh.deployRepo({
+                        name: tc.name,
+                        repoUrl: tc.repoUrl,
+                        branch: tc.branch || 'main',
+                        envVars: tc.envVars || {},
+                        conn,
+                        chat: chatId
+                    })
+                    if (!result.success) {
+                        const logsTail = result.logs ? '\n\n📋 *Build logs:*\n```\n' + result.logs + '\n```' : ''
+                        return `❌ Deployment failed: ${result.error}${logsTail}`
+                    }
+                    return `✅ *Deployed to Sky Hosting!*\n\n🌐 *Live URL:* ${result.liveUrl}\n📦 *Project ID:* ${result.projectId}\n🆔 *Deployment ID:* ${result.deploymentId}\n🖥️ *Runtime:* ${result.runtime || 'auto-detected'}`
+                }
+                case 'status': {
+                    if (!tc.deploymentId) return 'ERROR: deploymentId required'
+                    const r = await sh.getDeployment(tc.deploymentId)
+                    if (!r.success) return `❌ ${r.error}`
+                    const d = r.deployment
+                    return `📊 *Deployment Status*\n\nID: ${d.id}\nStatus: *${d.status}*\nRuntime: ${d.runtime || 'unknown'}\n${d.liveUrl ? '🌐 ' + d.liveUrl : ''}\nStarted: ${d.startedAt || d.createdAt}`
+                }
+                case 'logs': {
+                    if (!tc.deploymentId) return 'ERROR: deploymentId required'
+                    const r = await sh.getLogs(tc.deploymentId)
+                    if (!r.success) return `❌ ${r.error}`
+                    const lines = (r.logs || []).slice(-20).map(l => `[${l.level || 'info'}] ${l.message}`).join('\n')
+                    return `📋 *Build Logs:*\n\`\`\`\n${lines || 'No logs yet.'}\n\`\`\``
+                }
+                case 'stop': {
+                    if (!tc.deploymentId) return 'ERROR: deploymentId required'
+                    const r = await sh.deleteDeployment(tc.deploymentId)
+                    return r.success ? `🛑 Deployment ${tc.deploymentId} stopped.` : `❌ ${r.error}`
+                }
+                case 'delete_project': {
+                    if (!tc.projectId) return 'ERROR: projectId required'
+                    const r = await sh.deleteProject(tc.projectId)
+                    return r.success ? `🗑️ Project ${tc.projectId} deleted.` : `❌ ${r.error}`
+                }
+                case 'health': {
+                    const ok = await sh.checkHealth()
+                    return ok ? '✅ Sky Hosting API is online.' : '❌ Sky Hosting API is unreachable.'
+                }
+                default: return `Unknown skyhost action: ${action}\nAvailable: list, deploy, status, logs, stop, delete_project, health`
+            }
+        } catch (e) { return `❌ skyhost error: ${e.message}` }
     }
 
     // ── db ────────────────────────────────────────────────────────────────────
@@ -2901,21 +3058,46 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 
         messages.push({ role: 'assistant', content: aiReply })
 
-        const toolResults = []
-        for (const tc of toolCalls) {
+        // ── Execute tools (parallel when possible) ────────────────────────────
+        const toolResults = await Promise.all(toolCalls.map(async (tc) => {
             try {
                 const result = await executeToolCall(tc, chat, conn, m)
-                toolResults.push({ tool: tc.tool, result: String(result).slice(0, 3000) })
+                return { tool: tc.tool, result: String(result).slice(0, 3000), ok: true }
             } catch (e) {
-                toolResults.push({ tool: tc.tool, result: `EXECUTION ERROR: ${e.message}` })
+                return { tool: tc.tool, result: `EXECUTION ERROR: ${e.message}`, ok: false }
             }
+        }))
+
+        // ── Progress update every 5 steps ─────────────────────────────────────
+        if (conn && m && stepCount > 0 && stepCount % 5 === 0) {
+            const toolNames = toolCalls.map(tc => tc.tool).join(', ')
+            conn.sendMessage(chat, {
+                text: `⚙️ *Working...* [Step ${stepCount}]\n_Tools used: ${toolNames}_`
+            }, { quoted: m }).catch(() => {})
         }
+
+        // ── Self-healing: detect failures and instruct AI to fix them ─────────
+        const hasErrors = toolResults.some(r => !r.ok ||
+            r.result.startsWith('EXECUTION ERROR') ||
+            r.result.startsWith('ERROR:') ||
+            r.result.startsWith('❌'))
+        const allFailed = toolResults.every(r => !r.ok)
 
         const resultsText = toolResults.map(r => `[Tool: ${r.tool}]\n${r.result}`).join('\n\n---\n\n')
 
+        const continuePrompt = hasErrors
+            ? `Tool results:\n${resultsText}\n\n⚠️ Some tools failed above. Analyze each error carefully:\n- ENOENT → create the missing directory first with bash or mkdir tool\n- MODULE_NOT_FOUND → install the package with the install tool\n- Permission denied → try a different path\n- Any other error → try an alternative approach\n\nDo NOT give up. Fix the errors and continue. If fully done, give your final answer in plain text (no JSON).`
+            : `Tool results:\n${resultsText}\n\nContinue the task. If fully complete, give your final answer in plain text (no JSON).`
+
+        // If every single tool call failed repeatedly, abort early
+        if (allFailed && loop >= 3) {
+            const errSummary = toolResults.map(r => `• ${r.tool}: ${r.result.slice(0, 120)}`).join('\n')
+            return { success: false, reply: `❌ *Task blocked* — tools keep failing:\n\n${errSummary}\n\nPlease check your setup or try a simpler request.` }
+        }
+
         messages.push({
             role: 'user',
-            content: `Tool results:\n${resultsText}\n\nContinue the task. If fully complete, give your final answer in plain text (no JSON).`
+            content: continuePrompt
         })
     }
 
