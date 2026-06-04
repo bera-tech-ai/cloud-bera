@@ -397,13 +397,22 @@ const startBot = async () => {
             startReminderLoop(conn)
             startBioLoop(conn)
             applyBotImage(conn, botJid).catch(() => {})
+            // ── Set global._conn so monitor alerts can reach WhatsApp ────────
+            global._conn = conn
+
+            // ── Auto-create workspace directory on startup ────────────────
+            try {
+                const _wspath = require('path').join(process.cwd(), 'workspace')
+                require('fs').mkdirSync(_wspath, { recursive: true })
+            } catch {}
+
             // ── Restore persistent server monitor if it was enabled ────────
             try {
                 const monitorEnabled = global.db?.data?.settings?.monitorEnabled
                 const monitorChat    = global.db?.data?.settings?.monitorChat
                 if (monitorEnabled && monitorChat) {
-                    const { startMonitor } = require('../Plugins/monitor')
-                    startMonitor(conn, monitorChat)
+                    const { init: initMon } = require('../Library/lib/monitor')
+                    initMon(conn)
                     console.log(chalk.green('[BOT] 📊 Server monitor restored'))
                 }
             } catch (me) { console.log(chalk.yellow('[BOT] Monitor restore skipped:', me.message)) }
