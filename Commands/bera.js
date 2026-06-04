@@ -22,6 +22,8 @@ const pluginLoader = require('../Library/lib/pluginLoader')
 const { translate } = require('../Library/actions/translate')
 const { download, detectPlatform } = require('../Library/actions/downloader')
 const { listServers, getServerStatus, powerAction, sendCommand, formatUptime, statusEmoji } = require('../Library/actions/pterodactyl')
+const { deployRepo, listProjects, getDeployment, getLogs, deleteProject } = require('../Library/actions/skyhost')
+const { scrapePage, extractLinks, extractEmails, extractPhones } = require('../Library/actions/scraper')
 const {
     gtLyrics, gtDefine, gtDictionary, gtGoogle, gtWiki, gtWeather,
     gtYtMp3, gtYtMp4, gtTikTok, gtInstagram, gtTwitter, gtSpotifyDl,
@@ -1240,6 +1242,128 @@ Start immediately with the code — no lengthy intro.`
         const r = listWorkspace(sender)
         await react(conn, m, '✅')
         return reply(r.output)
+    }
+
+    // ── Create folder in workspace ─────────────────────────────────────────────
+    if (intent === 'mkdir_workspace') {
+        await react(conn, m, '📁')
+        const nameMatch = text.match(/\b(?:create|make|mkdir)\b.{0,40}\b(?:folder|directory|dir)\b\s+(?:(?:named?|called?)\s+)?["']?([^\s"']+)["']?/i)
+            || text.match(/\b(?:folder|directory|dir)\b\s+(?:named?|called?)?\s*["']?([^\s"']+)["']?/i)
+        if (!nameMatch || !nameMatch[1]) return reply(`❌ Please specify a folder name.\nExample: _create a folder named projects_`)
+        const folderName = nameMatch[1].replace(/[^a-zA-Z0-9_\-. /]/g, '').trim()
+        if (!folderName) return reply(`❌ Invalid folder name.`)
+        const r = mkdirWorkspace(sender, folderName)
+        await react(conn, m, r.success ? '✅' : '❌')
+        return reply(r.output)
+    }
+
+    // ── Create/write a file in workspace ──────────────────────────────────────
+    if (intent === 'file_write') {
+        await react(conn, m, '✍️')
+        const quoted = m.quoted?.text || m.quoted?.body || ''
+        const nameMatch = text.match(/\b(?:create|write|make|save|touch|edit|update|modify)\b.{0,30}(?:file\s+)?(?:named?|called?)?\s*["']?([^\s"']+\.[a-zA-Z0-9]+)["']?/i)
+        if (!nameMatch) return reply(`❌ Specify a filename with extension.\nExample: _create a file hello.js_\n\nQuote a message to set its content.`)
+        const filename = nameMatch[1]
+        const content = quoted || text.replace(nameMatch[0], '').trim()
+        const r = writeWorkspaceFile(sender, filename, content)
+        await react(conn, m, r.success ? '✅' : '❌')
+        return reply(r.output)
+    }
+
+    // ── Web scrape ─────────────────────────────────────────────────────────────
+    if (intent === 'web_scrape') {
+        await react(conn, m, '🌐')
+        const urlMatch = text.match(/https?:\/\/[^\s]+/)
+            || (m.quoted?.text || m.quoted?.body || '').match(/https?:\/\/[^\s]+/)
+        if (!urlMatch) return reply(`❌ Please include or quote the URL to scrape.\nExample: _scrape https://example.com_`)
+        const url = urlMatch[0].replace(/[)>\]"']+$/, '')
+        const t = text.toLowerCase()
+        let result
+        if (/email/i.test(t)) {
+            result = await extractEmails(url)
+            if (!result.success) { await react(conn, m, '❌'); return reply(`❌ ${result.error}`) }
+            if (!result.emails?.length) return reply(`No emails found on ${url}`)
+            await react(conn, m, '✅')
+            return reply(`📧 *Emails from* ${url}\n\n${result.emails.join('\n')}`)
+        }
+        if (/phone|number/i.test(t)) {
+            result = await extractPhones(url)
+            if (!result.success) { await react(conn, m, '❌'); return reply(`❌ ${result.error}`) }
+            if (!result.phones?.length) return reply(`No phone numbers found on ${url}`)
+            await react(conn, m, '✅')
+            return reply(`📞 *Phones from* ${url}\n\n${result.phones.join('\n')}`)
+        }
+        if (/links?|urls?/i.test(t)) {
+            result = await extractLinks(url)
+            if (!result.success) { await react(conn, m, '❌'); return reply(`❌ ${result.error}`) }
+            const links = (result.links || []).slice(0, 20).map(l => `🔗 ${l.text ? `[${l.text.slice(0,40)}] ` : ''}${l.url}`).join('\n')
+            await react(conn, m, '✅')
+            return reply(`🔗 *Links from* ${url}\n\n${links}`)
+        }
+        result = await scrapePage(url)
+        if (!result.success) { await react(conn, m, '❌'); return reply(`❌ Scrape failed: ${result.error}`) }
+        await react(conn, m, '✅')
+        const title = result.title ? `*${result.title}*\n` : ''
+        const desc = result.meta?.description ? `_${result.meta.description.slice(0, 200)}_\n\n` : ''
+        const content = (result.text || result.content || '').slice(0, 2500)
+        return reply(`🌐 ${title}${url}\n${desc}${'─'.repeat(28)}\n\n${content}`)
+    }
+
+    // ── Sky Hosting deployment ─────────────────────────────────────────────────
+    if (intent === 'sky_deploy') {
+        await react(conn, m, '🚀')
+        const t = text.toLowerCase()
+
+        if (!process.env.SKY_HOSTING_API_KEY) {
+            return reply(`❌ Sky Hosting API key not configured.\nAsk the bot owner to set SKY_HOSTING_API_KEY.`)
+        }
+
+        // List projects
+        if (/\b(list|show|my)\b.{0,20}\b(projects?|deployments?|sites?)\b/.test(t) || /^sky.?host\s*$/.test(t)) {
+            const res = await listProjects()
+            if (!res.success) { await react(conn, m, '❌'); return reply(`❌ ${res.error}`) }
+            const projects = res.projects || []
+            if (!projects.length) return reply(`🚀 *Sky Hosting*\n\nNo projects yet.\n\nDeploy one with:\n_deploy https://github.com/user/repo to sky_`)
+            await react(conn, m, '✅')
+            const lines = projects.map((p, i) => `${i + 1}. *${p.name}* — ${p.id}\n   ${p.liveUrl || 'not live yet'}`)
+            return reply(`🚀 *Sky Hosting Projects*\n\n${lines.join('\n\n')}`)
+        }
+
+        // Deployment status by ID
+        const statusMatch = text.match(/\b(?:status|check|info|logs?)\b.{0,20}([a-f0-9-]{8,})/i)
+        if (statusMatch) {
+            const depId = statusMatch[1]
+            const res = await getDeployment(depId)
+            if (!res.success) { await react(conn, m, '❌'); return reply(`❌ ${res.error}`) }
+            const dep = res.deployment
+            const status = dep.status || 'unknown'
+            const emoji = { queued: '⏳', cloning: '📥', building: '🔨', live: '✅', failed: '❌' }[status] || '🔄'
+            await react(conn, m, '✅')
+            return reply(`${emoji} *Sky Deployment*\n\nID: ${depId}\nStatus: *${status.toUpperCase()}*${dep.liveUrl ? `\n🌐 URL: ${dep.liveUrl}` : ''}${dep.runtime ? `\nRuntime: ${dep.runtime}` : ''}`)
+        }
+
+        // Deploy a repo
+        const repoMatch = text.match(/https?:\/\/github\.com\/[^\s]+/)
+        if (!repoMatch) {
+            return reply(`🚀 *Sky Hosting*\n\n_Commands:_\n• Deploy: _deploy https://github.com/user/repo to sky_\n• List: _list sky projects_\n• Status: _sky status <deployment-id>_\n\nRequires: SKY_HOSTING_API_KEY set by owner.`)
+        }
+        const repoUrl = repoMatch[0].replace(/[)>\]"']+$/, '')
+        const nameMatch = text.match(/\b(?:named?|called?|as|project)\s+["']?([a-zA-Z0-9_-]+)["']?/i)
+        const projName = nameMatch?.[1] || ('bera-' + Date.now().toString(36))
+        const branchMatch = text.match(/\b(?:branch|from)\s+["']?([a-zA-Z0-9_/.-]+)["']?/i)
+        const branch = branchMatch?.[1] || 'main'
+
+        conn.sendMessage(m.chat, { text: `🚀 *Sky Hosting:* Starting deployment of \`${repoUrl}\`...` }).catch(() => {})
+
+        const res = await deployRepo({ name: projName, repoUrl, branch, conn, chat: m.chat })
+        if (!res.success) {
+            await react(conn, m, '❌')
+            let errMsg = `❌ *Sky Hosting Deployment Failed*\n\n${res.error || 'Unknown error'}`
+            if (res.logs) errMsg += `\n\n*Logs:*\n\`\`\`\n${res.logs.slice(0, 800)}\n\`\`\``
+            return reply(errMsg)
+        }
+        await react(conn, m, '✅')
+        return reply(`✅ *Sky Hosting — Deployed!*\n\n🌐 *Live URL:* ${res.liveUrl}\n📦 Project ID: ${res.projectId}\n🚀 Deployment ID: ${res.deploymentId}${res.runtime ? `\n⚙️ Runtime: ${res.runtime}` : ''}`)
     }
 
     if (intent === 'pterodactyl') {

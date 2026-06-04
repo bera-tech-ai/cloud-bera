@@ -141,6 +141,19 @@ const detectIntent = (text) => {
         /\b(what.{0,10}(in|inside) (my )?workspace|workspace (info|size|status))\b/.test(t) ||
         /\b(show|list|view)\b.{0,15}\b(my files?|my folders?|files? in workspace)\b/.test(t)) return 'workspace_cmd'
 
+    // ── Create folder/directory ───────────────────────────────────────────────
+    if (/\b(create|make|mkdir)\b.{0,40}\b(folder|directory|dir)\b/.test(t) ||
+        /\b(create|make)\b.{0,20}(folder|directory)\s+(?:named?|called?)?\s*\S+/.test(t)) return 'mkdir_workspace'
+
+    // ── Create file ───────────────────────────────────────────────────────────
+    if (/\b(create|write|make|save|touch)\b.{0,20}\b(file|\.js|\.py|\.txt|\.json|\.sh|\.ts|\.html|\.css|\.md)\b/.test(t) ||
+        /\b(edit|update|modify|overwrite)\b.{0,20}\bfile\b/.test(t)) return 'file_write'
+
+    // ── Sky Hosting deployment ────────────────────────────────────────────────
+    if (/\b(sky.?host|sky.?hosting|skyhost)\b/.test(t) ||
+        /\b(deploy|host|publish|launch)\b.{0,40}\b(sky|skyhost|sky-hosting)\b/.test(t) ||
+        /\b(to sky|on sky|to skyhost|on skyhost)\b/.test(t)) return 'sky_deploy'
+
     // ── Shell / Bash direct intent ────────────────────────────────────────────
     if (/\b(run|execute|run this|execute this)\b.{0,20}\b(bash|shell|command|cmd|script)\b/.test(t) ||
         /^(bash|shell|run|exec)\s+.{3,}/.test(t)) return 'agent'
@@ -259,8 +272,6 @@ const detectIntent = (text) => {
     // ── File operations ───────────────────────────────────────────────────────
     if (/^(cat|read|open|view|show)\s+\S+\.(js|ts|json|txt|py|md|sh)/.test(t) ||
         /\b(read|cat|view|show|open)\b.{0,20}\b(file|content|source)\b/.test(t)) return 'file_read'
-    if (/\b(create|write|make|save)\b.{0,20}\b(file|script|\.js|\.txt|\.py|\.json)\b/.test(t) ||
-        /\b(edit|update|modify|overwrite)\b.{0,20}\b(file)\b/.test(t)) return 'file_write'
     if (/^ls\b|^ls\s/.test(t) ||
         /\b(list|ls|show|what)\b.{0,15}\b(files?|directory|folder|workspace)\b/.test(t)) return 'file_list'
 
@@ -278,12 +289,17 @@ const detectIntent = (text) => {
     // return 'agent' for explicit multi-step automation requests, NOT for "agent <task>" calls.
     if (/\b(automate|do it all|handle everything|take care of|multi.?step|plan and execute)\b/.test(t)) return 'agent'
 
+    // ── Web Scrape ────────────────────────────────────────────────────────────
+    if (/\b(scrape|crawl|extract content|fetch content|read page|get content)\b.{0,60}https?:\/\//.test(t) ||
+        /\b(scrape|crawl)\s+https?:\/\//.test(t) ||
+        /\b(scrape|extract data from|scrape data from)\b.{0,40}\b(this|the|that)\s+(page|site|url|link|website)\b/.test(t) ||
+        /\b(scrape|crawl)\b.{0,30}\b(page|site|website|url)\b/.test(t)) return 'web_scrape'
+
     // ── Web Search ───────────────────────────────────────────────────────────
-    if (/\b(search|look up|find|google|what is|who is|latest|news|current|today)\b/.test(t) &&
-        !/\b(song|music|repo|github|image|picture|file|docker|port|group)\b/.test(t)) return 'search'
-
-
-    if (/\b(scrape|extract content|fetch content|read page)\b.{0,20}https?:\/\//.test(t)) return 'web_scrape'
+    // Narrowed: must be a genuine search request, not an action command
+    if (/\b(search for|look up|google|search the web|search online)\b/.test(t) &&
+        !/\b(song|music|repo|github|image|picture|file|docker|port|group|folder|directory|create|make|build|deploy|scrape|run|execute)\b/.test(t)) return 'search'
+    if (/\b(latest news|current news|today's news|what is happening)\b/.test(t)) return 'search'
     if (/\b(dns|nslookup|dig)\b.{0,20}\b(check|record|lookup|resolve)\b/.test(t) || /\b(check|resolve)\b.{0,10}\bdns\b/.test(t)) return 'dns_check'
     if (/\b(ssl|certificate|cert)\b.{0,20}\b(check|valid|expir|status)\b/.test(t)) return 'ssl_check'
     if (/\b(write|generate|create)\b.{0,20}\b(function|class|script|program|module|snippet)\b/.test(t) || /\b(generate|write)\b.{0,10}\b(js|python|bash|html|css|typescript)\b.{0,20}\b(code|script)\b/.test(t)) return 'code_gen'
