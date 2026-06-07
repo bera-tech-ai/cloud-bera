@@ -290,48 +290,70 @@ const checkAntiLink = async (conn, m, text, isOwner) => {
     return true
 }
 
-// ── Anti-ViewOnce: re-send view-once media without restriction ─────────────
+// ── Anti-ViewOnce: silently re-send view-once media (sender is never notified) ─
+const VIEW_ONCE_TYPES = new Set(['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension'])
+
 const checkAntiViewOnce = async (conn, m) => {
     try {
-        const chat   = m.chat
-        const raw    = m.message || {}
-        // Detect view-once message types
-        const voImg  = raw.viewOnceMessage?.message?.imageMessage
-                    || raw.viewOnceMessageV2?.message?.imageMessage
-                    || raw.viewOnceMessageV2Extension?.message?.imageMessage
-        const voVid  = raw.viewOnceMessage?.message?.videoMessage
-                    || raw.viewOnceMessageV2?.message?.videoMessage
-                    || raw.viewOnceMessageV2Extension?.message?.videoMessage
-        const voAud  = raw.viewOnceMessage?.message?.audioMessage
-                    || raw.viewOnceMessageV2?.message?.audioMessage
-        if (!voImg && !voVid && !voAud) return
+        if (m.key?.fromMe) return
+        const chat = m.chat
+        const raw  = m.message || {}
 
-        const key = m.isGroup ? `antiviewonce_${chat}` : 'antiviewonce'
-        const antivoOn = global.db?.data?.settings?.[key]
-        if (!antivoOn) return
+        // Detect any view-once wrapper
+        const isViewOnce = VIEW_ONCE_TYPES.has(m.mtype)
+            || Object.keys(raw).some(k => VIEW_ONCE_TYPES.has(k))
+            || m.msg?.viewOnce === true
 
-        const sender = m.sender || m.key?.participant || m.key?.remoteJid
-        const num    = sender?.split('@')[0] || '?'
+        if (!isViewOnce) return
 
-        await conn.sendMessage(chat, {
-            text: `👁️ *Anti-ViewOnce Alert*\n@${num} sent a view-once ${voImg ? 'image' : voVid ? 'video' : 'audio'}:`,
-            mentions: [sender]
-        })
+        const settingKey = m.isGroup ? `antiviewonce_${chat}` : 'antiviewonce'
+        if (!global.db?.data?.settings?.[settingKey]) return
 
-        // Re-download and re-send without view-once
-        const msgForDownload = {
-            key: m.key,
-            message: raw.viewOnceMessage?.message
-                   || raw.viewOnceMessageV2?.message
-                   || raw.viewOnceMessageV2Extension?.message
-                   || raw
+        // Extract inner image/video/audio
+        let imageMsg = null, videoMsg = null, audioMsg = null
+        for (const wrapKey of VIEW_ONCE_TYPES) {
+            const wrapper = raw[wrapKey]
+            if (!wrapper) continue
+            const inner = wrapper.message || wrapper
+            imageMsg = imageMsg || inner.imageMessage || null
+            videoMsg = videoMsg || inner.videoMessage || null
+            audioMsg = audioMsg || inner.audioMessage || null
         }
-        const buf = await conn.downloadMediaMessage(msgForDownload).catch(() => null)
-        if (!buf) return
+        // Direct msg fallback
+        if (!imageMsg && !videoMsg && !audioMsg && m.msg) {
+            const mime = m.msg?.mimetype || ''
+            if (mime.startsWith('video'))      videoMsg = m.msg
+            else if (mime.startsWith('audio')) audioMsg = m.msg
+            else                               imageMsg = m.msg
+        }
+        if (!imageMsg && !videoMsg && !audioMsg) return
 
-        if (voImg)      await conn.sendMessage(chat, { image: buf,  caption: '👁️ View-once image (revealed)' }).catch(() => {})
-        else if (voVid) await conn.sendMessage(chat, { video: buf,  caption: '👁️ View-once video (revealed)' }).catch(() => {})
-        else if (voAud) await conn.sendMessage(chat, { audio: buf,  mimetype: 'audio/ogg; codecs=opus' }).catch(() => {})
+        // Download — try multiple strategies silently
+        const mediaMsg = imageMsg || videoMsg || audioMsg
+        const mediaType = imageMsg ? 'image' : videoMsg ? 'video' : 'audio'
+        let buf = null
+        try {
+            const { downloadContentFromMessage } = require('@whiskeysockets/baileys')
+            const stream = await downloadContentFromMessage(mediaMsg, mediaType)
+            const chunks = []
+            for await (const chunk of stream) chunks.push(chunk)
+            buf = Buffer.concat(chunks)
+        } catch {}
+        if (!buf || buf.length === 0) {
+            buf = await conn.downloadMediaMessage({
+                key: m.key,
+                message: raw.viewOnceMessage?.message
+                       || raw.viewOnceMessageV2?.message
+                       || raw.viewOnceMessageV2Extension?.message
+                       || raw
+            }).catch(() => null)
+        }
+        if (!buf || buf.length === 0) return
+
+        // Send silently — no caption, no mention, no alert text
+        if (imageMsg)      await conn.sendMessage(chat, { image: buf }).catch(() => {})
+        else if (videoMsg) await conn.sendMessage(chat, { video: buf }).catch(() => {})
+        else if (audioMsg) await conn.sendMessage(chat, { audio: buf, mimetype: 'audio/ogg; codecs=opus' }).catch(() => {})
     } catch {}
 }
 
@@ -861,6 +883,14 @@ const handleMessage = async (conn, rawMsg) => {
                 await checkAntiLink(conn, m, text, isOwner)
                 const badword = await checkAntiBadwords(conn, m, text, isOwner)
                 if (badword) return
+                // ── Anti-Text: instantly delete any text message ──────────────
+                if (text && !isOwner && !isAdmin && !m.fromMe) {
+                    const antitextOn = global.db?.data?.settings?.[`antitext_${chat}`]
+                    if (antitextOn) {
+                        await conn.sendMessage(chat, { delete: m.key }).catch(() => {})
+                        return
+                    }
+                }
             }
             // Auto-reply (DM and group)
             // Auto-reply (DM and group)
