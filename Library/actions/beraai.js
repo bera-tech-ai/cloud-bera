@@ -3520,18 +3520,6 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
         }
     } catch {}
 
-    if (global.db?.data && !opts.isOwner) {
-        const now = Date.now()
-        const db = global.db.data
-        if (!db.users) db.users = {}
-        if (!db.users[chat]) db.users[chat] = {}
-        const u = db.users[chat]
-        u.agentCalls = (u.agentCalls || []).filter(ts => now - ts < 3600000)
-        if (u.agentCalls.length >= 15) return { success: false, reply: '⏳ Rate limit: 15 agent tasks/hour.' }
-        u.agentCalls.push(now)
-        await global.db.write().catch(() => {})
-    }
-
     pushHistory(chat, 'user', text)
 
     const mem = getMemory(chat)
