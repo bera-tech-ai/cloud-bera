@@ -5,9 +5,23 @@
 const axios = require('axios')
 const config = require('../../Config')
 
-const GIFTED = 'https://api.giftedtech.co.ke'
+const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
+const OVERCHAT_URL = 'https://api.gifted.co.ke/api/ai/overchat'
 const XWOLF = 'https://apis.xwolf.space'
+
+// Shared overchat helper — used by generateStyleReply and analyzeStyle
+const _overchat = async (q, timeoutMs = 18000) => {
+    try {
+        const res = await axios.get(OVERCHAT_URL, {
+            params: { apikey: GIFTED_KEY, model: 'deepseek', q },
+            timeout: timeoutMs
+        })
+        const text = res.data?.result
+        if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
+    } catch {}
+    return null
+}
 
 // ── Pre-built style profile (trained on real chat exports) ────────────────────
 const PREBUILT_PROFILE = {
@@ -276,18 +290,12 @@ generateStyleReply = async (incomingText, styleData) => {
         const name = profile.myName || 'Bera'
         const prompt = sysPrompt + '\n\nSomeone said: ' + incomingText + '\n\n' + name + ':'
 
-        // 3. Overchat / DeepSeek — primary (accepts identity, no thinking leak)
-        try {
-            const res = await axios.get('https://api.gifted.co.ke/api/ai/overchat', {
-                params: { apikey: 'gifted', model: 'deepseek', q: prompt.slice(0, 1200) },
-                timeout: 12000
-            })
-            const raw = res.data?.result
-            if (raw && typeof raw === 'string' && raw.trim().length > 1) {
-                const reply = cleanReply(raw)
-                if (reply.length > 0) return { success: true, reply }
-            }
-        } catch {}
+        // 3. Gifted Overchat / DeepSeek — PRIMARY (correct apikey)
+        const raw1 = await _overchat(prompt.slice(0, 2000), 18000)
+        if (raw1) {
+            const reply = cleanReply(raw1)
+            if (reply.length > 0) return { success: true, reply }
+        }
 
         // 4. Xwolf Gemini — fallback
         try {
@@ -323,22 +331,19 @@ const analyzeStyle = async (myMessages, myName) => {
 1. Message length, 2. Punctuation, 3. Emojis, 4. Energy/vibe, 5. Common phrases, 6. Language mix.
 Their messages:
 ${sample}`
-        let res
+
+        // Primary: Gifted Overchat / DeepSeek
+        const oc = await _overchat(prompt.slice(0, 2000), 20000)
+        if (oc && oc.length > 20) return oc
+
+        // Fallback: Xwolf Gemini
         try {
-            res = await axios.get(`${GIFTED}/api/ai/gpt`, { 
-                params: { 
-                    q: prompt,
-                    apikey: GIFTED_KEY
-                }, 
-                timeout: 20000 
-            })
-            if (!res.data?.result && !res.data?.response) throw new Error('no result')
-        } catch {
-            try {
-                res = await axios.get(`${XWOLF}/api/ai/gemini`, { params: { q: prompt }, timeout: 20000 })
-            } catch { return PREBUILT_PROFILE.styleAnalysis }
-        }
-        return res.data?.result || res.data?.response || PREBUILT_PROFILE.styleAnalysis
+            const res = await axios.get(`${XWOLF}/api/ai/gemini`, { params: { q: prompt.slice(0, 1500) }, timeout: 20000 })
+            const text = res.data?.result || res.data?.response
+            if (text && text.length > 10) return text
+        } catch {}
+
+        return PREBUILT_PROFILE.styleAnalysis
     } catch {
         return PREBUILT_PROFILE.styleAnalysis
     }
