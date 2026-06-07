@@ -13,22 +13,38 @@ const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 const XWOLF = 'https://apis.xwolf.space'
 
-// ── Gifted Overchat / DeepSeek (primary — accepts Bera AI identity) ───────────
+// ── Gifted Overchat / DeepSeek — PRIMARY for ALL modes ──────────────────────
 const OVERCHAT_URL = 'https://api.gifted.co.ke/api/ai/overchat'
-const callOverchat = async (userText, systemPrompt, timeoutMs) => {
+
+const _overchatRaw = async (q, timeoutMs) => {
     try {
-        const identity = systemPrompt && systemPrompt.length > 20
-            ? systemPrompt.slice(0, 1200)
-            : 'You are Bera AI v4 — a powerful WhatsApp AI assistant built by Bera Tech. NEVER say you are DeepSeek, Gemini, GPT, Claude, or any other AI. Always say your name is Bera AI, built by Bera Tech. Be direct, helpful, and powerful.'
-        const q = identity + '\n\nUser: ' + String(userText || '').slice(0, 800) + '\nBera AI:'
         const res = await axios.get(OVERCHAT_URL, {
-            params: { apikey: 'gifted', model: 'deepseek', q },
-            timeout: timeoutMs || 12000
+            params: { apikey: GIFTED_KEY, model: 'deepseek', q },
+            timeout: timeoutMs || 18000
         })
         const text = res.data?.result
         if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
     } catch {}
     return null
+}
+
+// Normal chat mode — system prompt + user message as flat string
+const callOverchat = async (userText, systemPrompt, timeoutMs) => {
+    const identity = systemPrompt && systemPrompt.length > 20
+        ? systemPrompt.slice(0, 3000)
+        : 'You are Bera AI v4 — a powerful WhatsApp AI assistant built by Bera Tech. NEVER say you are DeepSeek, Gemini, GPT, Claude, or any other AI. Always say your name is Bera AI, built by Bera Tech.'
+    const q = identity + '\n\nUser: ' + String(userText || '').slice(0, 1000) + '\nBera AI:'
+    return _overchatRaw(q, timeoutMs)
+}
+
+// Agent / tool-calling mode — passes FULL system prompt + recent conversation
+const callOverchatAgent = async (messages, timeoutMs) => {
+    const system = messages.find(m => m.role === 'system')?.content || ''
+    const history = messages.filter(m => m.role !== 'system').slice(-6)
+    const histStr = history.map(m => (m.role === 'user' ? 'User' : 'Bera AI') + ': ' + String(m.content || '').slice(0, 400)).join('\n')
+    // Send the FULL system prompt (tool format instructions) + recent conversation
+    const q = system.slice(0, 5000) + '\n\n' + histStr + '\nBera AI:'
+    return _overchatRaw(q, timeoutMs || 25000)
 }
 
 // ── Groq AI (ultra-fast, < 1 second responses) ────────────────────────────────
@@ -208,43 +224,37 @@ const callPollinationsModel = (messages, model, timeoutMs) => {
     })
 }
 
-// ── Gifted Tech API ───────────────────────────────────────────────────────────
+// ── Gifted Tech API — now routes through Overchat (primary endpoint) ──────────
 const callGiftedTech = async (userText, historyMessages, timeoutMs, systemPrompt) => {
     const histCtx = (historyMessages || [])
         .filter(m => m.role !== 'system')
         .slice(-4)
-        .map(m => (m.role === 'user' ? 'User' : 'Bera AI') + ': ' + String(m.content || '').slice(0, 200))
+        .map(m => (m.role === 'user' ? 'User' : 'Bera AI') + ': ' + String(m.content || '').slice(0, 300))
         .join('\n')
 
     const identity = systemPrompt && systemPrompt.length > 100
-        ? systemPrompt.slice(0, 1500)
+        ? systemPrompt.slice(0, 3000)
         : 'You are Bera AI, a smart WhatsApp assistant built by Bera Tech. Always say your name is Bera AI.'
-    const userPart = String(userText || '').slice(0, 600)
-    const histPart = histCtx.slice(0, 400)
+    const userPart = String(userText || '').slice(0, 800)
+    const histPart = histCtx.slice(0, 600)
     const q = histPart
         ? identity + '\n\nConversation:\n' + histPart + '\nUser: ' + userPart + '\nBera AI:'
         : identity + '\n\nUser: ' + userPart + '\nBera AI:'
 
+    // Primary: Overchat endpoint (DeepSeek)
+    const oc = await _overchatRaw(q, timeoutMs || 15000)
+    if (oc) return oc
+
+    // Fallback: other Gifted endpoints
     const GT_CHAT_ENDPOINTS = [
-        `${GIFTED}/api/ai/gemini`,
         `${GIFTED}/api/ai/gpt4o`,
         `${GIFTED}/api/ai/gpt`,
-        `${GIFTED}/api/ai/chatgpt`,
+        `${GIFTED}/api/ai/gemini`,
     ]
-
-    const isBadGTResponse = (t) => {
-        if (!t) return true
-        const lc = t.trim().toLowerCase()
-        if (lc.includes('<!doctype')) return true
-        if (/^(❌|✗|×)\s*(no results found|no result)/i.test(t.trim())) return true
-        if (t.trim().length < 3) return true
-        return false
-    }
-
+    const isBadGTResponse = (t) => !t || t.trim().length < 3 || t.includes('<!DOCTYPE')
     for (const url of GT_CHAT_ENDPOINTS) {
         try {
             const r = await axios.get(url, { params: { apikey: GIFTED_KEY, q }, timeout: timeoutMs || 10000 })
-            if (typeof r.data === 'string' && r.data.includes('<!DOCTYPE')) continue
             const text = r.data?.result || r.data?.reply || r.data?.response || r.data?.message ||
                          r.data?.text || (typeof r.data === 'string' ? r.data : null)
             const clean = text && parseAiText(text)
@@ -340,30 +350,31 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
     const t = timeoutMs || 30000
 
     if (agentMode) {
-        // ── AGENT MODE: ONLY use models that receive the FULL system prompt ──
-        // Gemini/Overchat truncate the system prompt → can't see tool format → won't use tools
-        // Order: Groq (fastest) → DeepSeek via Pollinations → OpenAI via Pollinations → rotation
+        // ── AGENT MODE: Overchat (DeepSeek) first, then Groq, then Pollinations ──
+        // Order: Overchat/DeepSeek → Groq → DeepSeek/Pollinations → OpenAI/Pollinations
 
-        // 1. Groq — ultra-fast, full messages array, best at following JSON tool format
+        // 1. Gifted Overchat / DeepSeek — PRIMARY (full system prompt passed as q string)
+        const oc = await callOverchatAgent(messages, Math.min(t, 25000))
+        if (oc && oc.length > 2) return oc
+
+        // 2. Groq — ultra-fast, full messages array
         if (GROQ_API_KEY) {
             const groq = await callGroqAI(messages, Math.min(t, 25000), 4096)
             if (groq) return groq
         }
 
-        // 2. DeepSeek via Pollinations — free, excellent instruction following, full system prompt
+        // 3. DeepSeek via Pollinations — free, excellent instruction following
         const ds = await callPollinationsModel(messages, 'deepseek', Math.min(t, 40000))
         if (ds && ds !== 'ERROR' && ds !== 'RATELIMIT' && ds.length > 2) return ds
 
-        // 3. OpenAI via Pollinations — fallback
+        // 4. OpenAI via Pollinations — fallback
         const oa = await callPollinationsModel(messages, 'openai', Math.min(t, 35000))
         if (oa && oa !== 'ERROR' && oa !== 'RATELIMIT' && oa.length > 2) return oa
 
-        // 4. Full Pollinations rotation
+        // 5. Full Pollinations rotation
         const poll = await callPollinations(messages, Math.min(t, 35000))
         if (poll) return poll
 
-        // NEVER use callGiftedTech or callXwolf in agent mode
-        // They use Gemini which outputs plain text instead of JSON tool calls
         return null
     }
 
