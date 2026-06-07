@@ -1,8 +1,24 @@
 const axios = require('axios')
 
-const BASE = 'https://sky-host-live--isaacbarasa835.replit.app/api'
+const BASE_URLS = [
+    'https://sky-host-live--isaacbarasa835.replit.app/api',
+    'https://sky-hosting.replit.app/api'
+]
+const getBase = () => {
+    return global.db?.data?.settings?.skyHostUrl || BASE_URLS[0]
+}
 
-const getKey = () => process.env.SKY_HOSTING_API_KEY || ''
+const getKey = () =>
+    global.db?.data?.settings?.skyApiKey ||
+    process.env.SKY_HOSTING_API_KEY ||
+    process.env.SKY_API_KEY ||
+    ''
+
+const setKey = async (key) => {
+    if (!global.db?.data?.settings) global.db.data.settings = {}
+    global.db.data.settings.skyApiKey = key
+    await global.db?.write?.()
+}
 
 const headers = () => ({
     Authorization: 'Bearer ' + getKey(),
@@ -11,7 +27,7 @@ const headers = () => ({
 
 const createProject = async (name, repoUrl, description = '') => {
     try {
-        const r = await axios.post(BASE + '/v1/projects', {
+        const r = await axios.post(getBase() + '/v1/projects', {
             name, repoUrl, description
         }, { headers: headers(), timeout: 25000 })
         return { success: true, project: r.data }
@@ -26,7 +42,7 @@ const triggerDeploy = async (projectId, repoUrl, branch = 'main', envVars = {}) 
         const body = { projectId, branch }
         if (repoUrl) body.repoUrl = repoUrl
         if (envVars && Object.keys(envVars).length) body.envVars = envVars
-        const r = await axios.post(BASE + '/v1/deploy', body, { headers: headers(), timeout: 25000 })
+        const r = await axios.post(getBase() + '/v1/deploy', body, { headers: headers(), timeout: 25000 })
         return { success: true, deployment: r.data }
     } catch (e) {
         const msg = e.response?.data?.error || e.message
@@ -36,7 +52,7 @@ const triggerDeploy = async (projectId, repoUrl, branch = 'main', envVars = {}) 
 
 const getDeployment = async (deploymentId) => {
     try {
-        const r = await axios.get(BASE + '/v1/deployments/' + deploymentId, {
+        const r = await axios.get(getBase() + '/v1/deployments/' + deploymentId, {
             headers: headers(), timeout: 20000
         })
         return { success: true, deployment: r.data }
@@ -47,7 +63,7 @@ const getDeployment = async (deploymentId) => {
 
 const getLogs = async (deploymentId) => {
     try {
-        const r = await axios.get(BASE + '/v1/logs/' + deploymentId, {
+        const r = await axios.get(getBase() + '/v1/logs/' + deploymentId, {
             headers: headers(), timeout: 20000
         })
         return { success: true, logs: r.data?.logs || [] }
@@ -58,7 +74,7 @@ const getLogs = async (deploymentId) => {
 
 const listProjects = async () => {
     try {
-        const r = await axios.get(BASE + '/v1/projects', { headers: headers(), timeout: 15000 })
+        const r = await axios.get(getBase() + '/v1/projects', { headers: headers(), timeout: 15000 })
         return { success: true, projects: r.data }
     } catch (e) {
         return { success: false, error: e.response?.data?.error || e.message }
@@ -67,7 +83,7 @@ const listProjects = async () => {
 
 const deleteDeployment = async (deploymentId) => {
     try {
-        await axios.delete(BASE + '/v1/deployments/' + deploymentId, { headers: headers(), timeout: 15000 })
+        await axios.delete(getBase() + '/v1/deployments/' + deploymentId, { headers: headers(), timeout: 15000 })
         return { success: true }
     } catch (e) {
         return { success: false, error: e.response?.data?.error || e.message }
@@ -76,7 +92,7 @@ const deleteDeployment = async (deploymentId) => {
 
 const deleteProject = async (projectId) => {
     try {
-        await axios.delete(BASE + '/v1/projects/' + projectId, { headers: headers(), timeout: 15000 })
+        await axios.delete(getBase() + '/v1/projects/' + projectId, { headers: headers(), timeout: 15000 })
         return { success: true }
     } catch (e) {
         return { success: false, error: e.response?.data?.error || e.message }
@@ -85,7 +101,7 @@ const deleteProject = async (projectId) => {
 
 const checkHealth = async () => {
     try {
-        const r = await axios.get(BASE + '/healthz', { timeout: 8000 })
+        const r = await axios.get(getBase() + '/healthz', { timeout: 8000 })
         return r.data?.status === 'ok'
     } catch { return false }
 }
@@ -148,6 +164,7 @@ const deployRepo = async ({ name, repoUrl, branch = 'main', envVars = {}, onTick
 }
 
 module.exports = {
+    setKey,
     createProject,
     triggerDeploy,
     getDeployment,

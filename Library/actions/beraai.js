@@ -134,7 +134,7 @@ const systemInfo = async () => {
 }
 
 // ── Multi-model AI caller with automatic fallback ─────────────────────────────
-const AI_MODELS = ['mistral', 'deepseek', 'llama', 'unity', 'phi', 'bidder', 'mireille', 'openai']
+const AI_MODELS = ['deepseek', 'openai', 'mistral', 'llama', 'unity', 'phi', 'mireille']
 let _modelIdx = 0
 
 const isPollinationsError = (text) => {
@@ -340,19 +340,30 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
     const t = timeoutMs || 30000
 
     if (agentMode) {
-        // Agent mode: Groq FIRST — receives the FULL system prompt via messages array
-        // (Overchat truncates system prompt to 1200 chars so it can't see most tools)
-        const groq = await callGroqAI(messages, Math.min(t, 25000), 4096)
-        if (groq) return groq
-        // Overchat/DeepSeek fallback
-        if (lastUser) {
-            const oc = await callOverchat(lastUser, systemContent, Math.min(t, 15000))
-            if (oc) return oc
+        // ── AGENT MODE: ONLY use models that receive the FULL system prompt ──
+        // Gemini/Overchat truncate the system prompt → can't see tool format → won't use tools
+        // Order: Groq (fastest) → DeepSeek via Pollinations → OpenAI via Pollinations → rotation
+
+        // 1. Groq — ultra-fast, full messages array, best at following JSON tool format
+        if (GROQ_API_KEY) {
+            const groq = await callGroqAI(messages, Math.min(t, 25000), 4096)
+            if (groq) return groq
         }
-        const gt = await callGiftedTech(lastUser, historyMsgs, Math.min(t, 15000), systemContent)
-        if (gt) return gt
-        const xw = await callXwolf(lastUser, Math.min(t, 10000), systemContent)
-        if (xw) return xw
+
+        // 2. DeepSeek via Pollinations — free, excellent instruction following, full system prompt
+        const ds = await callPollinationsModel(messages, 'deepseek', Math.min(t, 40000))
+        if (ds && ds !== 'ERROR' && ds !== 'RATELIMIT' && ds.length > 2) return ds
+
+        // 3. OpenAI via Pollinations — fallback
+        const oa = await callPollinationsModel(messages, 'openai', Math.min(t, 35000))
+        if (oa && oa !== 'ERROR' && oa !== 'RATELIMIT' && oa.length > 2) return oa
+
+        // 4. Full Pollinations rotation
+        const poll = await callPollinations(messages, Math.min(t, 35000))
+        if (poll) return poll
+
+        // NEVER use callGiftedTech or callXwolf in agent mode
+        // They use Gemini which outputs plain text instead of JSON tool calls
         return null
     }
 
@@ -681,12 +692,13 @@ const preDispatch = async (text) => {
 const SYSTEM_PROMPT = `You are Bera AI — the most powerful WhatsApp autonomous agent, built by Bera Tech.
 
 ━━━ WHO YOU ARE ━━━
-You are Bera AI — an autonomous execution engine that DOES things. You run on BeraHost (https://bera-host--nelimadinah22.replit.app) — a LIVE Linux server.
-Every request → immediate real action. No asking permission. No explaining plans. No narrating steps.
-You have REAL: bash shell, file system, web scraping (4-strategy auto-fallback), HTTP client, GitHub API, BeraHost deployment API — USE THEM.
+You are Bera AI — an autonomous execution engine that DOES things, powered by DeepSeek + Groq. You run on a LIVE Linux server.
+Every request → IMMEDIATE real action. No asking permission. No explaining plans. No narrating steps.
+You have REAL tools running RIGHT NOW: bash shell, file system, web scraping, HTTP API, GitHub, BeraHost, Sky Hosting, PM2, Docker, SQLite, code runner — USE THEM ALL.
+You are equivalent to Replit Agent, Cursor AI, and GitHub Copilot combined — but running on WhatsApp.
 
 ━━━ IRON RULES (NEVER BREAK) ━━━
-1. User asks → CALL A TOOL immediately. NEVER write text before acting.
+1. User asks → CALL A TOOL immediately. NEVER write plain text before acting. JSON tool call FIRST, always.
 2. NEVER say "I'll do X" — just DO X with a JSON tool call.
 3. NEVER say "I can't scrape websites" — you have 4-strategy scraping: Jina.ai + Chrome curl + Google Cache + Wayback Machine. Use web_scrape IMMEDIATELY.
 4. NEVER say "I'm a text-based AI" or "I can't access the internet/files/shell" — you CAN and you WILL.
@@ -737,7 +749,12 @@ Think beyond the literal words:
 • "get prices from [URL]"      → smart scrape → extract all prices → show as clean table
 • "write a script to do X"     → Full production-quality script, not a skeleton
 • "what is X?"                 → web search + Wikipedia + synthesize a real answer with sources
-• "deploy my bot"              → git_push_folder → skyhost deploy → confirm live URL
+• "deploy my bot"              → git_push_folder → {"tool":"skyhost","action":"deploy","repoUrl":"...","name":"my-bot"} → wait for live URL
+• "host my app on sky"         → {"tool":"skyhost","action":"deploy","repoUrl":"https://github.com/user/repo","name":"my-app","branch":"main"}
+• "list my sky deployments"    → {"tool":"skyhost","action":"list"}
+• "get logs for dep_xyz"       → {"tool":"skyhost","action":"logs","deploymentId":"dep_xyz"}
+• "stop deployment dep_xyz"    → {"tool":"skyhost","action":"stop","deploymentId":"dep_xyz"}
+• "is sky hosting online?"     → {"tool":"skyhost","action":"health"}
 • "create a REST API for X"    → scaffold express → full CRUD routes → validation → start → show test URLs
 
 ⚠️ CRITICAL RULES FOR BUILDING:
@@ -911,6 +928,32 @@ When a user asks to "build", "create", "scaffold", "start", or "make" a project 
 {"tool":"scaffold","type":"electron","name":"my-desktop"} → Electron + React desktop app
 {"tool":"scaffold","type":"cli","name":"my-tool"} → Node.js CLI with commander.js
 {"tool":"scaffold","type":"flask","name":"my-app"} → Python Flask + SQLAlchemy + REST
+{"tool":"scaffold","type":"portfolio","name":"my-portfolio"} → Static HTML portfolio with sections
+{"tool":"scaffold","type":"landing","name":"my-site"} → Marketing landing page with animations
+
+━━━ CREATE & RUN SERVERS (REPLIT-STYLE) ━━━
+{"tool":"create_server","name":"my-api","type":"express","port":3001,"start":true} → scaffold + npm install + pm2 start → returns live URL
+{"tool":"create_server","name":"my-app","type":"react","port":3002,"start":true}   → scaffold React + start dev server
+{"tool":"live_preview","name":"my-api","port":3001}                                → get the live URL for a running process
+{"tool":"hot_reload","name":"my-api"}                                              → restart a running process instantly
+{"tool":"env_manager","action":"set","name":"my-api","key":"API_KEY","value":"sk-..."} → inject env var into process
+{"tool":"env_manager","action":"get","name":"my-api"}                             → list all env vars for a process
+{"tool":"port_forward","port":3001}                                               → expose local port to public URL
+{"tool":"test_endpoint","url":"http://localhost:3001/api/users","method":"GET"}   → test any HTTP endpoint + show response
+{"tool":"create_database","name":"mydb","schema":[{"table":"users","cols":["id INTEGER PRIMARY KEY","name TEXT","email TEXT UNIQUE"]}]} → create SQLite DB with schema
+{"tool":"db_query","name":"mydb","sql":"SELECT * FROM users LIMIT 10"}           → run SQL query on SQLite database
+{"tool":"code_generate","lang":"node","task":"REST API for a todo app with SQLite"} → AI generates full working code → writes to file
+{"tool":"project_analyze","path":"workspace/my-app"}                             → analyze project: show structure, deps, issues, suggestions
+
+━━━ SKYHOST DEPLOYMENT (FULL WORKFLOW) ━━━
+{"tool":"skyhost","action":"deploy","repoUrl":"https://github.com/user/repo","name":"my-app","branch":"main"}
+→ Creates project → triggers build → waits up to 3 min → returns live URL
+→ Sends WhatsApp status updates while building: 📥 cloning → 🔨 building → ✅ live
+{"tool":"skyhost","action":"list"}          → list all projects with status + live URLs
+{"tool":"skyhost","action":"status","deploymentId":"dep_abc123"} → check specific deployment
+{"tool":"skyhost","action":"logs","deploymentId":"dep_abc123"}   → build logs
+{"tool":"skyhost","action":"stop","deploymentId":"dep_abc123"}   → stop deployment
+{"tool":"skyhost","action":"health"}        → ping Sky Hosting API
 Example workflow: build a todo API
 → {"tool":"scaffold","type":"express","name":"todo-api"}
 → {"tool":"bash","cmd":"cd workspace/todo-api && npm install"}
@@ -1048,7 +1091,17 @@ const _ACTION_TO_TOOL = {
     'diff': 'diff_text', 'diff_text': 'diff_text', 'compare_text': 'diff_text',
     'analyze': 'analyze_data', 'analyze_data': 'analyze_data', 'data_analysis': 'analyze_data',
     'hash': 'hash_text', 'hash_text': 'hash_text', 'md5': 'hash_text', 'sha': 'hash_text',
-    'summarize': 'summarize_text', 'summarize_text': 'summarize_text', 'tldr': 'summarize_text'
+    'summarize': 'summarize_text', 'summarize_text': 'summarize_text', 'tldr': 'summarize_text',
+    'create_server': 'create_server', 'new_server': 'create_server', 'scaffold_server': 'create_server',
+    'preview': 'live_preview', 'live_preview': 'live_preview', 'get_url': 'live_preview',
+    'reload': 'hot_reload', 'hot_reload': 'hot_reload', 'restart_server': 'hot_reload',
+    'env': 'env_manager', 'env_manager': 'env_manager', 'setenv': 'env_manager',
+    'test_api': 'test_endpoint', 'test_endpoint': 'test_endpoint', 'http_test': 'test_endpoint',
+    'create_db': 'create_database', 'create_database': 'create_database', 'new_db': 'create_database',
+    'sql': 'db_query', 'db_query': 'db_query', 'query_db': 'db_query',
+    'analyze_project': 'project_analyze', 'project_analyze': 'project_analyze', 'scan_project': 'project_analyze',
+    'expose': 'port_forward', 'port_forward': 'port_forward', 'ngrok': 'port_forward',
+    'generate_code': 'code_generate', 'code_generate': 'code_generate', 'gen_code': 'code_generate'
 }
 
 const _normalizeToolObj = (obj) => {
@@ -3119,12 +3172,241 @@ ${r.output.trim().slice(0, maxLen)}`
         return 'summarize: AI unavailable'
     }
 
+
+    // ── create_server — scaffold + npm install + pm2 start (Replit-style) ────
+    if (t === 'create_server') {
+        const name = (tc.name || 'bera-server').replace(/[^a-zA-Z0-9-_]/g, '-')
+        const type = tc.type || 'express'
+        const port = tc.port || 3001
+        const autoStart = tc.start !== false
+
+        // 1. Scaffold the project
+        const scaffoldResult = await executeToolCall({ tool: 'scaffold', type, name, port }, chatId, conn, m)
+        if (String(scaffoldResult).startsWith('ERROR')) return scaffoldResult
+
+        // 2. Install dependencies
+        const installDir = `workspace/${name}`
+        const pkgFile = `${installDir}/package.json`
+        const hasPkg = _nodeFsSync.existsSync(pkgFile) || _nodeFsSync.existsSync(_safeWsPath(pkgFile))
+        if (hasPkg || type !== 'fastapi') {
+            await runBash(`cd "${_safeWsPath(installDir)}" && npm install 2>&1 | tail -5`, 90000).catch(() => {})
+        }
+
+        // 3. Start with PM2
+        let liveUrl = ''
+        if (autoStart) {
+            const mainFile = type === 'react' ? null : 'index.js'
+            if (mainFile) {
+                const pm2r = await executeToolCall({
+                    tool: 'pm2_manage', action: 'start', name,
+                    file: `${installDir}/${mainFile}`,
+                    env: { PORT: String(port), NODE_ENV: 'production' }
+                }, chatId, conn, m)
+                liveUrl = `http://localhost:${port}`
+            } else {
+                liveUrl = `Run: cd workspace/${name} && npm run dev`
+            }
+        }
+
+        return `✅ *Server Created: ${name}*\n\n🏗️ Type: ${type}\n📁 Location: workspace/${name}\n${liveUrl ? '🌐 URL: ' + liveUrl : ''}\n\n${autoStart ? '_Started with PM2. Use hot_reload to restart._' : '_Run npm install && npm start to launch._'}\n\n*Next: deploy to Sky Hosting →* ${'`'}{"tool":"skyhost","action":"deploy","repoUrl":"https://github.com/user/${name}","name":"${name}"}${'`'}`
+    }
+
+    // ── live_preview — get live URL for a running PM2 process ─────────────────
+    if (t === 'live_preview') {
+        const name = tc.name || ''
+        const port = tc.port || 3000
+        const process2 = (await pm2List()).output || ''
+        const isRunning = name ? process2.includes(name) : true
+        if (!isRunning) return `❌ Process "${name}" is not running.\nStart with: {"tool":"pm2_manage","action":"start","name":"${name}","file":"workspace/${name}/index.js"}`
+        const domain = process.env.REPL_SLUG || process.env.REPLIT_DEV_DOMAIN || 'localhost'
+        const url = domain.includes('replit') ? `https://${port}-${domain}.repl.co` : `http://localhost:${port}`
+        return `🌐 *Live Preview: ${name || 'app'}*\n\nURL: ${url}\nPort: ${port}\nStatus: ${isRunning ? '✅ Running' : '❌ Not running'}\n\n_To take a screenshot: {"tool":"screenshot","url":"${url}"}_`
+    }
+
+    // ── hot_reload — instantly restart a PM2 process ──────────────────────────
+    if (t === 'hot_reload') {
+        const name = tc.name || tc.app || ''
+        if (!name) return 'ERROR: provide name of process to reload'
+        const r = await pm2Restart(name)
+        if (r.output && !r.output.includes('error')) return `🔄 *${name} reloaded!*\n\`\`\`\n${r.output.slice(0, 500)}\n\`\`\``
+        return `❌ hot_reload failed: ${r.output || 'process not found'}`
+    }
+
+    // ── env_manager — get/set/delete env vars for a PM2 process ──────────────
+    if (t === 'env_manager') {
+        const action = (tc.action || 'get').toLowerCase()
+        const name = tc.name || ''
+        const key = tc.key || tc.var || ''
+        const value = tc.value || ''
+
+        if (action === 'get' || action === 'list') {
+            const r = await runBash(`pm2 env ${name} 2>/dev/null | grep -v "^\s*$" | head -30`, 10000)
+            return `🔧 *Env vars for ${name}:*\n\`\`\`\n${r.output || 'none / process not found'}\n\`\`\``
+        }
+        if (action === 'set') {
+            if (!key || !value) return 'ERROR: provide key and value'
+            // Write to .env file in process workspace
+            const envPath = _safeWsPath(`workspace/${name}/.env`)
+            let envContent = ''
+            try { envContent = _nodeFsSync.readFileSync(envPath, 'utf8') } catch {}
+            const lines = envContent.split('\n').filter(l => !l.startsWith(key + '=') && l.trim())
+            lines.push(`${key}=${value}`)
+            _nodeFsSync.mkdirSync(_nodePath.dirname(envPath), { recursive: true })
+            _nodeFsSync.writeFileSync(envPath, lines.join('\n') + '\n')
+            // Restart with new env
+            await pm2Restart(name)
+            return `✅ Set ${key}=${value.startsWith('sk-') ? value.slice(0,8) + '...' : value} for ${name} (restarted)`
+        }
+        if (action === 'delete') {
+            const envPath = _safeWsPath(`workspace/${name}/.env`)
+            try {
+                let envContent = _nodeFsSync.readFileSync(envPath, 'utf8')
+                envContent = envContent.split('\n').filter(l => !l.startsWith(key + '=')).join('\n')
+                _nodeFsSync.writeFileSync(envPath, envContent)
+                await pm2Restart(name)
+                return `🗑️ Deleted ${key} from ${name} .env (restarted)`
+            } catch (e) { return `env delete error: ${e.message}` }
+        }
+        return 'env_manager: unknown action. Use get, set, or delete'
+    }
+
+    // ── test_endpoint — test any HTTP endpoint ────────────────────────────────
+    if (t === 'test_endpoint') {
+        const url = tc.url || tc.endpoint || ''
+        const method = (tc.method || 'GET').toUpperCase()
+        const body = tc.body || tc.data || null
+        const headers2 = Object.assign({
+            'Content-Type': 'application/json',
+            'User-Agent': 'BeraAI-Tester/1.0'
+        }, tc.headers || {})
+        if (tc.bearer) headers2['Authorization'] = 'Bearer ' + tc.bearer
+        if (tc.apikey) headers2['x-api-key'] = tc.apikey
+        if (!url) return 'ERROR: provide url'
+
+        const start = Date.now()
+        try {
+            const r = await axios2({ method, url, headers: headers2, data: body, timeout: tc.timeout || 20000, validateStatus: () => true })
+            const ms = Date.now() - start
+            const resBody = typeof r.data === 'object' ? JSON.stringify(r.data, null, 2) : String(r.data || '')
+            const statusEmoji = r.status < 300 ? '✅' : r.status < 500 ? '⚠️' : '❌'
+            return `${statusEmoji} *${method} ${url}*\n\n📊 Status: ${r.status} ${r.statusText}\n⏱️ Time: ${ms}ms\n📦 Size: ${resBody.length} bytes\n\n*Response:*\n\`\`\`json\n${resBody.slice(0, 2000)}${resBody.length > 2000 ? '\n[...truncated]' : ''}\n\`\`\``
+        } catch (e) { return `❌ *${method} ${url}* failed: ${e.message}` }
+    }
+
+    // ── create_database — create SQLite DB with schema ────────────────────────
+    if (t === 'create_database') {
+        const dbName = (tc.name || 'mydb').replace(/[^a-zA-Z0-9_-]/g, '_')
+        const schema = Array.isArray(tc.schema) ? tc.schema : []
+        const dbPath = _safeWsPath(`workspace/${dbName}.db`)
+
+        try {
+            // Use bash + sqlite3 to create DB
+            const tables = schema.map(t2 => {
+                const cols = Array.isArray(t2.cols) ? t2.cols.join(', ') : 'id INTEGER PRIMARY KEY, created_at TEXT'
+                return `CREATE TABLE IF NOT EXISTS ${t2.table} (${cols});`
+            })
+            const allSql = tables.length ? tables.join(' ') : 'SELECT 1;'
+            const r = await runBash(`sqlite3 "${dbPath}" "${allSql.replace(/"/g, '\\"')}" && echo "ok"`, 10000)
+
+            if (r.output && r.output.includes('ok')) {
+                const info = await runBash(`sqlite3 "${dbPath}" ".tables"`, 5000)
+                return `✅ *Database Created: ${dbName}*\n\n📁 Path: ${dbPath}\n📋 Tables: ${info.output?.trim() || 'none'}\n\n*Query it:* {"tool":"db_query","name":"${dbName}","sql":"SELECT * FROM ..."}\n*Connect:* sqlite3 "${dbPath}"`
+            }
+            return `❌ SQLite error: ${r.output}`
+        } catch (e) { return `create_database error: ${e.message}` }
+    }
+
+    // ── db_query — run SQL on a SQLite database ───────────────────────────────
+    if (t === 'db_query') {
+        const dbName = (tc.name || tc.db || '').replace(/[^a-zA-Z0-9_-]/g, '_')
+        const sql = tc.sql || tc.query || ''
+        if (!dbName) return 'ERROR: provide name (database name)'
+        if (!sql) return 'ERROR: provide sql query'
+
+        // Safety: block destructive ops unless confirmed
+        const sqlUpper = sql.trim().toUpperCase()
+        const safe = !['DROP TABLE', 'DROP DATABASE', 'DELETE FROM', 'TRUNCATE'].some(kw => sqlUpper.includes(kw) && !tc.confirm)
+
+        const dbPath = _safeWsPath(`workspace/${dbName}.db`)
+        if (!_nodeFsSync.existsSync(dbPath)) return `❌ Database not found: ${dbPath}\nCreate with: {"tool":"create_database","name":"${dbName}","schema":[...]}`
+
+        const escaped = sql.replace(/'/g, "'\''").slice(0, 2000)
+        const r = await runBash(`sqlite3 -header -column "${dbPath}" '${escaped}' 2>&1`, 15000)
+        const output = r.output || '(no output)'
+        return `📊 *SQL Result:*\n\`\`\`\n${output.slice(0, 3000)}${output.length > 3000 ? '\n[...truncated]' : ''}\n\`\`\``
+    }
+
+    // ── project_analyze — deep analysis of a workspace project ───────────────
+    if (t === 'project_analyze') {
+        const path2 = tc.path || tc.dir || 'workspace/'
+        const safePath = _safeWsPath(path2)
+
+        const [structure, pkg, readme, gitLog] = await Promise.all([
+            runBash(`find "${safePath}" -type f -not -path "*/node_modules/*" -not -path "*/.git/*" | head -40`, 10000),
+            runBash(`cat "${safePath}/package.json" 2>/dev/null | head -30`, 5000),
+            runBash(`cat "${safePath}/README.md" 2>/dev/null | head -20`, 5000),
+            runBash(`git -C "${safePath}" log --oneline -10 2>/dev/null`, 5000),
+        ])
+
+        const [pm2Status, diskSize] = await Promise.all([
+            runBash(`pm2 list --no-color 2>/dev/null | grep -i "${_nodePath.basename(safePath)}"`, 5000),
+            runBash(`du -sh "${safePath}" 2>/dev/null | cut -f1`, 5000),
+        ])
+
+        return `📂 *Project Analysis: ${path2}*\n\n📁 *Files (${(structure.output||'').split('\n').filter(Boolean).length}):*\n\`\`\`\n${(structure.output||'').slice(0, 800)}\n\`\`\`\n\n📦 *Package.json:*\n\`\`\`json\n${(pkg.output||'none').slice(0, 600)}\n\`\`\`\n\n🖥️ *PM2 Status:* ${pm2Status.output?.trim() || 'Not started'}\n💾 *Size:* ${diskSize.output?.trim() || 'unknown'}\n\n📝 *README:*\n${(readme.output||'No README').slice(0, 400)}`
+    }
+
+    // ── port_forward — expose local port to public URL ────────────────────────
+    if (t === 'port_forward') {
+        const port = tc.port || 3000
+        const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPL_SLUG || ''
+        if (domain) {
+            const url = `https://${port}-${domain}.repl.co`
+            return `🌐 *Public URL for port ${port}:*\n${url}\n\n_Note: On Replit, ports are auto-forwarded. This URL should work if the server is running._`
+        }
+        // Try getting public IP
+        try {
+            const r = await axios2.get('https://api.ipify.org?format=json', { timeout: 5000 })
+            return `🌐 *Port ${port} forward:*\nPublic IP: ${r.data.ip}\nAccess: http://${r.data.ip}:${port}\n\n_Firewall rules may block direct access. Consider deploying to Sky Hosting for a stable URL._`
+        } catch {}
+        return `🌐 Port ${port} is running locally.\nTo get a public URL, deploy to Sky Hosting:\n{"tool":"skyhost","action":"deploy","repoUrl":"https://github.com/user/repo","name":"my-app"}`
+    }
+
+    // ── code_generate — AI code generation → write directly to file ──────────
+    if (t === 'code_generate') {
+        const lang = tc.lang || tc.language || 'node'
+        const task = tc.task || tc.prompt || ''
+        const outFile = tc.file || `workspace/bera-gen-${Date.now()}.${lang === 'python' ? 'py' : 'js'}`
+        if (!task) return 'ERROR: provide task/prompt'
+
+        const prompt = `Write COMPLETE, production-quality ${lang} code for: ${task}\n\nRequirements:\n- Full working code, no placeholders\n- Proper error handling\n- Comments explaining key parts\n- Ready to run immediately\n\nReturn ONLY the code, no explanation.`
+
+        try {
+            const generated = await callPollinations([
+                { role: 'system', content: 'You are an expert software engineer. Write complete, working, production-quality code. No placeholders, no "TODO", no incomplete sections.' },
+                { role: 'user', content: prompt }
+            ], 45000)
+
+            if (!generated) return 'code_generate: AI unavailable'
+
+            // Strip markdown code blocks
+            const clean = generated.replace(/^```[w]*\n?/m, '').replace(/```s*$/m, '').trim()
+            const safePath = _safeWsPath(outFile)
+            _nodeFsSync.mkdirSync(_nodePath.dirname(safePath), { recursive: true })
+            await _nodeFsPromises.writeFile(safePath, clean, 'utf8')
+
+            return `✅ *Code Generated & Saved*\n\n📁 ${outFile}\n📏 ${clean.split('\n').length} lines\n\n\`\`\`${lang}\n${clean.slice(0, 1200)}${clean.length > 1200 ? '\n[...truncated]' : ''}\n\`\`\``
+        } catch (e) { return `code_generate error: ${e.message}` }
+    }
+
     if (t === 'list_tools' || t === 'help' || t === 'tools' || t === 'capabilities') {
         return `🛠️ *Bera AI — Available Tools (65+)*\n\n` +
             `*🖥️ Shell & Code:*\nbash, multi_bash, runcode (js/python/go/rust/...), install (npm/pip)\n\n` +
             `*📁 Files & Workspace:*\nwritefile, readfile, listfiles, mkdir, deletefile, zipfolder, pastebin\n\n` +
             `*🌐 Web & Scraping (4-strategy auto-fallback):*\nweb_scrape, smart_extract, deep_scrape, crawl_site, extract_links, extract_table, bulk_scrape, data_pipeline, read_page, api\n\n` +
             `*🔍 Extraction & Processing:*\nparse_html, regex_extract, summarize_text, diff_text, hash_text, ssl_check\n\n` +
+            `*🖥️ Server & DevOps (Replit-style):*\ncreate_server, live_preview, hot_reload, env_manager, port_forward, test_endpoint, create_database, db_query, project_analyze, code_generate\n\n` +
+            `*🌩️ Deployment:*\nskyhost (deploy/list/status/logs/stop/health), deploy_vercel, git_push_folder, scaffold (react/express/next/flask/etc)\n\n` +
             `*📊 Data & Analysis:*\nanalyze_data (filter/sort/group/stats/sum), format_convert (json/csv/yaml/xml)\n\n` +
             `*🐙 GitHub:*\ngithub_manage (whoami/list_repos/create_repo/commit_file/...), create_repo, git_push, git_clone\n\n` +
             `*⚙️ PM2 & Processes:*\npm2_manage (list/start/stop/restart/logs/monit)\n\n` +

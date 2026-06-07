@@ -819,6 +819,164 @@ Generate at: https://github.com/settings/tokens`)
         }
     }
 
+    // ── SET SKY HOSTING API KEY ───────────────────────────────────────────────
+    if (command === 'setskykey' || command === 'skykey' || command === 'setskyapikey') {
+        if (!isOwner) return reply(`⛔ Owner only.`)
+        if (!text) return reply(
+            `❌ Usage: ${prefix}setskykey <your-sky-api-key>\n\n` +
+            `Get your API key at: https://sky-host-live--isaacbarasa835.replit.app\n` +
+            `Then deploy with: ${prefix}skydeploy <github-url>`
+        )
+        if (!global.db.data.settings) global.db.data.settings = {}
+        const sky = require('../Library/actions/skyhost')
+        await sky.setKey(text.trim())
+        return reply(`✅ *Sky Hosting API key saved!*\nKey: ***${text.trim().slice(-4)}\n\nNow deploy with: ${prefix}skydeploy <github-url>`)
+    }
+
+    // ── SKY HOSTING DEPLOY ────────────────────────────────────────────────────
+    if (command === 'skydeploy' || command === 'skyhost' || command === 'skylaunch') {
+        if (!isOwner) return reply(`⛔ Owner only.`)
+        const sky = require('../Library/actions/skyhost')
+        const skyKey = sky.setKey ? (global.db?.data?.settings?.skyApiKey || process.env.SKY_HOSTING_API_KEY || '') : ''
+        if (!skyKey) return reply(`❌ Sky Hosting key not set.\nRun: ${prefix}setskykey <your-key>`)
+        if (!text) return reply(
+            `❌ Usage: ${prefix}skydeploy <github-repo-url> [project-name] [branch]\n\n` +
+            `Example: ${prefix}skydeploy https://github.com/bera-tech-ai/my-app\n` +
+            `Or:      ${prefix}skydeploy https://github.com/bera-tech-ai/my-app myapp main`
+        )
+        const parts = text.trim().split(/\s+/)
+        const repoUrl = parts[0]
+        const name = (parts[1] || repoUrl.split('/').pop().replace(/\.git$/, '')).toLowerCase().replace(/[^a-z0-9-]/g, '-')
+        const branch = parts[2] || 'main'
+        if (!/^https?:\/\/github\.com\//i.test(repoUrl)) return reply(`❌ Provide a GitHub URL: https://github.com/owner/repo`)
+
+        await react('🚀')
+        await reply(`╭══〘 *🌩️ SKY HOSTING DEPLOY* 〙═⊷\n┃❍ Project: ${name}\n┃❍ Repo: ${repoUrl}\n┃❍ Branch: ${branch}\n┃\n┃ ⏳ Building... (30-180 seconds)\n┃ Progress updates will appear below.\n╰══════════════════⊷`)
+
+        try {
+            const result = await sky.deployRepo({
+                name, repoUrl, branch,
+                conn, chat: chatId,
+                onTick: (status) => {
+                    const emojis = { queued: '⏳', cloning: '📥', building: '🔨', live: '✅', failed: '❌', error: '❌' }
+                    conn.sendMessage(chatId, { text: `${emojis[status] || '🔄'} *Sky Hosting:* ${status.toUpperCase()}...` }).catch(() => {})
+                }
+            })
+
+            if (result.success) {
+                return reply(
+                    `╭══〘 *✅ DEPLOYED TO SKY HOSTING* 〙═⊷\n` +
+                    `┃❍ *Project:* ${name}\n` +
+                    `┃❍ *Live URL:* ${result.liveUrl}\n` +
+                    `┃❍ *Project ID:* ${result.projectId}\n` +
+                    `┃❍ *Deploy ID:* ${result.deploymentId}\n` +
+                    `┃❍ *Runtime:* ${result.runtime || 'auto-detected'}\n` +
+                    `┃\n` +
+                    `┃ _Manage with .skylist, .skylogs, .skystatus, .skystop_\n` +
+                    `╰══════════════════⊷`
+                )
+            } else {
+                const logs = result.logs ? `\n\n*Build logs:*\n\`\`\`\n${result.logs}\n\`\`\`` : ''
+                return reply(`❌ *Deploy failed:* ${result.error}${logs}`)
+            }
+        } catch (e) {
+            await react('❌')
+            return reply(`❌ Sky deploy error: ${e.message}`)
+        }
+    }
+
+    // ── SKY HOSTING LIST PROJECTS ─────────────────────────────────────────────
+    if (command === 'skylist' || command === 'skyprojects' || command === 'skyhostlist') {
+        if (!isOwner) return reply(`⛔ Owner only.`)
+        const sky = require('../Library/actions/skyhost')
+        const skyKey = global.db?.data?.settings?.skyApiKey || process.env.SKY_HOSTING_API_KEY || ''
+        if (!skyKey) return reply(`❌ Set key first: ${prefix}setskykey <your-key>`)
+        try {
+            const r = await sky.listProjects()
+            if (!r.success) return reply(`❌ ${r.error}`)
+            const projects = r.projects || []
+            if (!projects.length) return reply(`📭 No Sky Hosting projects yet.\nDeploy with: ${prefix}skydeploy <github-url>`)
+            const lines = projects.slice(0, 15).map((p, i) => {
+                const statusEmoji = p.status === 'live' ? '🟢' : p.status === 'building' ? '🔨' : p.status === 'failed' ? '🔴' : '⚪'
+                return `${i+1}. ${statusEmoji} *${p.name}* [${p.status || 'unknown'}]\n   ID: ${p.id}\n${p.liveUrl ? '   🌐 ' + p.liveUrl : ''}`
+            }).join('\n\n')
+            return reply(`╭══〘 *🌩️ SKY HOSTING PROJECTS* 〙═⊷\n┃\n${lines}\n╰══════════════════⊷`)
+        } catch (e) { return reply(`❌ ${e.message}`) }
+    }
+
+    // ── SKY HOSTING STATUS ────────────────────────────────────────────────────
+    if (command === 'skystatus' || command === 'skystat') {
+        if (!isOwner) return reply(`⛔ Owner only.`)
+        const sky = require('../Library/actions/skyhost')
+        if (!text) return reply(`❌ Usage: ${prefix}skystatus <deployment-id>`)
+        try {
+            const r = await sky.getDeployment(text.trim())
+            if (!r.success) return reply(`❌ ${r.error}`)
+            const d = r.deployment
+            const statusEmoji = d.status === 'live' ? '🟢' : d.status === 'building' ? '🔨' : d.status === 'failed' ? '🔴' : '⚪'
+            return reply(
+                `╭══〘 *🌩️ DEPLOYMENT STATUS* 〙═⊷\n` +
+                `┃❍ ID: ${d.id}\n` +
+                `┃❍ Status: ${statusEmoji} ${d.status}\n` +
+                `┃❍ Runtime: ${d.runtime || 'unknown'}\n` +
+                `${d.liveUrl ? '┃❍ URL: ' + d.liveUrl + '\n' : ''}` +
+                `┃❍ Started: ${d.startedAt || d.createdAt || 'unknown'}\n` +
+                `╰══════════════════⊷`
+            )
+        } catch (e) { return reply(`❌ ${e.message}`) }
+    }
+
+    // ── SKY HOSTING LOGS ──────────────────────────────────────────────────────
+    if (command === 'skylogs' || command === 'skylog') {
+        if (!isOwner) return reply(`⛔ Owner only.`)
+        const sky = require('../Library/actions/skyhost')
+        if (!text) return reply(`❌ Usage: ${prefix}skylogs <deployment-id>`)
+        try {
+            const r = await sky.getLogs(text.trim())
+            if (!r.success) return reply(`❌ ${r.error}`)
+            const logs = r.logs || []
+            if (!logs.length) return reply(`📋 No logs yet for deployment ${text.trim()}`)
+            const lines = logs.slice(-25).map(l => `[${l.level || 'info'}] ${l.message}`).join('\n')
+            return reply(`╭══〘 *📋 BUILD LOGS* 〙═⊷\n\`\`\`\n${lines}\n\`\`\`\n╰══════════════════⊷`)
+        } catch (e) { return reply(`❌ ${e.message}`) }
+    }
+
+    // ── SKY HOSTING STOP ──────────────────────────────────────────────────────
+    if (command === 'skystop' || command === 'skykill') {
+        if (!isOwner) return reply(`⛔ Owner only.`)
+        const sky = require('../Library/actions/skyhost')
+        if (!text) return reply(`❌ Usage: ${prefix}skystop <deployment-id>`)
+        try {
+            const r = await sky.deleteDeployment(text.trim())
+            if (r.success) return reply(`🛑 Deployment ${text.trim()} stopped and removed.`)
+            return reply(`❌ ${r.error}`)
+        } catch (e) { return reply(`❌ ${e.message}`) }
+    }
+
+    // ── SKY HOSTING DELETE PROJECT ────────────────────────────────────────────
+    if (command === 'skydelete' || command === 'skyremove') {
+        if (!isOwner) return reply(`⛔ Owner only.`)
+        const sky = require('../Library/actions/skyhost')
+        if (!text) return reply(`❌ Usage: ${prefix}skydelete <project-id>`)
+        try {
+            const r = await sky.deleteProject(text.trim())
+            if (r.success) return reply(`🗑️ Project ${text.trim()} permanently deleted.`)
+            return reply(`❌ ${r.error}`)
+        } catch (e) { return reply(`❌ ${e.message}`) }
+    }
+
+    // ── SKY HOSTING HEALTH ────────────────────────────────────────────────────
+    if (command === 'skyhealth' || command === 'skystatus') {
+        const sky = require('../Library/actions/skyhost')
+        try {
+            const ok = await sky.checkHealth()
+            return reply(ok
+                ? `✅ *Sky Hosting API is online!*\nDeploy with: ${prefix}skydeploy <github-url>`
+                : `❌ *Sky Hosting API is unreachable.*\nTry again later or check https://sky-host-live--isaacbarasa835.replit.app`
+            )
+        } catch (e) { return reply(`❌ ${e.message}`) }
+    }
+
 }
 
 handle.command = ['update','reload','hotreload','selfupdate','up','broadcast', 'backup', 'stats', 'ban', 'unban', 'premium', 'depremium',
@@ -826,7 +984,14 @@ handle.command = ['update','reload','hotreload','selfupdate','up','broadcast', '
     'autostatusview', 'statusview', 'autotyping', 'autobio',
     'addbio', 'setbio', 'listbios', 'clearbio', 'noprefix',
     'setgitusername', 'setgittoken', 'setbhkey', 'psetbhkey', 'myconfig', 'mykeys', 'configs',
-    'deploy', 'skydeploy', 'host',
+    'deploy', 'skydeploy', 'skyhost', 'skylaunch', 'host',
+    'setskykey', 'skykey', 'setskyapikey',
+    'skylist', 'skyprojects', 'skyhostlist',
+    'skystatus', 'skystat',
+    'skylogs', 'skylog',
+    'skystop', 'skykill',
+    'skydelete', 'skyremove',
+    'skyhealth',
     'vercel', 'vdeploy', 'deployvercl', 'setvercel', 'verceltoken', 'vercellist', 'vprojects',
     // Shell/eval commands
     'bash', 'shell', 'exec', 'run', 'terminal', 'cmd',
