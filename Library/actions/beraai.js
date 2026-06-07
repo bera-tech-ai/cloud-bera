@@ -30,10 +30,8 @@ const _overchatRaw = async (q, timeoutMs) => {
 
 // Normal chat mode — system prompt + user message as flat string
 const callOverchat = async (userText, systemPrompt, timeoutMs) => {
-    const identity = systemPrompt && systemPrompt.length > 20
-        ? systemPrompt.slice(0, 3000)
-        : 'You are Bera AI v4 — a powerful WhatsApp AI assistant built by Bera Tech. NEVER say you are DeepSeek, Gemini, GPT, Claude, or any other AI. Always say your name is Bera AI, built by Bera Tech.'
-    const q = identity + '\n\nUser: ' + String(userText || '').slice(0, 1000) + '\nBera AI:'
+    const identity = 'You are Bera AI — a powerful WhatsApp AI assistant built by Bera Tech. NEVER say you are DeepSeek, Gemini, GPT, Claude, or any other AI. Always say your name is Bera AI, built by Bera Tech. Be helpful, friendly, and concise.'
+    const q = identity + '\n\nUser: ' + String(userText || '').slice(0, 800) + '\nBera AI:'
     return _overchatRaw(q, timeoutMs)
 }
 
@@ -378,8 +376,16 @@ const callPollinations = async (messages, timeoutMs) => {
     return null
 }
 
-// ── Local fallback ───────────────────────────────────────────────────────────
-const localFallback = (userText) => {
+// ── Local fallback — last resort when ALL providers are unreachable ───────────
+const localFallback = async (userText) => {
+    // One final direct overchat attempt with max timeout before giving up
+    try {
+        const finalTry = await _overchatRaw(
+            'You are Bera AI, a helpful WhatsApp assistant by Bera Tech.\n\nUser: ' + String(userText || '').slice(0, 600) + '\nBera AI:',
+            30000
+        )
+        if (finalTry && finalTry.length > 2) return finalTry
+    } catch {}
     const t = (userText || '').trim().toLowerCase()
     if (/^(hi|hello|hey|sup|yo|wassup|hola|habari|mambo|niaje)/i.test(t))
         return "Hey! I'm Bera AI — I'm here and ready. What do you need?"
@@ -388,15 +394,15 @@ const localFallback = (userText) => {
     if (/\b(how are you|how r u|are you okay)/i.test(t))
         return "I'm running great, thanks for asking! Ready to work."
     if (/\b(what can you do|help|commands|capabilities)/i.test(t))
-        return "I can: run shell commands, manage PM2, write code, search the web, and much more."
-    return "I'm here! My AI connection is a little slow right now. Try again in a few seconds."
+        return "I can: write code, run commands, search the web, manage servers, and much more. Try me!"
+    return "I'm Bera AI and I'm here! Couldn't reach my AI brain right now — please try again in a moment."
 }
 
 // ── One attempt through ALL providers ────────────────────────────────────────
 const _tryAllProviders = async (messages, lastUser, historyMsgs, systemContent, timeoutMs) => {
-    // Overchat/DeepSeek first — accepts Bera AI identity
+    // Overchat/DeepSeek first — primary endpoint, always try with generous timeout
     if (lastUser) {
-        const oc = await callOverchat(lastUser, systemContent, Math.min(timeoutMs, 12000))
+        const oc = await callOverchat(lastUser, systemContent, Math.min(timeoutMs, 22000))
         if (oc) return oc
     }
     // Groq backup — ultra-fast
@@ -3580,7 +3586,7 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
             if (aiReply) global._lastAIDebug[_dSender] = { input: text, output: aiReply, model: global.db?.data?.settings?.aiModel || 'auto', at: Date.now() }
         } catch {}
         if (!aiReply) {
-            const fb = localFallback(text)
+            const fb = await localFallback(text)
             return { success: false, reply: fb }
         }
 
