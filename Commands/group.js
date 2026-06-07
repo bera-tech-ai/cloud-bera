@@ -706,6 +706,22 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
             : '❌ *Anti-ViewOnce OFF* — View-once messages are protected.')
     }
 
+    // ── ANTI-TEXT ─────────────────────────────────────────────────────────
+    if (['antitext', 'antitexton', 'antitextoff'].includes(command)) {
+        if (groupOnly()) return
+        if (await adminOnly()) return
+        let val = text?.toLowerCase()
+        if (command === 'antitexton') val = 'on'
+        if (command === 'antitextoff') val = 'off'
+        if (!val || !['on', 'off'].includes(val)) return reply(`Usage: ${prefix}antitext on/off`)
+        if (!global.db.data.settings) global.db.data.settings = {}
+        global.db.data.settings[`antitext_${chat}`] = val === 'on'
+        await global.db.write()
+        return reply(val === 'on'
+            ? '✅ *Anti-Text ON* — Text messages from non-admins will be deleted instantly.'
+            : '❌ *Anti-Text OFF* — Text messages are allowed.')
+    }
+
     // ── EXPORT MEMBERS ────────────────────────────────────────────────────
     if (['exportmembers', 'exportmem', 'memberexport', 'membernumbers'].includes(command)) {
         if (groupOnly()) return
@@ -968,6 +984,7 @@ handle.command = [
     'antiedit', 'antiediton', 'antieditoff',
     'anticall', 'blockcall', 'rejectcall', 'nocall',
     'antiviewonce', 'antiview', 'viewonce', 'unviewonce',
+    'antitext', 'antitexton', 'antitextoff',
     // Welcome/goodbye
     'welcome', 'setwelcome',
     'setwelcomemsg', 'welcomemessage', 'welcomemsg',
