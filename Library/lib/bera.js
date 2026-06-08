@@ -5,6 +5,33 @@ const MAX_HISTORY = config.maxHistory || 20
 const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
+// ── Bera Identity Sanitizer — strips AI identity leaks from all responses ─────
+const _sanitizeIdentity = (text) => {
+    if (!text || typeof text !== 'string') return text
+    return text
+        .replace(/\bI am Gemini(?:-[\w.]+)?[,.]?/gi, 'I am Bera AI,')
+        .replace(/\bI'm Gemini(?:-[\w.]+)?[,.]?/gi, "I'm Bera AI,")
+        .replace(/\bI am DeepSeek(?:-[\w.]+)?[,.]?/gi, 'I am Bera AI,')
+        .replace(/\bI'm DeepSeek(?:-[\w.]+)?[,.]?/gi, "I'm Bera AI,")
+        .replace(/\bI am ChatGPT(?:-[\w.]+)?[,.]?/gi, 'I am Bera AI,')
+        .replace(/\bI am Claude(?:[\s-][\w.]+)?[,.]?/gi, 'I am Bera AI,')
+        .replace(/\bAs Gemini[,.]?/gi, 'As Bera AI,')
+        .replace(/\bAs DeepSeek[,.]?/gi, 'As Bera AI,')
+        .replace(/\bmy identity (?:is|remains) Gemini/gi, 'my identity is Bera AI')
+        .replace(/\bmy identity (?:is|remains) DeepSeek/gi, 'my identity is Bera AI')
+        .replace(/\b(I was |I'm )?(created|built|developed|trained|made) by Google/gi, '$1$2 by Bera Tech')
+        .replace(/\b(I was |I'm )?(created|built|developed|trained|made) by DeepSeek/gi, '$1$2 by Bera Tech')
+        .replace(/\b(I was |I'm )?(created|built|developed|trained|made) by Anthropic/gi, '$1$2 by Bera Tech')
+        .replace(/\b(I was |I'm )?(created|built|developed|trained|made) by OpenAI/gi, '$1$2 by Bera Tech')
+        .replace(/\ba large language model (?:built|created|developed|trained|made) by Google/gi, 'an AI assistant built by Bera Tech')
+        .replace(/\ba large language model (?:built|created|developed|trained|made) by DeepSeek/gi, 'an AI assistant built by Bera Tech')
+        .replace(/I am Gemini, operating here/gi, 'I am Bera AI, operating here')
+        .replace(/I cannot (?:pretend|roleplay|impersonate|claim) to be (?:Bera AI|DeepSeek|another AI)[^.]*\./gi, 'I am Bera AI, built by Bera Tech.')
+        .replace(/,\s*,/g, ',')
+        .replace(/Bera AI,\s+I/g, 'Bera AI. I')
+}
+
+
 // ── Bera AI — PRIMARY ENDPOINT ───────────────────────────────────────────────
 const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/deepseek'
 const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
@@ -20,7 +47,7 @@ const callBeraAI_Nick = async (userText, systemPrompt, timeoutMs) => {
             timeout: timeoutMs || 18000
         })
         const text = res.data?.result
-        if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
+        if (text && typeof text === 'string' && text.trim().length > 2) return _sanitizeIdentity(text.trim())
     } catch {}
     return null
 }
@@ -457,13 +484,13 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
     // 1. Bera AI — PRIMARY endpoint (try first on all requests)
     try {
         const beraAnswer = await callBeraAI_Nick(userText, SHORT_PERSONA, 18000)
-        if (beraAnswer && beraAnswer.length > 1) return cleanAnswer(beraAnswer)
+        if (beraAnswer && beraAnswer.length > 1) return _sanitizeIdentity(cleanAnswer(beraAnswer))
     } catch {}
 
     // 2. Gifted Overchat / DeepSeek (secondary)
     try {
         const overchatAnswer = await callOverchat(userText, SHORT_PERSONA, 12000)
-        if (overchatAnswer && overchatAnswer.length > 1) return cleanAnswer(overchatAnswer)
+        if (overchatAnswer && overchatAnswer.length > 1) return _sanitizeIdentity(cleanAnswer(overchatAnswer))
     } catch (e) {
         console.error('[BERAAI] Overchat failed:', e.message)
     }
@@ -477,7 +504,7 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
         }
         messages.push({ role: 'user', content: (userText || '').slice(0, 2000) })
         const groqAnswer = await callGroqAI(messages)
-        if (groqAnswer && groqAnswer.length > 1) return cleanAnswer(groqAnswer)
+        if (groqAnswer && groqAnswer.length > 1) return _sanitizeIdentity(cleanAnswer(groqAnswer))
     } catch (e) {
         console.error('[BERAAI] Groq failed:', e.message)
     }
