@@ -79,7 +79,7 @@ const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
 // ── Bera AI — PRIMARY ENDPOINT (all agents call this first) ──────────────────
-const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/deepseek'
+const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/gpt4o'
 const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
 
 const callBeraAI = async (messages, timeoutMs) => {
@@ -93,7 +93,7 @@ const callBeraAI = async (messages, timeoutMs) => {
             timeout: timeoutMs || 20000
         })
         const text = res.data?.result
-        if (text && typeof text === 'string' && text.trim().length > 2) return { success: true, text: text.trim(), model: 'bera/deepseek' }
+        if (text && typeof text === 'string' && text.trim().length > 2) return { success: true, text: text.trim(), model: 'bera/gpt4o' }
     } catch {}
     return { success: false, error: 'Bera AI unavailable' }
 }
