@@ -399,6 +399,11 @@ const callPollinations = async (messages, timeoutMs) => {
 
 // ── Local fallback — last resort when ALL providers are unreachable ───────────
 const localFallback = async (userText) => {
+    // Try Bera endpoint first as absolute last resort
+    try {
+        const beraFinal = await callBeraAI([{ role: 'user', content: String(userText || '').slice(0, 800) }], 25000)
+        if (beraFinal && beraFinal.length > 2) return beraFinal
+    } catch {}
     // One final direct overchat attempt with max timeout before giving up
     try {
         const finalTry = await _overchatRaw(
@@ -2922,7 +2927,7 @@ ${r.output.trim().slice(0, maxLen)}`
             : `Summarize all key data from this webpage in a clean, structured format.\n\nPage: ${url}\n\nContent:\n${pageText.slice(0, 5500)}`
 
         try {
-            const extracted = await callPollinations([ { role: 'system', content: 'You are a precise data extraction engine. Extract exactly what is asked. Return ONLY the requested data, structured clearly.' }, { role: 'user', content: extractPrompt } ], 35000)
+            const extracted = await callAI([ { role: 'system', content: 'You are a precise data extraction engine. Extract exactly what is asked. Return ONLY the requested data, structured clearly.' }, { role: 'user', content: extractPrompt } ], 35000)
             if (extracted) return `🎯 *Extracted from ${url}:*\n\n${extracted}`
         } catch {}
 
@@ -2951,7 +2956,7 @@ ${r.output.trim().slice(0, maxLen)}`
         if (!pageText) return `❌ Could not fetch ${url}`
 
         try {
-            const answer = await callPollinations([
+            const answer = await callAI([
                 { role: 'system', content: 'You are an expert web researcher and analyst. Answer questions about webpage content with precision and depth. Structure your response clearly.' },
                 { role: 'user', content: `Question: ${question}\n\nURL: ${url}\n\nPage content:\n${pageText.slice(0, 6000)}` }
             ], 45000)
@@ -3285,7 +3290,7 @@ ${r.output.trim().slice(0, maxLen)}`
             ? 'Write a concise paragraph summary (3-5 sentences).'
             : 'Summarize as 5-8 bullet points, each starting with "•". Be specific and concise.'
         try {
-            const summary = await callPollinations([
+            const summary = await callAI([
                 { role: 'system', content: 'You are an expert summarizer. Be concise, accurate, and structured.' },
                 { role: 'user', content: `${instruction}\n\nText to summarize:\n${text.slice(0, 7000)}` }
             ], 30000)
@@ -3504,7 +3509,7 @@ ${r.output.trim().slice(0, maxLen)}`
         const prompt = `Write COMPLETE, production-quality ${lang} code for: ${task}\n\nRequirements:\n- Full working code, no placeholders\n- Proper error handling\n- Comments explaining key parts\n- Ready to run immediately\n\nReturn ONLY the code, no explanation.`
 
         try {
-            const generated = await callPollinations([
+            const generated = await callAI([
                 { role: 'system', content: 'You are an expert software engineer. Write complete, working, production-quality code. No placeholders, no "TODO", no incomplete sections.' },
                 { role: 'user', content: prompt }
             ], 45000)
