@@ -54,7 +54,7 @@ const callGroqAI = async (systemPrompt, userMsg) => {
             const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
                 model,
                 messages,
-                max_tokens: 2048,
+                max_tokens: 4096,
                 temperature: 0.7
             }, {
                 headers: {
@@ -90,7 +90,7 @@ const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
                   model,
                   messages: (Array.isArray(messages) ? messages : []).map(m => ({
                       role: m.role,
-                      content: String(m.content || '').slice(0, 4000)
+                      content: String(m.content || '').slice(0, 16000)
                   })),
                   max_tokens: 2048,
                   temperature: 0.7
@@ -209,7 +209,14 @@ const callPollinationsAgent = async (systemPrompt, userMsg) => {
 
 // ── Primary AI caller — Overchat/DeepSeek first, then Groq, then fallbacks ────
 const callAI = async (systemPrompt, userMsg) => {
-    // 1. Bera AI — PRIMARY endpoint, try first
+    // 0. OpenRouter — primary (fast, follows system prompts, no truncation issues)
+    const _orMsgs = []
+    if (systemPrompt) _orMsgs.push({ role: 'system', content: String(systemPrompt) })
+    _orMsgs.push({ role: 'user', content: String(userMsg || '') })
+    const orR = await callDeepSeekAI(_orMsgs, 22000)
+    if (orR) return { success: true, text: orR }
+
+    // 1. Bera AI — secondary
     const _beraMsgs = []
     if (systemPrompt) _beraMsgs.push({ role: 'system', content: String(systemPrompt) })
     _beraMsgs.push({ role: 'user', content: String(userMsg || '') })
@@ -801,7 +808,7 @@ Reply:`
 
 const planTask = async (task) => {
     try {
-        const result = await callAI('', PLAN_PROMPT + task)
+        const result = await callAI(PLAN_PROMPT, task)
         if (!result.success) return { success: false, error: result.error }
         const jsonMatch = result.text.match(/\{[\s\S]*\}/)
         if (!jsonMatch) return { success: false, error: 'Could not parse plan' }
