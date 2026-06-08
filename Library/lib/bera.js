@@ -39,7 +39,33 @@ const _sanitizeIdentity = (text) => {
 }
 
 
-// ── Bera AI — PRIMARY ENDPOINT ───────────────────────────────────────────────
+
+  // ── DeepSeek Official API (PRIMARY — follows system prompts perfectly) ────────
+  const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY
+  const callDeepSeekAI = async (userText, systemPrompt, timeoutMs) => {
+      if (!DEEPSEEK_API_KEY) return null
+      try {
+          const messages = []
+          if (systemPrompt) messages.push({ role: 'system', content: systemPrompt.slice(0, 4000) })
+          messages.push({ role: 'user', content: String(userText || '').slice(0, 4000) })
+          const res = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+              model: 'deepseek-chat',
+              messages,
+              max_tokens: 1024,
+              temperature: 0.7
+          }, {
+              headers: { 'Authorization': `Bearer ${DEEPSEEK_API_KEY}`, 'Content-Type': 'application/json' },
+              timeout: timeoutMs || 20000
+          })
+          const text = res.data?.choices?.[0]?.message?.content
+          if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
+      } catch (e) {
+          if (e?.response?.status === 402) console.error('[DeepSeek] Insufficient balance')
+      }
+      return null
+  }
+  
+// ── Bera AI — SECONDARY ENDPOINT ──────────────────────────────────────────────
 const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/gpt4o'
 const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
 
