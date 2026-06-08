@@ -143,7 +143,8 @@ const gtWallpaper = (query) =>
 
 // News — use GNews (free tier)
 const gtNews = async (topic = 'kenya') => {
-    const r = await free('https://gnews.io/api/v4/search', { q: topic, lang: 'en', max: 5, token: 'e2c21c5e8e8d4b2a6c4a8f2a9d7e5b4c' })
+    // gnews.io tokens expire frequently — use Gifted news API instead
+    const r = await gt('/api/news/search', { q: topic, lang: 'en', max: 5 })
     if (r?.articles?.length) return r.articles
     // Fallback: use Gifted google search for news
     const gs = await gt('/api/search/google', { query: `${topic} news today` })
