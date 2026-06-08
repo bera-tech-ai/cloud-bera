@@ -176,8 +176,11 @@ const callPollinationsAgent = async (systemPrompt, userMsg) => {
 // ── Primary AI caller — Overchat/DeepSeek first, then Groq, then fallbacks ────
 const callAI = async (systemPrompt, userMsg) => {
     // 1. Bera AI — PRIMARY endpoint, try first
-    const beraR = await callBeraAI(messages, 20000)
-    if (beraR.success) return beraR
+    const _beraMsgs = []
+    if (systemPrompt) _beraMsgs.push({ role: 'system', content: String(systemPrompt) })
+    _beraMsgs.push({ role: 'user', content: String(userMsg || '') })
+    const beraR = await callBeraAI(_beraMsgs, 20000)
+    if (beraR && beraR.success) return beraR
 
     // 2. Overchat/DeepSeek — secondary
     const oc = await callOverchat(systemPrompt, userMsg)
