@@ -544,10 +544,32 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
     const t = timeoutMs || 30000
 
     if (agentMode) {
-        // ── AGENT MODE: Overchat (DeepSeek) first, then Groq, then Pollinations ──
-        // Order: Overchat/DeepSeek → Groq → DeepSeek/Pollinations → OpenAI/Pollinations
+        // ── AGENT MODE: OpenRouter PRIMARY → Bera → Overchat → Groq → Pollinations ──
 
-        // 0. Bera AI — PRIMARY endpoint for all agents
+        // 0. OpenRouter — PRIMARY (500ms, verified format-following, 16k context)
+        const _orKey = process.env.OPENROUTER_API_KEY
+        if (_orKey) {
+            try {
+                const _orRes = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+                    model: 'openai/gpt-oss-120b:free',
+                    messages: messages.map(msg => ({ role: msg.role, content: String(msg.content || '').slice(0, 16000) })),
+                    max_tokens: 4096,
+                    temperature: 0.7
+                }, {
+                    headers: {
+                        'Authorization': `Bearer ${_orKey}`,
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': 'https://bera-tech-ai.github.io',
+                        'X-Title': 'Bera AI'
+                    },
+                    timeout: Math.min(t, 22000)
+                })
+                const _orTxt = _orRes.data?.choices?.[0]?.message?.content
+                if (_orTxt && _orTxt.length > 2) return _sanitizeIdentity(_orTxt)
+            } catch (_orE) { /* fall through */ }
+        }
+
+        // 1. Bera AI — secondary
         const beraR = await callBeraAI(messages, Math.min(t, 20000))
         if (beraR && beraR.length > 2) return _sanitizeIdentity(beraR)
 
