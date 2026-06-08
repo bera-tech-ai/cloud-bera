@@ -13,6 +13,27 @@ const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 const XWOLF = 'https://apis.xwolf.space'
 
+// ── Bera AI — PRIMARY ENDPOINT (all agents call this first) ──────────────────
+const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/deepseek'
+const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
+
+const callBeraAI = async (messages, timeoutMs) => {
+    try {
+        const systemMsg = (Array.isArray(messages) ? messages : []).find(m => m.role === 'system')?.content || ''
+        const history = (Array.isArray(messages) ? messages : []).filter(m => m.role !== 'system').slice(-8)
+        const histStr = history.map(m => (m.role === 'user' ? 'User' : 'Assistant') + ': ' + String(m.content || '').slice(0, 600)).join('\n')
+        const q = (systemMsg ? systemMsg.slice(0, 800) + '\n\n' : '') + histStr
+        const res = await axios.get(BERA_API_URL, {
+            params: { q: q.slice(0, 3000), apikey: BERA_API_KEY },
+            timeout: timeoutMs || 20000
+        })
+        const text = res.data?.result
+        if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
+    } catch {}
+    return null
+}
+
+
 // ── Gifted Overchat / DeepSeek — PRIMARY for ALL modes ──────────────────────
 const OVERCHAT_URL = 'https://api.gifted.co.ke/api/ai/overchat'
 
@@ -400,7 +421,11 @@ const localFallback = async (userText) => {
 
 // ── One attempt through ALL providers ────────────────────────────────────────
 const _tryAllProviders = async (messages, lastUser, historyMsgs, systemContent, timeoutMs) => {
-    // Overchat/DeepSeek first — primary endpoint, always try with generous timeout
+    // Bera AI — PRIMARY endpoint, always call first
+    const bera = await callBeraAI(messages, Math.min(timeoutMs, 20000))
+    if (bera) return bera
+
+    // Overchat/DeepSeek — secondary endpoint
     if (lastUser) {
         const oc = await callOverchat(lastUser, systemContent, Math.min(timeoutMs, 22000))
         if (oc) return oc
@@ -435,7 +460,11 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
         // ── AGENT MODE: Overchat (DeepSeek) first, then Groq, then Pollinations ──
         // Order: Overchat/DeepSeek → Groq → DeepSeek/Pollinations → OpenAI/Pollinations
 
-        // 1. Gifted Overchat / DeepSeek — PRIMARY (full system prompt passed as q string)
+        // 0. Bera AI — PRIMARY endpoint for all agents
+        const beraR = await callBeraAI(messages, Math.min(t, 20000))
+        if (beraR && beraR.length > 2) return beraR
+
+        // 1. Gifted Overchat / DeepSeek — secondary
         const oc = await callOverchatAgent(messages, Math.min(t, 25000))
         if (oc && oc.length > 2) return oc
 
