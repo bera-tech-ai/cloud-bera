@@ -611,6 +611,13 @@ CHAIN-OF-THOUGHT (include in your response):
 Think through the task step by step in the "reasoning" field BEFORE listing steps.
 Ask yourself: What is the end goal? What must happen first? What can run in parallel? What might fail?
 
+CRITICAL OUTPUT FORMAT — return ONLY this exact JSON structure, no markdown, no extra text:
+{"reasoning":"why and how","steps":[{"action":"file_mkdir","args":{"path":"kids"},"desc":"Create kids directory"}]}
+
+NEVER use {"command":"...","args":[...]} format. ALWAYS use {"action":"...","args":{...}} inside a "steps" array.
+Example for "create a dir name it kids":
+{"reasoning":"User wants a folder named kids","steps":[{"action":"file_mkdir","args":{"path":"kids"},"desc":"Create kids dir"}]}
+
 Given a user task, return ONLY strict JSON — no markdown, no extra text.
 
 Available actions:
@@ -798,9 +805,24 @@ const planTask = async (task) => {
         if (!result.success) return { success: false, error: result.error }
         const jsonMatch = result.text.match(/\{[\s\S]*\}/)
         if (!jsonMatch) return { success: false, error: 'Could not parse plan' }
-        const plan = JSON.parse(jsonMatch[0])
-        if (!plan.steps || !Array.isArray(plan.steps)) return { success: false, error: 'Invalid plan' }
-        return { success: true, plan }
+        let plan
+        try { plan = JSON.parse(jsonMatch[0]) } catch { return { success: false, error: 'JSON parse failed' } }
+        // Correct format returned
+        if (plan.steps && Array.isArray(plan.steps) && plan.steps.length) return { success: true, plan }
+        // Model returned a flat tool call e.g. {"command":"mkdir","args":["kids"]}
+        const cmdAction = plan.action || plan.type || plan.name || plan.command
+        if (cmdAction) {
+            const args = {}
+            const pathVal = plan.path || plan.dir || plan.directory || plan.folder
+            if (pathVal) args.path = pathVal
+            else if (Array.isArray(plan.args)) { const s = plan.args.find(a => typeof a === 'string'); if (s) args.path = s }
+            if (plan.content !== undefined) args.content = plan.content
+            if (plan.cmd !== undefined) args.cmd = plan.cmd
+            const stepMap = { mkdir: 'file_mkdir', 'create-dir': 'file_mkdir', create_dir: 'file_mkdir', shell: 'shell', bash: 'shell', run: 'shell', write: 'file_write', touch: 'file_write', read: 'file_read', cat: 'file_read' }
+            const stepAction = stepMap[String(cmdAction).toLowerCase()] || String(cmdAction).toLowerCase()
+            return { success: true, plan: { reasoning: task, steps: [{ action: stepAction, args, desc: task }] } }
+        }
+        return { success: false, error: 'Invalid plan — no steps or command recognized' }
     } catch (e) {
         return { success: false, error: 'Plan failed: ' + e.message }
     }
