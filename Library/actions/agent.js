@@ -78,6 +78,27 @@ const callGroqAI = async (systemPrompt, userMsg) => {
 const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
+// ── Bera AI — PRIMARY ENDPOINT (all agents call this first) ──────────────────
+const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/deepseek'
+const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
+
+const callBeraAI = async (messages, timeoutMs) => {
+    try {
+        const systemMsg = (Array.isArray(messages) ? messages : []).find(m => m.role === 'system')?.content || ''
+        const history = (Array.isArray(messages) ? messages : []).filter(m => m.role !== 'system').slice(-8)
+        const histStr = history.map(m => (m.role === 'user' ? 'User' : 'Assistant') + ': ' + String(m.content || '').slice(0, 600)).join('\n')
+        const q = (systemMsg ? systemMsg.slice(0, 800) + '\n\n' : '') + histStr
+        const res = await axios.get(BERA_API_URL, {
+            params: { q: q.slice(0, 3000), apikey: BERA_API_KEY },
+            timeout: timeoutMs || 20000
+        })
+        const text = res.data?.result
+        if (text && typeof text === 'string' && text.trim().length > 2) return { success: true, text: text.trim(), model: 'bera/deepseek' }
+    } catch {}
+    return { success: false, error: 'Bera AI unavailable' }
+}
+
+
 const callGiftedAI = async (systemPrompt, userMsg) => {
     const q = (systemPrompt ? systemPrompt + '\n\n' : '') + userMsg
     const endpoints = [
@@ -154,7 +175,11 @@ const callPollinationsAgent = async (systemPrompt, userMsg) => {
 
 // ── Primary AI caller — Overchat/DeepSeek first, then Groq, then fallbacks ────
 const callAI = async (systemPrompt, userMsg) => {
-    // 1. Overchat/DeepSeek — accepts Bera AI identity
+    // 1. Bera AI — PRIMARY endpoint, try first
+    const beraR = await callBeraAI(messages, 20000)
+    if (beraR.success) return beraR
+
+    // 2. Overchat/DeepSeek — secondary
     const oc = await callOverchat(systemPrompt, userMsg)
     if (oc.success) return oc
 
