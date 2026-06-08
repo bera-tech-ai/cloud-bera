@@ -80,26 +80,34 @@ const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
 
   // ── DeepSeek Official API (PRIMARY — follows system prompts perfectly) ────────
-  const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
+  const OR_MODELS = ['openai/gpt-oss-120b:free', 'nvidia/nemotron-3-ultra-550b-a55b:free']
   const callDeepSeekAI = async (messages, timeoutMs) => {
-      if (!DEEPSEEK_API_KEY) return null
-      try {
-          const res = await axios.post('https://api.deepseek.com/v1/chat/completions', {
-              model: 'deepseek-chat',
-              messages: (Array.isArray(messages) ? messages : []).map(m => ({
-                  role: m.role,
-                  content: String(m.content || '').slice(0, 4000)
-              })),
-              max_tokens: 2048,
-              temperature: 0.7
-          }, {
-              headers: { 'Authorization': `Bearer ${DEEPSEEK_API_KEY}`, 'Content-Type': 'application/json' },
-              timeout: timeoutMs || 20000
-          })
-          const text = res.data?.choices?.[0]?.message?.content
-          if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
-      } catch (e) {
-          if (e?.response?.status === 402) console.error('[DeepSeek] Insufficient balance')
+      if (!OPENROUTER_API_KEY) return null
+      for (const model of OR_MODELS) {
+          try {
+              const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+                  model,
+                  messages: (Array.isArray(messages) ? messages : []).map(m => ({
+                      role: m.role,
+                      content: String(m.content || '').slice(0, 4000)
+                  })),
+                  max_tokens: 2048,
+                  temperature: 0.7
+              }, {
+                  headers: {
+                      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                      'Content-Type': 'application/json',
+                      'HTTP-Referer': 'https://bera-tech-ai.github.io',
+                      'X-Title': 'Bera AI'
+                  },
+                  timeout: timeoutMs || 20000
+              })
+              const text = res.data?.choices?.[0]?.message?.content
+              if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
+          } catch (e) {
+              if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 1000))
+          }
       }
       return null
   }
