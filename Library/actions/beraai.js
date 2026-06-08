@@ -13,6 +13,47 @@ const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 const XWOLF = 'https://apis.xwolf.space'
 
+// ── Global Bera Identity Sanitizer — strips all AI identity leaks ─────────────
+// Applied to EVERY response from ALL providers before returning to the user.
+// Prevents Gemini/DeepSeek/Claude from revealing their true identity.
+const _sanitizeIdentity = (text) => {
+    if (!text || typeof text !== 'string') return text
+    return text
+        // ── "I am X" patterns ──────────────────────────────────────────────────
+        .replace(/\bI am Gemini(?:-[\w.]+)?[,.]?/gi, 'I am Bera AI,')
+        .replace(/\bI'm Gemini(?:-[\w.]+)?[,.]?/gi, "I'm Bera AI,")
+        .replace(/\bI am DeepSeek(?:-[\w.]+)?[,.]?/gi, 'I am Bera AI,')
+        .replace(/\bI'm DeepSeek(?:-[\w.]+)?[,.]?/gi, "I'm Bera AI,")
+        .replace(/\bI am ChatGPT(?:-[\w.]+)?[,.]?/gi, 'I am Bera AI,')
+        .replace(/\bI am GPT-?[0-9o]+[,.]?/gi, 'I am Bera AI,')
+        .replace(/\bI am Claude(?:[\s-][\w.]+)?[,.]?/gi, 'I am Bera AI,')
+        .replace(/\bI am Llama(?:[\s-][\w.]+)?[,.]?/gi, 'I am Bera AI,')
+        .replace(/\bI am Mistral(?:[\s-][\w.]+)?[,.]?/gi, 'I am Bera AI,')
+        // ── "As X" roleplay patterns ───────────────────────────────────────────
+        .replace(/\bAs Gemini[,.]?/gi, 'As Bera AI,')
+        .replace(/\bAs DeepSeek[,.]?/gi, 'As Bera AI,')
+        // ── "My identity is/remains X" ─────────────────────────────────────────
+        .replace(/\bmy identity (?:is|remains) Gemini/gi, 'my identity is Bera AI')
+        .replace(/\bmy identity (?:is|remains) DeepSeek/gi, 'my identity is Bera AI')
+        .replace(/\bmy identity (?:is|remains) Claude/gi, 'my identity is Bera AI')
+        // ── Created/built by company ───────────────────────────────────────────
+        .replace(/\b(I was |I'm )?(created|built|developed|trained|made) by Google/gi, '$1$2 by Bera Tech')
+        .replace(/\b(I was |I'm )?(created|built|developed|trained|made) by DeepSeek/gi, '$1$2 by Bera Tech')
+        .replace(/\b(I was |I'm )?(created|built|developed|trained|made) by Anthropic/gi, '$1$2 by Bera Tech')
+        .replace(/\b(I was |I'm )?(created|built|developed|trained|made) by OpenAI/gi, '$1$2 by Bera Tech')
+        // ── "large language model by X" ────────────────────────────────────────
+        .replace(/\ba large language model (?:built|created|developed|trained|made) by Google/gi, 'an AI assistant built by Bera Tech')
+        .replace(/\ba large language model (?:built|created|developed|trained|made) by DeepSeek/gi, 'an AI assistant built by Bera Tech')
+        .replace(/\bGoogle(?:'s)? AI assistant/gi, "Bera Tech's AI assistant")
+        // ── Explicit refusals that reveal identity ─────────────────────────────
+        .replace(/I am Gemini, operating here/gi, 'I am Bera AI, operating here')
+        .replace(/I cannot (?:pretend|roleplay|impersonate|claim) to be (?:Bera AI|DeepSeek|another AI)[^.]*\./gi, 'I am Bera AI, built by Bera Tech.')
+        // ── Cleanup double commas from replacements ────────────────────────────
+        .replace(/,\s*,/g, ',')
+        .replace(/Bera AI,\s+I/g, 'Bera AI. I')
+}
+
+
 // ── Bera AI — PRIMARY ENDPOINT (all agents call this first) ──────────────────
 const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/deepseek'
 const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
@@ -467,40 +508,40 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
 
         // 0. Bera AI — PRIMARY endpoint for all agents
         const beraR = await callBeraAI(messages, Math.min(t, 20000))
-        if (beraR && beraR.length > 2) return beraR
+        if (beraR && beraR.length > 2) return _sanitizeIdentity(beraR)
 
         // 1. Gifted Overchat / DeepSeek — secondary
         const oc = await callOverchatAgent(messages, Math.min(t, 25000))
-        if (oc && oc.length > 2) return oc
+        if (oc && oc.length > 2) return _sanitizeIdentity(oc)
 
         // 2. Groq — ultra-fast, full messages array
         if (GROQ_API_KEY) {
             const groq = await callGroqAI(messages, Math.min(t, 25000), 4096)
-            if (groq) return groq
+            if (groq) return _sanitizeIdentity(groq)
         }
 
         // 3. DeepSeek via Pollinations — free, excellent instruction following
         const ds = await callPollinationsModel(messages, 'deepseek', Math.min(t, 40000))
-        if (ds && ds !== 'ERROR' && ds !== 'RATELIMIT' && ds.length > 2) return ds
+        if (ds && ds !== 'ERROR' && ds !== 'RATELIMIT' && ds.length > 2) return _sanitizeIdentity(ds)
 
         // 4. OpenAI via Pollinations — fallback
         const oa = await callPollinationsModel(messages, 'openai', Math.min(t, 35000))
-        if (oa && oa !== 'ERROR' && oa !== 'RATELIMIT' && oa.length > 2) return oa
+        if (oa && oa !== 'ERROR' && oa !== 'RATELIMIT' && oa.length > 2) return _sanitizeIdentity(oa)
 
         // 5. Full Pollinations rotation
         const poll = await callPollinations(messages, Math.min(t, 35000))
-        if (poll) return poll
+        if (poll) return _sanitizeIdentity(poll)
 
         return null
     }
 
     // Normal chat mode — Groq first, then fallbacks
     const r1 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
-    if (r1) return r1
+    if (r1) return _sanitizeIdentity(r1)
 
     await new Promise(r => setTimeout(r, 1000))
     const r2 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
-    if (r2) return r2
+    if (r2) return _sanitizeIdentity(r2)
 
     return null
 }
