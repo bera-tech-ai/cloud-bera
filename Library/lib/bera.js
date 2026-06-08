@@ -33,7 +33,7 @@ const _sanitizeIdentity = (text) => {
 
 
 // ── Bera AI — PRIMARY ENDPOINT ───────────────────────────────────────────────
-const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/deepseek'
+const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/gpt4o'
 const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
 
 const callBeraAI_Nick = async (userText, systemPrompt, timeoutMs) => {
