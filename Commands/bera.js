@@ -1116,7 +1116,7 @@ Start immediately with the code — no lengthy intro.`
 
         try {
             const { generateAdvancedReply } = require('../Library/actions/beraai')
-            const r = await generateAdvancedReply(buildPrompt, m.chat + '_build', null, null)
+            const r = await generateAdvancedReply(buildPrompt, m.chat + '_build', conn, m)
             if (r.success && r.reply) {
                 const validated = await validateAndFixCode(r.reply, task)
                 await react(conn, m, validated.errors.length ? '⚠️' : '✅')
@@ -1142,7 +1142,7 @@ Start immediately with the code — no lengthy intro.`
 
         try {
             const { generateAdvancedReply } = require('../Library/actions/beraai')
-            const r = await generateAdvancedReply(prompt, m.chat + '_explain', null, null)
+            const r = await generateAdvancedReply(prompt, m.chat + '_explain', conn, m)
             if (r.success && r.reply) {
                 await react(conn, m, '✅')
                 return reply(`🧠 *Code Analysis:*\n\n${r.reply}`)
