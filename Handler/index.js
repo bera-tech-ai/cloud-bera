@@ -884,7 +884,7 @@ const handleMessage = async (conn, rawMsg) => {
                 const badword = await checkAntiBadwords(conn, m, text, isOwner)
                 if (badword) return
                 // ── Anti-Text: instantly delete any text message ──────────────
-                if (text && !isOwner && !isAdmin && !m.fromMe) {
+                if (text && !isOwner && !m.fromMe) {
                     const antitextOn = global.db?.data?.settings?.[`antitext_${chat}`]
                     if (antitextOn) {
                         await conn.sendMessage(chat, { delete: m.key }).catch(() => {})
