@@ -1316,13 +1316,16 @@ const _ACTION_TO_TOOL = {
 const _normalizeToolObj = (obj) => {
     if (!obj || typeof obj !== 'object') return null
     if (obj.tool) return obj
-    const action = obj.action || obj.type || obj.name
+    // Accept 'command' as action when no other identifier (handles {"command":"mkdir","args":["kids"]})
+    const action = obj.action || obj.type || obj.name || obj.command
     if (!action) return null
     const tool = _ACTION_TO_TOOL[String(action).toLowerCase()] || String(action).toLowerCase()
     const norm = { tool }
-    if (obj.command !== undefined) norm.cmd = obj.command
-    else if (obj.cmd !== undefined) norm.cmd = obj.cmd
+    if (obj.cmd !== undefined) norm.cmd = obj.cmd
+    // Handle args array: first string becomes path (e.g. args: ["kids"])
+    const firstArrayArg = Array.isArray(obj.args) ? obj.args.find(a => typeof a === 'string') : undefined
     if (obj.path || obj.directory || obj.dir || obj.folder) norm.path = obj.path || obj.directory || obj.dir || obj.folder
+    else if (firstArrayArg) norm.path = firstArrayArg
     if (obj.content !== undefined) norm.content = obj.content
     if (obj.url !== undefined) norm.url = obj.url
     if (obj.method !== undefined) norm.method = obj.method
