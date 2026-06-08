@@ -5,6 +5,27 @@ const MAX_HISTORY = config.maxHistory || 20
 const GIFTED = 'https://api.gifted.co.ke'
 const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
+// ── Bera AI — PRIMARY ENDPOINT ───────────────────────────────────────────────
+const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/deepseek'
+const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
+
+const callBeraAI_Nick = async (userText, systemPrompt, timeoutMs) => {
+    try {
+        const identity = systemPrompt && systemPrompt.length > 10
+            ? systemPrompt.slice(0, 800)
+            : 'You are Bera AI — a powerful WhatsApp AI assistant built by Bera Tech. NEVER say you are DeepSeek, Gemini, GPT, Claude, or any other AI. Always say your name is Bera AI, built by Bera Tech.'
+        const q = identity + '\n\nUser: ' + String(userText || '').slice(0, 1000) + '\nBera AI:'
+        const res = await axios.get(BERA_API_URL, {
+            params: { q: q.slice(0, 3000), apikey: BERA_API_KEY },
+            timeout: timeoutMs || 18000
+        })
+        const text = res.data?.result
+        if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
+    } catch {}
+    return null
+}
+
+
 // ── Gifted Overchat / DeepSeek (primary — accepts Bera AI identity) ───────────
 const OVERCHAT_URL = 'https://api.gifted.co.ke/api/ai/overchat'
 const callOverchat = async (userText, systemPrompt, timeoutMs) => {
@@ -433,7 +454,13 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
         throw new Error('Image analysis is temporarily unavailable. Try again later.')
     }
 
-    // 1. Gifted Overchat / DeepSeek (primary — accepts Bera AI identity)
+    // 1. Bera AI — PRIMARY endpoint (try first on all requests)
+    try {
+        const beraAnswer = await callBeraAI_Nick(userText, SHORT_PERSONA, 18000)
+        if (beraAnswer && beraAnswer.length > 1) return cleanAnswer(beraAnswer)
+    } catch {}
+
+    // 2. Gifted Overchat / DeepSeek (secondary)
     try {
         const overchatAnswer = await callOverchat(userText, SHORT_PERSONA, 12000)
         if (overchatAnswer && overchatAnswer.length > 1) return cleanAnswer(overchatAnswer)
@@ -441,7 +468,7 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
         console.error('[BERAAI] Overchat failed:', e.message)
     }
 
-    // 2. Groq AI (backup — ultra-fast)
+    // 3. Groq AI (backup — ultra-fast)
     try {
         const messages = [{ role: 'system', content: SHORT_PERSONA }]
         const recent = (history || []).slice(-6)
@@ -455,7 +482,7 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
         console.error('[BERAAI] Groq failed:', e.message)
     }
 
-    // 3. Gifted API fallback — GET with short query
+    // 4. Gifted API fallback — GET with short query
     const query = buildQuery(userText, history)
     try {
         const answer = await tryEndpoints(
@@ -468,7 +495,7 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
         console.error('[BERAAI] Gifted endpoints failed:', e.message)
     }
 
-    // 4. Ultra-short fallback
+    // 5. Ultra-short fallback
     const shortQuery = (userText || '').slice(0, 400)
     const answer2 = await tryEndpoints(
         AI_ENDPOINTS.slice(0, 3),
