@@ -546,7 +546,17 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
     if (agentMode) {
         // ── AGENT MODE: OpenRouter PRIMARY → Bera → Overchat → Groq → Pollinations ──
 
-        // 0. OpenRouter — PRIMARY (500ms, verified format-following, 16k context)
+        // 0. ch.at — PRIMARY (free, no API key, OpenAI-compatible, 16k context)
+        try {
+            const _chatR = await axios.post('https://ch.at/v1/chat/completions',
+                { messages: messages.map(msg => ({ role: msg.role, content: String(msg.content || '').slice(0, 16000) })) },
+                { headers: { 'Content-Type': 'application/json' }, timeout: Math.min(t, 25000) }
+            )
+            const _chatTxt = _chatR.data?.choices?.[0]?.message?.content
+            if (_chatTxt && _chatTxt.length > 2) return _sanitizeIdentity(_chatTxt)
+        } catch {}
+
+        // 1. OpenRouter — secondary fallback
         const _orKey = process.env.OPENROUTER_API_KEY
         if (_orKey) {
             try {
@@ -566,7 +576,7 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
                 })
                 const _orTxt = _orRes.data?.choices?.[0]?.message?.content
                 if (_orTxt && _orTxt.length > 2) return _sanitizeIdentity(_orTxt)
-            } catch (_orE) { /* fall through */ }
+            } catch {}
         }
 
         // 1. Bera AI — secondary
