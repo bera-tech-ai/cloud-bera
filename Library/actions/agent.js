@@ -20,7 +20,15 @@ const resolveAgentPath = (argPath, userId) => {
 const OVERCHAT_URL_AGENT = 'https://api.gifted.co.ke/api/ai/overchat'
 const {
     gtCrypto, gtStock, gtCurrency, gtMovie, gtAnime, gtIpInfo, gtGithub,
-    gtTranslate, gtNews, gtWeather, gtLyrics, gtWiki, gtBible
+    gtTranslate, gtNews, gtWeather, gtLyrics, gtWiki, gtBible,
+    // NEW Gifted Tools
+    gtDnsCheck, gtHttpHeaders, gtServerCheck,
+    gtEncodeBinary, gtDecodeBinary, gtEncodeBase64, gtDecodeBase64,
+    gtFancyText, gtFancyTextV2,
+    gtEncryptCode, gtEncryptCodeV2, gtEncryptCodeV3,
+    gtGoogleImages, gtUnsplash, gtTikTokSearch,
+    gtLyricsV2, gtSpotifyLyrics, gtSpotifyPlaylist, gtSoundCloud, gtHearthis, gtChord,
+    gtDefine, gtWikimedia, gtPlaystore, gtHappyMod, gtApkMirror, gtNpmSearch, gtWattpad
 } = require('./giftedapi')
 const callOverchat = async (systemPrompt, userMsg, timeoutMs) => {
     try {
@@ -737,6 +745,33 @@ DATA & LIVE INFO:
 - lyrics_fetch   → args: { query: "Song by Artist" }  ← song lyrics
 - wiki_search    → args: { topic: "Nairobi" }  ← Wikipedia summary
 - bible_verse    → args: { verse: "John 3:16" }  ← Bible verse lookup
+
+GIFTED API TOOLS (NEW):
+- gt_dns_check    → args: { domain }  ← DNS lookup for any domain
+- gt_http_headers → args: { url }     ← Fetch HTTP response headers for a URL
+- gt_server_check → args: { url }     ← Check if a server/website is up
+- gt_encode_bin   → args: { text }    ← Convert text to binary
+- gt_decode_bin   → args: { binary }  ← Decode binary to text
+- gt_encode_b64   → args: { text }    ← Base64 encode text
+- gt_decode_b64   → args: { b64 }     ← Base64 decode
+- gt_fancy_text   → args: { text }    ← Generate fancy/stylized text variants
+- gt_encrypt_code → args: { code }    ← Obfuscate/encrypt source code
+- gt_google_img   → args: { query }   ← Google image search results
+- gt_unsplash     → args: { query }   ← High-quality Unsplash stock photos
+- gt_tiktok_search → args: { query } ← Search TikTok videos
+- gt_lyrics_v2    → args: { query }   ← Alternative lyrics source
+- gt_spotify_lyrics → args: { query } ← Spotify-sourced lyrics
+- gt_spotify_playlist → args: { query } ← Search Spotify playlists
+- gt_soundcloud   → args: { query }   ← Search SoundCloud tracks
+- gt_hearthis     → args: { query }   ← Search HearThis.at tracks
+- gt_chord        → args: { query }   ← Guitar chords / tabs for any song
+- gt_define       → args: { term }    ← Define a word or term
+- gt_wikimedia    → args: { title }   ← Wikimedia/Wikipedia article summary
+- gt_playstore    → args: { query }   ← Search Google Play Store
+- gt_happymod     → args: { query }   ← Search HappyMod for modded APKs
+- gt_apkmirror    → args: { query }   ← Search APK Mirror
+- gt_npm_search   → args: { packagename } ← Search npm packages
+- gt_wattpad      → args: { query }   ← Search Wattpad stories
 
 APP BUILDER:
 - build_webapp   → args: { name, type("express"|"express-api"|"react"|"vue"|"nextjs"|"flask"|"fastapi"|"static"|"discord"|"telegram"), description, port }
@@ -1550,6 +1585,164 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                     output: `🧠 *Deep Scrape Analysis*\n🌐 ${r.url}\n❓ ${r.question}\n📏 Content: ${r.contentLength} chars\n\n${r.answer}`,
                     desc
                 }
+            }
+
+            // ── GIFTED API NEW TOOLS ────────────────────────────────────────
+            case 'gt_dns_check': {
+                const d = await gtDnsCheck(args.domain)
+                if (!d) return { success: false, output: `DNS lookup failed for: ${args.domain}`, desc }
+                const info = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+                return { success: true, output: `🌐 DNS: ${args.domain}\n\n${info.slice(0, 1500)}`, desc }
+            }
+            case 'gt_http_headers': {
+                const d = await gtHttpHeaders(args.url)
+                if (!d) return { success: false, output: `Could not fetch headers: ${args.url}`, desc }
+                const info = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+                return { success: true, output: `📡 HTTP Headers: ${args.url}\n\n${info.slice(0, 2000)}`, desc }
+            }
+            case 'gt_server_check': {
+                const d = await gtServerCheck(args.url)
+                if (!d) return { success: false, output: `Server check failed: ${args.url}`, desc }
+                const info = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+                return { success: true, output: `🔍 Server: ${args.url}\n${info.slice(0, 1000)}`, desc }
+            }
+            case 'gt_encode_bin': {
+                const r = await gtEncodeBinary(args.text)
+                if (!r) return { success: false, output: 'Binary encode failed', desc }
+                return { success: true, output: `Binary: ${String(r).slice(0, 2000)}`, desc }
+            }
+            case 'gt_decode_bin': {
+                const r = await gtDecodeBinary(args.binary)
+                if (!r) return { success: false, output: 'Binary decode failed', desc }
+                return { success: true, output: `Decoded: ${String(r).slice(0, 2000)}`, desc }
+            }
+            case 'gt_encode_b64': {
+                const r = await gtEncodeBase64(args.text)
+                if (!r) return { success: false, output: 'Base64 encode failed', desc }
+                return { success: true, output: `Base64: ${String(r).slice(0, 2000)}`, desc }
+            }
+            case 'gt_decode_b64': {
+                const r = await gtDecodeBase64(args.b64)
+                if (!r) return { success: false, output: 'Base64 decode failed', desc }
+                return { success: true, output: `Decoded: ${String(r).slice(0, 2000)}`, desc }
+            }
+            case 'gt_fancy_text': {
+                const r = await gtFancyText(args.text)
+                if (!r) return { success: false, output: 'Fancy text failed', desc }
+                const styles = typeof r === 'object' ? Object.values(r).filter(v => typeof v === 'string').join('\n') : String(r)
+                return { success: true, output: `✨ Fancy Text: "${args.text}"\n\n${styles.slice(0, 2000)}`, desc }
+            }
+            case 'gt_encrypt_code': {
+                const r = await gtEncryptCode(args.code)
+                if (!r) return { success: false, output: 'Code encrypt failed', desc }
+                return { success: true, output: `🔒 Encrypted:\n${String(r).slice(0, 2000)}`, desc }
+            }
+            case 'gt_google_img': {
+                const results = await gtGoogleImages(args.query)
+                if (!results?.length) return { success: false, output: `No Google images: ${args.query}`, desc }
+                const arr = Array.isArray(results) ? results.slice(0, 3) : [results]
+                const lines = arr.map((img, i) => `${i+1}. ${img?.url || img?.image || JSON.stringify(img).slice(0,80)}`)
+                return { success: true, output: `🖼 Google Images: "${args.query}"\n${lines.join('\n')}`, desc }
+            }
+            case 'gt_unsplash': {
+                const results = await gtUnsplash(args.query)
+                if (!results?.length) return { success: false, output: `No Unsplash photos: ${args.query}`, desc }
+                const arr = Array.isArray(results) ? results.slice(0, 3) : [results]
+                const lines = arr.map((p, i) => `${i+1}. ${p?.urls?.regular || p?.url || JSON.stringify(p).slice(0,80)}`)
+                return { success: true, output: `📷 Unsplash: "${args.query}"\n${lines.join('\n')}`, desc }
+            }
+            case 'gt_tiktok_search': {
+                const results = await gtTikTokSearch(args.query)
+                if (!results) return { success: false, output: `No TikTok results: ${args.query}`, desc }
+                const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+                const lines = arr.map((v, i) => `${i+1}. ${v?.title || v?.desc || '?'} — @${v?.author?.nickname || '?'}`)
+                return { success: true, output: `🎵 TikTok: "${args.query}"\n${lines.join('\n')}`, desc }
+            }
+            case 'gt_lyrics_v2': {
+                const d = await gtLyricsV2(args.query)
+                if (!d) return { success: false, output: `No lyrics v2: ${args.query}`, desc }
+                const lyr = d.lyrics || (typeof d === 'string' ? d : JSON.stringify(d))
+                return { success: true, output: `🎵 ${d.title || args.query}\n\n${lyr.slice(0, 2000)}`, desc }
+            }
+            case 'gt_spotify_lyrics': {
+                const d = await gtSpotifyLyrics(args.query)
+                if (!d) return { success: false, output: `No Spotify lyrics: ${args.query}`, desc }
+                const lyr = typeof d === 'string' ? d : (d.lyrics || JSON.stringify(d))
+                return { success: true, output: `🎵 Spotify Lyrics: ${args.query}\n\n${lyr.slice(0, 2000)}`, desc }
+            }
+            case 'gt_spotify_playlist': {
+                const results = await gtSpotifyPlaylist(args.query)
+                if (!results) return { success: false, output: `No playlists: ${args.query}`, desc }
+                const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+                const lines = arr.map((p, i) => `${i+1}. ${p.name || p.title || '?'}${p.tracks ? ` (${p.tracks} tracks)` : ''}`)
+                return { success: true, output: `🎵 Spotify Playlists: "${args.query}"\n${lines.join('\n')}`, desc }
+            }
+            case 'gt_soundcloud': {
+                const results = await gtSoundCloud(args.query)
+                if (!results) return { success: false, output: `No SoundCloud: ${args.query}`, desc }
+                const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+                const lines = arr.map((t, i) => `${i+1}. ${t.title || '?'} — ${t.user?.username || t.artist || ''}`)
+                return { success: true, output: `🎵 SoundCloud: "${args.query}"\n${lines.join('\n')}`, desc }
+            }
+            case 'gt_hearthis': {
+                const results = await gtHearthis(args.query)
+                if (!results) return { success: false, output: `No HearThis: ${args.query}`, desc }
+                const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+                const lines = arr.map((t, i) => `${i+1}. ${t.title || '?'} — ${t.user?.username || ''}`)
+                return { success: true, output: `🎵 HearThis: "${args.query}"\n${lines.join('\n')}`, desc }
+            }
+            case 'gt_chord': {
+                const d = await gtChord(args.query)
+                if (!d) return { success: false, output: `No chords: ${args.query}`, desc }
+                const info = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+                return { success: true, output: `🎸 Chords: ${args.query}\n\n${info.slice(0, 2000)}`, desc }
+            }
+            case 'gt_define': {
+                const d = await gtDefine(args.term)
+                if (!d) return { success: false, output: `No definition: ${args.term}`, desc }
+                const info = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+                return { success: true, output: `📖 ${args.term}: ${info.slice(0, 1500)}`, desc }
+            }
+            case 'gt_wikimedia': {
+                const d = await gtWikimedia(args.title)
+                if (!d) return { success: false, output: `No Wikimedia: ${args.title}`, desc }
+                const info = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+                return { success: true, output: `🌐 Wikimedia: ${args.title}\n\n${info.slice(0, 2000)}`, desc }
+            }
+            case 'gt_playstore': {
+                const results = await gtPlaystore(args.query)
+                if (!results) return { success: false, output: `No Play Store: ${args.query}`, desc }
+                const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+                const lines = arr.map((a, i) => `${i+1}. ${a.title || a.name || '?'}${a.developer ? ` by ${a.developer}` : ''}${a.score ? ` ⭐${a.score}` : ''}`)
+                return { success: true, output: `📱 Play Store: "${args.query}"\n${lines.join('\n')}`, desc }
+            }
+            case 'gt_happymod': {
+                const results = await gtHappyMod(args.query)
+                if (!results) return { success: false, output: `No HappyMod: ${args.query}`, desc }
+                const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+                const lines = arr.map((a, i) => `${i+1}. ${a.title || a.name || '?'}${a.version ? ` v${a.version}` : ''}`)
+                return { success: true, output: `📦 HappyMod: "${args.query}"\n${lines.join('\n')}`, desc }
+            }
+            case 'gt_apkmirror': {
+                const results = await gtApkMirror(args.query)
+                if (!results) return { success: false, output: `No APK Mirror: ${args.query}`, desc }
+                const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+                const lines = arr.map((a, i) => `${i+1}. ${a.title || a.name || '?'}`)
+                return { success: true, output: `📲 APK Mirror: "${args.query}"\n${lines.join('\n')}`, desc }
+            }
+            case 'gt_npm_search': {
+                const results = await gtNpmSearch(args.packagename)
+                if (!results) return { success: false, output: `No npm: ${args.packagename}`, desc }
+                const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+                const lines = arr.map((p, i) => `${i+1}. ${p.name || p.package?.name || '?'}${p.version ? ` v${p.version}` : ''} — ${(p.description || p.package?.description || '').slice(0, 60)}`)
+                return { success: true, output: `📦 npm: "${args.packagename}"\n${lines.join('\n')}`, desc }
+            }
+            case 'gt_wattpad': {
+                const results = await gtWattpad(args.query)
+                if (!results) return { success: false, output: `No Wattpad: ${args.query}`, desc }
+                const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+                const lines = arr.map((s, i) => `${i+1}. ${s.title || s.name || '?'} by ${s.user?.name || s.author || '?'}`)
+                return { success: true, output: `📚 Wattpad: "${args.query}"\n${lines.join('\n')}`, desc }
             }
 
             default: return { success: false, output: `Unknown action: ${action}`, desc }

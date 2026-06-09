@@ -352,6 +352,137 @@ const gtGithub = async (repo) => {
     return search?.items?.[0] || null
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  NEW — ALL WORKING GIFTED ENDPOINTS (v2)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── NETWORK TOOLS ─────────────────────────────────────────────────────────────
+const gtDnsCheck   = (domain) => gt('/api/tools/dns-check',   { domain }).then(r => r.result || r || null)
+const gtHttpHeaders= (url)    => gt('/api/tools/http-headers', { url    }).then(r => r.result || r || null)
+const gtServerCheck= (url)    => gt('/api/tools/server-check', { url    }).then(r => r.result || r || null)
+
+// ── ENCODE / DECODE ───────────────────────────────────────────────────────────
+const gtEncodeBinary = (query) => gt('/api/tools/ebinary',  { query }).then(r => r.result || null)
+const gtDecodeBinary = (query) => gt('/api/tools/dbinary',  { query }).then(r => r.result || null)
+const gtEncodeBase64 = (query) => gt('/api/tools/ebase',    { query }).then(r => r.result || null)
+const gtDecodeBase64 = (query) => gt('/api/tools/dbase',    { query }).then(r => r.result || null)
+
+// ── TEXT EFFECTS ──────────────────────────────────────────────────────────────
+const gtFancyText   = (text)  => gt('/api/tools/fancy',   { text }).then(r => r.result || null)
+const gtFancyTextV2 = (text)  => gt('/api/tools/fancyv2', { text }).then(r => r.result || null)
+const gtTtp         = (query) => gt('/api/tools/ttp',     { query }, { binary: true }).then(r => r || null)
+
+// ── EMOJI MIX ─────────────────────────────────────────────────────────────────
+const gtEmojiMix = async (emoji1, emoji2) => {
+    try {
+        const r = await require('axios').get(`${GT}/api/tools/emojimix`, {
+            params: { apikey: KEY, emoji1, emoji2 },
+            responseType: 'arraybuffer',
+            timeout: 20000
+        })
+        return Buffer.from(r.data)
+    } catch { return null }
+}
+
+// ── CODE TOOLS ────────────────────────────────────────────────────────────────
+const gtEncryptCode    = (code) => gt('/api/tools/encrypt',       { code }).then(r => r.result || null)
+const gtEncryptCodeV2  = (code) => gt('/api/tools/encryptv2',     { code }).then(r => r.result || null)
+const gtEncryptCodeV3  = (code) => gt('/api/tools/encryptv3',     { code }).then(r => r.result || null)
+const gtHtmlObfuscate  = (html) => gt('/api/tools/htmlobfuscate', { html }).then(r => r.result || null)
+const gtCarbonCode = async (code) => {
+    try {
+        const r = await require('axios').get(`${GT}/api/tools/carbon`, {
+            params: { apikey: KEY, code },
+            responseType: 'arraybuffer',
+            timeout: 30000
+        })
+        return Buffer.from(r.data)
+    } catch { return null }
+}
+
+// ── DOCUMENT / IMAGE GENERATION ──────────────────────────────────────────────
+const gtToPdf = async (query) => {
+    try {
+        const r = await require('axios').get(`${GT}/api/tools/topdf`, {
+            params: { apikey: KEY, query },
+            responseType: 'arraybuffer',
+            timeout: 20000
+        })
+        return Buffer.from(r.data)
+    } catch { return null }
+}
+
+const gtQuoteCard = async (text, name, avatar) => {
+    try {
+        const r = await require('axios').get(`${GT}/api/tools/quote`, {
+            params: { apikey: KEY, text, name, avatar },
+            responseType: 'arraybuffer',
+            timeout: 20000
+        })
+        return Buffer.from(r.data)
+    } catch { return null }
+}
+
+const gtCanvasCard = async (title, type, text, watermark) => {
+    try {
+        const r = await require('axios').get(`${GT}/api/tools/canvas`, {
+            params: { apikey: KEY, title, type, text, watermark },
+            responseType: 'arraybuffer',
+            timeout: 20000
+        })
+        return Buffer.from(r.data)
+    } catch { return null }
+}
+
+// ── SCREENSHOTS (extra viewports) ────────────────────────────────────────────
+const gtSsPhone = async (url) => {
+    try {
+        const r = await require('axios').get(`${GT}/api/tools/ssphone`, { params: { apikey: KEY, url }, responseType: 'arraybuffer', timeout: 30000 })
+        return Buffer.from(r.data)
+    } catch { return null }
+}
+const gtSsTab = async (url) => {
+    try {
+        const r = await require('axios').get(`${GT}/api/tools/sstab`, { params: { apikey: KEY, url }, responseType: 'arraybuffer', timeout: 30000 })
+        return Buffer.from(r.data)
+    } catch { return null }
+}
+const gtSsPc = async (url) => {
+    try {
+        const r = await require('axios').get(`${GT}/api/tools/sspc`, { params: { apikey: KEY, url }, responseType: 'arraybuffer', timeout: 30000 })
+        return Buffer.from(r.data)
+    } catch { return null }
+}
+
+// ── WEB2ZIP ───────────────────────────────────────────────────────────────────
+const gtWeb2Zip = (url) => gt('/api/tools/web2zip', { url }).then(r => r.result || r.url || r.download_url || null)
+
+// ── IMAGE SEARCH ──────────────────────────────────────────────────────────────
+const gtGoogleImages = (query) => gt('/api/search/googleimage', { query }).then(r => r.results || r.result || null)
+const gtUnsplash     = (query) => gt('/api/search/unsplash',    { query }).then(r => r.results || r.result || null)
+
+// ── CONTENT SEARCH ────────────────────────────────────────────────────────────
+const gtTikTokSearch   = (query) => gt('/api/search/tiktoksearch',  { query  }).then(r => r.results || r.result || null)
+const gtStickerSearch  = (query) => gt('/api/search/stickersearch', { query  }).then(r => r.results || r.result || null)
+const gtLyricsV2       = (query) => gt('/api/search/lyricsv2',      { query  }).then(r => r.result || null)
+const gtSpotifyLyrics  = (query) => gt('/api/search/spotifylyrics', { query  }).then(r => r.result || null)
+const gtSpotifyPlaylist= (query) => gt('/api/search/spotifyplaylist',{ query  }).then(r => r.result || r.results || null)
+const gtSoundCloud     = (query) => gt('/api/search/soundcloud',    { query  }).then(r => r.result || r.results || null)
+const gtHearthis       = (query) => gt('/api/search/hearthis',      { query  }).then(r => r.result || r.results || null)
+const gtHearthisSet    = (url)   => gt('/api/search/hearthisset',   { url    }).then(r => r.result || null)
+const gtChord          = (query) => gt('/api/search/chord',         { query  }).then(r => r.result || null)
+
+// ── KNOWLEDGE SEARCH ──────────────────────────────────────────────────────────
+const gtDefine     = (term)  => gt('/api/search/define',    { term  }).then(r => r.result || null)
+const gtWikimedia  = (title) => gt('/api/search/wikimedia', { title }).then(r => r.result || null)
+
+// ── APP / PACKAGE SEARCH ──────────────────────────────────────────────────────
+const gtPlaystore  = (query)       => gt('/api/search/playstore',  { query       }).then(r => r.result || r.results || null)
+const gtHappyMod   = (query)       => gt('/api/search/happymod',   { query       }).then(r => r.result || r.results || null)
+const gtApkMirror  = (query)       => gt('/api/search/apkmirror',  { query       }).then(r => r.result || r.results || null)
+const gtNpmSearch  = (packagename) => gt('/api/search/npmsearch',  { packagename }).then(r => r.result || r.results || null)
+const gtWattpad    = (query)       => gt('/api/search/wattpad',    { query       }).then(r => r.result || r.results || null)
+
 // Intent classifier for agent
 const ACTIONS_PROMPT = `You are an intent classifier for a WhatsApp AI bot called Bera AI.
 Given the user message, respond ONLY with a valid JSON object (no markdown, no explanation).
@@ -422,8 +553,30 @@ module.exports = {
     gtTranscript, gtWhois,
     // Football
     gtLiveScore, gtPredictions, gtStandings, gtFootballNews,
-    // NEW unique features
+    // Unique features
     gtCrypto, gtTranslate, gtMovie, gtAnime, gtIpInfo, gtStock, gtCurrency, gtGithub,
+    // NEW — Network Tools
+    gtDnsCheck, gtHttpHeaders, gtServerCheck,
+    // NEW — Encode/Decode
+    gtEncodeBinary, gtDecodeBinary, gtEncodeBase64, gtDecodeBase64,
+    // NEW — Text Effects
+    gtFancyText, gtFancyTextV2, gtTtp,
+    // NEW — Emoji / Code
+    gtEmojiMix, gtEncryptCode, gtEncryptCodeV2, gtEncryptCodeV3, gtHtmlObfuscate, gtCarbonCode,
+    // NEW — Document/Image gen
+    gtToPdf, gtQuoteCard, gtCanvasCard,
+    // NEW — Screenshots
+    gtSsPhone, gtSsTab, gtSsPc,
+    // NEW — Web
+    gtWeb2Zip,
+    // NEW — Image/Content Search
+    gtGoogleImages, gtUnsplash, gtTikTokSearch, gtStickerSearch,
+    // NEW — Music/Lyrics
+    gtLyricsV2, gtSpotifyLyrics, gtSpotifyPlaylist, gtSoundCloud, gtHearthis, gtHearthisSet, gtChord,
+    // NEW — Knowledge
+    gtDefine, gtWikimedia,
+    // NEW — App/Package Search
+    gtPlaystore, gtHappyMod, gtApkMirror, gtNpmSearch, gtWattpad,
     // Agent
     gtIntent,
     // Constants

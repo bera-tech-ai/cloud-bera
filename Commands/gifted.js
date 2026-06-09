@@ -8,6 +8,16 @@ const {
     gtTranscript, gtWhois, gtImage, gtChat, gtVision,
     gtLiveScore, gtPredictions, gtStandings, gtFootballNews,
     gtCrypto, gtTranslate, gtMovie, gtAnime, gtIpInfo, gtStock, gtCurrency, gtGithub,
+    // NEW
+    gtDnsCheck, gtHttpHeaders, gtServerCheck,
+    gtEncodeBinary, gtDecodeBinary, gtEncodeBase64, gtDecodeBase64,
+    gtFancyText, gtFancyTextV2, gtTtp,
+    gtEmojiMix, gtEncryptCode, gtEncryptCodeV2, gtEncryptCodeV3, gtHtmlObfuscate, gtCarbonCode,
+    gtToPdf, gtQuoteCard, gtCanvasCard,
+    gtSsPhone, gtSsTab, gtSsPc, gtWeb2Zip,
+    gtGoogleImages, gtUnsplash, gtTikTokSearch, gtStickerSearch,
+    gtLyricsV2, gtSpotifyLyrics, gtSpotifyPlaylist, gtSoundCloud, gtHearthis, gtHearthisSet, gtChord,
+    gtDefine, gtWikimedia, gtPlaystore, gtHappyMod, gtApkMirror, gtNpmSearch, gtWattpad,
     GT, KEY
 } = require('../Library/actions/giftedapi')
 
@@ -634,6 +644,495 @@ const handle = async (m, { conn, command, args, reply, prefix, text }) => {
         const imgUrl = img.url || img.imageUrl || img.image || img.full || img.src
         return conn.sendMessage(m.chat, { image: { url: imgUrl }, caption: `🖼 *${text}*` }, { quoted: m })
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  NEW GIFTED API COMMANDS — All 55 Working Endpoints
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // ── DNS CHECK ─────────────────────────────────────────────────────────────
+    if (['dnscheck','dns','nslookup'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}dns <domain>*\n_Example: ${prefix}dns google.com_`)
+        await react(conn, m, '🌐')
+        const d = await gtDnsCheck(text.trim())
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ DNS lookup failed for: *${text}*`) }
+        await react(conn, m, '✅')
+        const info = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+        return reply(`🌐 *DNS: ${text}*\n${'─'.repeat(28)}\n\`\`\`\n${info.slice(0, 1500)}\n\`\`\``)
+    }
+
+    // ── HTTP HEADERS ──────────────────────────────────────────────────────────
+    if (['httpheaders','headers','hheaders'].includes(command)) {
+        const url = args[0]
+        if (!url?.startsWith('http')) return reply(`Usage: *${prefix}headers <URL>*`)
+        await react(conn, m, '📡')
+        const d = await gtHttpHeaders(url)
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ Could not fetch headers for: *${url}*`) }
+        await react(conn, m, '✅')
+        const info = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+        return reply(`📡 *HTTP Headers: ${url}*\n${'─'.repeat(28)}\n\`\`\`\n${info.slice(0, 2000)}\n\`\`\``)
+    }
+
+    // ── SERVER CHECK / IS UP ──────────────────────────────────────────────────
+    if (['servercheck','isup','upcheck','checksite'].includes(command)) {
+        const url = args[0]
+        if (!url?.startsWith('http')) return reply(`Usage: *${prefix}isup <URL>*`)
+        await react(conn, m, '🔍')
+        const d = await gtServerCheck(url)
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ Could not check server: *${url}*`) }
+        await react(conn, m, '✅')
+        const info = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+        return reply(`🔍 *Server Check: ${url}*\n${'─'.repeat(28)}\n${info.slice(0, 1000)}`)
+    }
+
+    // ── ENCODE BINARY ─────────────────────────────────────────────────────────
+    if (['ebinary','tobinary','binenc'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}tobinary <text>*`)
+        await react(conn, m, '🔢')
+        const r = await gtEncodeBinary(text)
+        if (!r) { await react(conn, m, '❌'); return reply('❌ Encoding failed.') }
+        await react(conn, m, '✅')
+        return reply(`🔢 *Binary Encoded:*\n\n\`\`\`${String(r).slice(0, 3000)}\`\`\``)
+    }
+
+    // ── DECODE BINARY ─────────────────────────────────────────────────────────
+    if (['dbinary','frombinary','bindec'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}frombinary <binary>*`)
+        await react(conn, m, '🔢')
+        const r = await gtDecodeBinary(text)
+        if (!r) { await react(conn, m, '❌'); return reply('❌ Decoding failed.') }
+        await react(conn, m, '✅')
+        return reply(`🔤 *Binary Decoded:*\n\n${String(r).slice(0, 2000)}`)
+    }
+
+    // ── BASE64 ENCODE ─────────────────────────────────────────────────────────
+    if (['ebase64','b64enc','base64enc'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}b64enc <text>*`)
+        await react(conn, m, '🔐')
+        const r = await gtEncodeBase64(text)
+        if (!r) { await react(conn, m, '❌'); return reply('❌ Encoding failed.') }
+        await react(conn, m, '✅')
+        return reply(`🔐 *Base64 Encoded:*\n\n\`\`\`${String(r).slice(0, 3000)}\`\`\``)
+    }
+
+    // ── BASE64 DECODE ─────────────────────────────────────────────────────────
+    if (['dbase64','b64dec','base64dec'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}b64dec <base64>*`)
+        await react(conn, m, '🔓')
+        const r = await gtDecodeBase64(text)
+        if (!r) { await react(conn, m, '❌'); return reply('❌ Decoding failed.') }
+        await react(conn, m, '✅')
+        return reply(`🔓 *Base64 Decoded:*\n\n${String(r).slice(0, 2000)}`)
+    }
+
+    // ── FANCY TEXT ────────────────────────────────────────────────────────────
+    if (['fancy','fancytext','stylize'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}fancy <text>*`)
+        await react(conn, m, '✨')
+        const r = await gtFancyText(text)
+        if (!r) { await react(conn, m, '❌'); return reply('❌ Fancy text failed.') }
+        await react(conn, m, '✅')
+        const styles = typeof r === 'object' ? Object.values(r).filter(v => typeof v === 'string').join('\n') : String(r)
+        return reply(`✨ *Fancy Text: "${text}"*\n${'─'.repeat(28)}\n\n${styles.slice(0, 3000)}`)
+    }
+
+    // ── FANCY TEXT V2 ─────────────────────────────────────────────────────────
+    if (['fancyv2','fancier','stylize2'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}fancyv2 <text>*`)
+        await react(conn, m, '✨')
+        const r = await gtFancyTextV2(text)
+        if (!r) { await react(conn, m, '❌'); return reply('❌ Fancy text v2 failed.') }
+        await react(conn, m, '✅')
+        const styles = typeof r === 'object' ? Object.values(r).filter(v => typeof v === 'string').join('\n') : String(r)
+        return reply(`✨ *Fancy Text v2: "${text}"*\n${'─'.repeat(28)}\n\n${styles.slice(0, 3000)}`)
+    }
+
+    // ── TEXT TO PICTURE ───────────────────────────────────────────────────────
+    if (['ttp','textpic','textimg'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}ttp <text>*`)
+        await react(conn, m, '🎨')
+        const buf = await gtTtp(text)
+        if (!buf || !Buffer.isBuffer(buf)) { await react(conn, m, '❌'); return reply('❌ Text-to-picture failed.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { image: buf, caption: `🎨 *${text}*` }, { quoted: m })
+    }
+
+    // ── EMOJI MIX ─────────────────────────────────────────────────────────────
+    if (['emojimix','mixemoji','emojifuse'].includes(command)) {
+        const e1 = args[0], e2 = args[1]
+        if (!e1 || !e2) return reply(`Usage: *${prefix}emojimix <emoji1> <emoji2>*\n_Example: ${prefix}emojimix 😂 🙄_`)
+        await react(conn, m, '😊')
+        const buf = await gtEmojiMix(e1, e2)
+        if (!buf) { await react(conn, m, '❌'); return reply('❌ Emoji mix failed.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { image: buf, caption: `${e1} + ${e2} = ✨` }, { quoted: m })
+    }
+
+    // ── CODE ENCRYPT ──────────────────────────────────────────────────────────
+    if (['encrypt','encryptcode','codeenc'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}encrypt <code or text>*`)
+        await react(conn, m, '🔒')
+        const r = await gtEncryptCode(text)
+        if (!r) { await react(conn, m, '❌'); return reply('❌ Encryption failed.') }
+        await react(conn, m, '✅')
+        return reply(`🔒 *Encrypted Code:*\n\n\`\`\`${String(r).slice(0, 3000)}\`\`\``)
+    }
+
+    // ── HTML OBFUSCATE ────────────────────────────────────────────────────────
+    if (['obfuscatehtml','htmlobfuscate','htmlenc'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}obfuscatehtml <HTML code>*`)
+        await react(conn, m, '🔒')
+        const r = await gtHtmlObfuscate(text)
+        if (!r) { await react(conn, m, '❌'); return reply('❌ HTML obfuscation failed.') }
+        await react(conn, m, '✅')
+        return reply(`🔒 *Obfuscated HTML:*\n\n\`\`\`${String(r).slice(0, 3000)}\`\`\``)
+    }
+
+    // ── CODE TO IMAGE (CARBON) ────────────────────────────────────────────────
+    if (['carbon','codeimg','codeshot'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}carbon <code>*\n_Example: ${prefix}carbon console.log("hello")_`)
+        await react(conn, m, '📸')
+        const buf = await gtCarbonCode(text)
+        if (!buf) { await react(conn, m, '❌'); return reply('❌ Code image failed.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { image: buf, caption: '📸 *Code Image (Carbon)*' }, { quoted: m })
+    }
+
+    // ── TEXT TO PDF ───────────────────────────────────────────────────────────
+    if (['topdf','makepdf','txt2pdf'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}topdf <text>*`)
+        await react(conn, m, '📄')
+        const buf = await gtToPdf(text)
+        if (!buf) { await react(conn, m, '❌'); return reply('❌ PDF generation failed.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { document: buf, mimetype: 'application/pdf', fileName: 'document.pdf', caption: '📄 *Generated PDF*' }, { quoted: m })
+    }
+
+    // ── QUOTE CARD ────────────────────────────────────────────────────────────
+    if (['quotecard','qcard','makecard'].includes(command)) {
+        const parts = text?.split('|').map(s => s.trim())
+        const qtext = parts?.[0], qname = parts?.[1] || 'Bera AI', qavatar = parts?.[2] || 'https://files.gifted.co.ke/image/yYmygifted2.png'
+        if (!qtext) return reply(`Usage: *${prefix}quotecard <text> | <name> | <avatar URL>*\n_Example: ${prefix}quotecard Live and let live | Bera AI_`)
+        await react(conn, m, '🎴')
+        const buf = await gtQuoteCard(qtext, qname, qavatar)
+        if (!buf) { await react(conn, m, '❌'); return reply('❌ Quote card generation failed.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { image: buf, caption: `🎴 *${qtext}*\n— ${qname}` }, { quoted: m })
+    }
+
+    // ── CANVAS CARD ───────────────────────────────────────────────────────────
+    if (['canvascard','cardgen','spotifycard'].includes(command)) {
+        const parts = text?.split('|').map(s => s.trim())
+        const ctitle = parts?.[0], ctype = parts?.[1] || 'spotify', ctext = parts?.[2] || '', cwm = parts?.[3] || 'BERA'
+        if (!ctitle) return reply(`Usage: *${prefix}canvascard <title> | <type> | <text> | <watermark>*\n_Example: ${prefix}canvascard Blinding Lights | spotify | The Weeknd | GIFTED_`)
+        await react(conn, m, '🎨')
+        const buf = await gtCanvasCard(ctitle, ctype, ctext, cwm)
+        if (!buf) { await react(conn, m, '❌'); return reply('❌ Canvas card failed.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { image: buf, caption: `🎨 *${ctitle}*` }, { quoted: m })
+    }
+
+    // ── SCREENSHOT — PHONE ────────────────────────────────────────────────────
+    if (['ssphone','phoness','mobiless'].includes(command)) {
+        const url = args[0]
+        if (!url?.startsWith('http')) return reply(`Usage: *${prefix}ssphone <URL>*`)
+        await react(conn, m, '📱')
+        const buf = await gtSsPhone(url)
+        if (!buf) { await react(conn, m, '❌'); return reply('❌ Phone screenshot failed.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { image: buf, caption: `📱 *Phone view: ${url}*` }, { quoted: m })
+    }
+
+    // ── SCREENSHOT — TABLET ───────────────────────────────────────────────────
+    if (['sstab','tabss','tabletss'].includes(command)) {
+        const url = args[0]
+        if (!url?.startsWith('http')) return reply(`Usage: *${prefix}sstab <URL>*`)
+        await react(conn, m, '📱')
+        const buf = await gtSsTab(url)
+        if (!buf) { await react(conn, m, '❌'); return reply('❌ Tablet screenshot failed.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { image: buf, caption: `📱 *Tablet view: ${url}*` }, { quoted: m })
+    }
+
+    // ── SCREENSHOT — DESKTOP ──────────────────────────────────────────────────
+    if (['sspc','desktopss','pcss'].includes(command)) {
+        const url = args[0]
+        if (!url?.startsWith('http')) return reply(`Usage: *${prefix}sspc <URL>*`)
+        await react(conn, m, '🖥️')
+        const buf = await gtSsPc(url)
+        if (!buf) { await react(conn, m, '❌'); return reply('❌ Desktop screenshot failed.') }
+        await react(conn, m, '✅')
+        return conn.sendMessage(m.chat, { image: buf, caption: `🖥️ *Desktop view: ${url}*` }, { quoted: m })
+    }
+
+    // ── WEB TO ZIP ────────────────────────────────────────────────────────────
+    if (['web2zip','websitezip','dlsite'].includes(command)) {
+        const url = args[0]
+        if (!url?.startsWith('http')) return reply(`Usage: *${prefix}web2zip <URL>*`)
+        await react(conn, m, '📦')
+        const result = await gtWeb2Zip(url)
+        if (!result) { await react(conn, m, '❌'); return reply('❌ Failed to download website.') }
+        await react(conn, m, '✅')
+        const dlUrl = typeof result === 'string' ? result : result?.url || result?.download_url || JSON.stringify(result)
+        return reply(`📦 *Website Download*\n\n🔗 ${dlUrl}`)
+    }
+
+    // ── GOOGLE IMAGES ─────────────────────────────────────────────────────────
+    if (['googleimages','gimages','gimg'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}gimages <query>*`)
+        await react(conn, m, '🖼')
+        const results = await gtGoogleImages(text)
+        if (!results?.length) { await react(conn, m, '❌'); return reply(`❌ No images found for: *${text}*`) }
+        await react(conn, m, '✅')
+        const img = Array.isArray(results) ? results[0] : results
+        const imgUrl = img?.url || img?.image || img?.imageUrl || img?.src || (typeof img === 'string' ? img : null)
+        if (!imgUrl) return reply(`🖼 Found images for: *${text}*\n${JSON.stringify(results[0]).slice(0, 300)}`)
+        return conn.sendMessage(m.chat, { image: { url: imgUrl }, caption: `🖼 *Google Image: ${text}*` }, { quoted: m })
+    }
+
+    // ── UNSPLASH ──────────────────────────────────────────────────────────────
+    if (['unsplash','hqphoto','stockphoto'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}unsplash <query>*`)
+        await react(conn, m, '📷')
+        const results = await gtUnsplash(text)
+        if (!results?.length) { await react(conn, m, '❌'); return reply(`❌ No Unsplash photos for: *${text}*`) }
+        await react(conn, m, '✅')
+        const r = Array.isArray(results) ? results[Math.floor(Math.random() * Math.min(results.length, 5))] : results
+        const imgUrl = r?.urls?.regular || r?.url || r?.image || (typeof r === 'string' ? r : null)
+        if (!imgUrl) return reply(`📷 Unsplash results for: *${text}*`)
+        return conn.sendMessage(m.chat, { image: { url: imgUrl }, caption: `📷 *${text}*${r?.user?.name ? `\n👤 ${r.user.name}` : ''}` }, { quoted: m })
+    }
+
+    // ── TIKTOK SEARCH ─────────────────────────────────────────────────────────
+    if (['tiktoksearch','ttsearch','tiktokfind'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}ttsearch <username or keyword>*`)
+        await react(conn, m, '🎵')
+        const results = await gtTikTokSearch(text)
+        if (!results) { await react(conn, m, '❌'); return reply(`❌ No TikTok results for: *${text}*`) }
+        await react(conn, m, '✅')
+        const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+        const lines = arr.map((v, i) => {
+            const title = v.title || v.desc || v.description || 'TikTok Video'
+            const author = v.author?.nickname || v.author || v.username || ''
+            const url = v.url || v.share_url || ''
+            return `*${i + 1}. ${title.slice(0, 60)}*${author ? `\n   👤 @${author}` : ''}${url ? `\n   🔗 ${url}` : ''}`
+        })
+        return reply(`🎵 *TikTok Search: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+    }
+
+    // ── STICKER SEARCH ────────────────────────────────────────────────────────
+    if (['stickersearch','stickerfind','findsticker'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}stickerfind <keyword>*`)
+        await react(conn, m, '🎭')
+        const results = await gtStickerSearch(text)
+        if (!results) { await react(conn, m, '❌'); return reply(`❌ No stickers found for: *${text}*`) }
+        await react(conn, m, '✅')
+        const arr = Array.isArray(results) ? results : [results]
+        const first = arr[0]
+        const imgUrl = first?.url || first?.gif || first?.webp || (typeof first === 'string' ? first : null)
+        if (imgUrl) return conn.sendMessage(m.chat, { image: { url: imgUrl }, caption: `🎭 *Sticker: ${text}*` }, { quoted: m })
+        return reply(`🎭 *Stickers for "${text}":*\n${JSON.stringify(arr[0]).slice(0, 300)}`)
+    }
+
+    // ── LYRICS V2 ─────────────────────────────────────────────────────────────
+    if (['lyricsv2','altlyrics','lyrics2'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}lyricsv2 <song name>*`)
+        await react(conn, m, '🎵')
+        const d = await gtLyricsV2(text)
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ No lyrics found for: *${text}*`) }
+        await react(conn, m, '✅')
+        const lyricsText = d.lyrics || (typeof d === 'string' ? d : JSON.stringify(d))
+        const header = `🎵 *${d.title || text}*${d.artist ? ` — ${d.artist}` : ''}\n${'─'.repeat(28)}\n\n`
+        return reply((header + lyricsText).slice(0, 4000))
+    }
+
+    // ── SPOTIFY LYRICS ────────────────────────────────────────────────────────
+    if (['spotifylyrics','splyrics','splyr'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}splyrics <song name>*`)
+        await react(conn, m, '🎵')
+        const d = await gtSpotifyLyrics(text)
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ No Spotify lyrics for: *${text}*`) }
+        await react(conn, m, '✅')
+        const lyricsText = typeof d === 'string' ? d : (d.lyrics || d.text || JSON.stringify(d))
+        return reply(`🎵 *Spotify Lyrics: ${text}*\n${'─'.repeat(28)}\n\n${lyricsText.slice(0, 3500)}`)
+    }
+
+    // ── SPOTIFY PLAYLIST SEARCH ───────────────────────────────────────────────
+    if (['spotifyplaylist','spplaylist','splists'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}spplaylist <artist or playlist name>*`)
+        await react(conn, m, '🎵')
+        const results = await gtSpotifyPlaylist(text)
+        if (!results) { await react(conn, m, '❌'); return reply(`❌ No playlists found for: *${text}*`) }
+        await react(conn, m, '✅')
+        const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+        const lines = arr.map((p, i) => `*${i + 1}. ${p.name || p.title || 'Playlist'}*${p.tracks ? `\n   🎵 ${p.tracks} tracks` : ''}${p.url ? `\n   🔗 ${p.url}` : ''}`)
+        return reply(`🎵 *Spotify Playlists: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+    }
+
+    // ── SOUNDCLOUD SEARCH ─────────────────────────────────────────────────────
+    if (['soundcloud','scmusic','scsearch'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}soundcloud <song or artist>*`)
+        await react(conn, m, '🎵')
+        const results = await gtSoundCloud(text)
+        if (!results) { await react(conn, m, '❌'); return reply(`❌ No SoundCloud results for: *${text}*`) }
+        await react(conn, m, '✅')
+        const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+        const lines = arr.map((t, i) => {
+            const title = t.title || t.name || '?'
+            const artist = t.user?.username || t.artist || ''
+            const url = t.permalink_url || t.url || ''
+            return `*${i + 1}. ${title}*${artist ? `\n   👤 ${artist}` : ''}${url ? `\n   🔗 ${url}` : ''}`
+        })
+        return reply(`🎵 *SoundCloud: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+    }
+
+    // ── HEARTHIS SEARCH ───────────────────────────────────────────────────────
+    if (['hearthis','htsearch','htsong'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}hearthis <artist or song>*`)
+        await react(conn, m, '🎵')
+        const results = await gtHearthis(text)
+        if (!results) { await react(conn, m, '❌'); return reply(`❌ No HearThis results for: *${text}*`) }
+        await react(conn, m, '✅')
+        const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+        const lines = arr.map((t, i) => {
+            const title = t.title || t.name || '?'
+            const artist = t.user?.username || t.artist || ''
+            const url = t.permalink || t.url || ''
+            return `*${i + 1}. ${title}*${artist ? `\n   👤 ${artist}` : ''}${url ? `\n   🔗 ${url}` : ''}`
+        })
+        return reply(`🎵 *HearThis: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+    }
+
+    // ── HEARTHIS SET ──────────────────────────────────────────────────────────
+    if (['hearthisset','htset','htplaylist'].includes(command)) {
+        const url = args[0]
+        if (!url?.startsWith('http')) return reply(`Usage: *${prefix}htset <hearthis.at set URL>*`)
+        await react(conn, m, '🎵')
+        const d = await gtHearthisSet(url)
+        if (!d) { await react(conn, m, '❌'); return reply('❌ Could not fetch HearThis set.') }
+        await react(conn, m, '✅')
+        const info = typeof d === 'object' ? JSON.stringify(d, null, 2).slice(0, 1500) : String(d).slice(0, 1500)
+        return reply(`🎵 *HearThis Set*\n${'─'.repeat(28)}\n${info}`)
+    }
+
+    // ── CHORD SEARCH ──────────────────────────────────────────────────────────
+    if (['chord','chords','guitarchords'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}chord <song name>*`)
+        await react(conn, m, '🎸')
+        const d = await gtChord(text)
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ No chords found for: *${text}*`) }
+        await react(conn, m, '✅')
+        const chordText = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+        return reply(`🎸 *Chords: ${text}*\n${'─'.repeat(28)}\n\n${chordText.slice(0, 3000)}`)
+    }
+
+    // ── DEFINE (GIFTED endpoint) ───────────────────────────────────────────────
+    if (['define2','gtdefine','termdef'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}define2 <term>*`)
+        await react(conn, m, '📖')
+        const d = await gtDefine(text.trim())
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ No definition found for: *${text}*`) }
+        await react(conn, m, '✅')
+        const defText = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+        return reply(`📖 *Definition: ${text}*\n${'─'.repeat(28)}\n\n${defText.slice(0, 2000)}`)
+    }
+
+    // ── WIKIMEDIA ─────────────────────────────────────────────────────────────
+    if (['wikimedia','wkmedia','wmedia'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}wikimedia <person or topic>*`)
+        await react(conn, m, '🌐')
+        const d = await gtWikimedia(text)
+        if (!d) { await react(conn, m, '❌'); return reply(`❌ Nothing found on Wikimedia for: *${text}*`) }
+        await react(conn, m, '✅')
+        const info = typeof d === 'string' ? d : JSON.stringify(d, null, 2)
+        return reply(`🌐 *Wikimedia: ${text}*\n${'─'.repeat(28)}\n\n${info.slice(0, 2000)}`)
+    }
+
+    // ── PLAY STORE SEARCH ─────────────────────────────────────────────────────
+    if (['playstore','appstore','googleplay'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}playstore <app name>*`)
+        await react(conn, m, '📱')
+        const results = await gtPlaystore(text)
+        if (!results) { await react(conn, m, '❌'); return reply(`❌ No apps found for: *${text}*`) }
+        await react(conn, m, '✅')
+        const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+        const lines = arr.map((a, i) => {
+            const name = a.title || a.name || a.appName || '?'
+            const dev = a.developer || a.devName || ''
+            const rating = a.score || a.rating || ''
+            const url = a.url || a.appUrl || ''
+            return `*${i + 1}. ${name}*${dev ? `\n   👤 ${dev}` : ''}${rating ? `\n   ⭐ ${rating}` : ''}${url ? `\n   🔗 ${url}` : ''}`
+        })
+        return reply(`📱 *Play Store: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+    }
+
+    // ── HAPPYMOD SEARCH ───────────────────────────────────────────────────────
+    if (['happymod','hmod','moddedapk'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}happymod <app name>*`)
+        await react(conn, m, '📦')
+        const results = await gtHappyMod(text)
+        if (!results) { await react(conn, m, '❌'); return reply(`❌ No HappyMod results for: *${text}*`) }
+        await react(conn, m, '✅')
+        const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+        const lines = arr.map((a, i) => {
+            const name = a.title || a.name || '?'
+            const version = a.version || a.ver || ''
+            const url = a.url || a.link || ''
+            return `*${i + 1}. ${name}*${version ? ` v${version}` : ''}${url ? `\n   🔗 ${url}` : ''}`
+        })
+        return reply(`📦 *HappyMod: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+    }
+
+    // ── APK MIRROR SEARCH ─────────────────────────────────────────────────────
+    if (['apkmirror','apkm','apksearch'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}apkmirror <app name>*`)
+        await react(conn, m, '📲')
+        const results = await gtApkMirror(text)
+        if (!results) { await react(conn, m, '❌'); return reply(`❌ No APK Mirror results for: *${text}*`) }
+        await react(conn, m, '✅')
+        const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+        const lines = arr.map((a, i) => {
+            const name = a.title || a.name || '?'
+            const url = a.url || a.link || ''
+            return `*${i + 1}. ${name}*${url ? `\n   🔗 ${url}` : ''}`
+        })
+        return reply(`📲 *APK Mirror: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+    }
+
+    // ── NPM SEARCH ────────────────────────────────────────────────────────────
+    if (['npmsearch','npm','npmfind'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}npm <package name>*`)
+        await react(conn, m, '📦')
+        const results = await gtNpmSearch(text.trim().split(' ')[0])
+        if (!results) { await react(conn, m, '❌'); return reply(`❌ No npm results for: *${text}*`) }
+        await react(conn, m, '✅')
+        const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+        const lines = arr.map((p, i) => {
+            const name = p.name || p.package?.name || '?'
+            const desc = p.description || p.package?.description || ''
+            const version = p.version || p.package?.version || ''
+            const url = `https://npmjs.com/package/${name}`
+            return `*${i + 1}. ${name}*${version ? ` v${version}` : ''}\n   ${desc.slice(0, 80)}\n   🔗 ${url}`
+        })
+        return reply(`📦 *npm Search: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+    }
+
+    // ── WATTPAD SEARCH ────────────────────────────────────────────────────────
+    if (['wattpad','stories','wattfind'].includes(command)) {
+        if (!text) return reply(`Usage: *${prefix}wattpad <story or author>*`)
+        await react(conn, m, '📚')
+        const results = await gtWattpad(text)
+        if (!results) { await react(conn, m, '❌'); return reply(`❌ No Wattpad results for: *${text}*`) }
+        await react(conn, m, '✅')
+        const arr = Array.isArray(results) ? results.slice(0, 5) : [results]
+        const lines = arr.map((s, i) => {
+            const title = s.title || s.name || '?'
+            const author = s.user?.name || s.author || ''
+            const desc = s.description || s.desc || ''
+            const url = s.url || s.link || ''
+            return `*${i + 1}. ${title}*${author ? `\n   👤 ${author}` : ''}${desc ? `\n   ${desc.slice(0, 80)}` : ''}${url ? `\n   🔗 ${url}` : ''}`
+        })
+        return reply(`📚 *Wattpad: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+    }
 }
 
 handle.command = [
@@ -655,7 +1154,7 @@ handle.command = [
     'yts','ytsearch','yousearch',
     'bible','verse',
     'wallpaper','wp','wallp',
-    // NEW commands
+    // Unique commands
     'translate','tr','trans',
     'crypto','coin','btc','eth','doge','bitcoin',
     'stock','shares','equity',
@@ -681,6 +1180,57 @@ handle.command = [
     'predictions','predict','tips','betika',
     'epl','laliga','ucl','bundesliga','seriea','ligue1','euros',
     'fnews','footballnews',
+    // NEW — Network Tools
+    'dnscheck','dns','nslookup',
+    'httpheaders','headers','hheaders',
+    'servercheck','isup','upcheck','checksite',
+    // NEW — Encode/Decode
+    'ebinary','tobinary','binenc',
+    'dbinary','frombinary','bindec',
+    'ebase64','b64enc','base64enc',
+    'dbase64','b64dec','base64dec',
+    // NEW — Text Effects
+    'fancy','fancytext','stylize',
+    'fancyv2','fancier','stylize2',
+    'ttp','textpic','textimg',
+    // NEW — Emoji / Code
+    'emojimix','mixemoji','emojifuse',
+    'encrypt','encryptcode','codeenc',
+    'obfuscatehtml','htmlobfuscate','htmlenc',
+    'carbon','codeimg','codeshot',
+    // NEW — Documents / Cards
+    'topdf','makepdf','txt2pdf',
+    'quotecard','qcard','makecard',
+    'canvascard','cardgen','spotifycard',
+    // NEW — Screenshots
+    'ssphone','phoness','mobiless',
+    'sstab','tabss','tabletss',
+    'sspc','desktopss','pcss',
+    // NEW — Web
+    'web2zip','websitezip','dlsite',
+    // NEW — Image Search
+    'googleimages','gimages','gimg',
+    'unsplash','hqphoto','stockphoto',
+    // NEW — Content Search
+    'tiktoksearch','ttsearch','tiktokfind',
+    'stickersearch','stickerfind','findsticker',
+    // NEW — Music / Lyrics
+    'lyricsv2','altlyrics','lyrics2',
+    'spotifylyrics','splyrics','splyr',
+    'spotifyplaylist','spplaylist','splists',
+    'soundcloud','scmusic','scsearch',
+    'hearthis','htsearch','htsong',
+    'hearthisset','htset','htplaylist',
+    'chord','chords','guitarchords',
+    // NEW — Knowledge
+    'define2','gtdefine','termdef',
+    'wikimedia','wkmedia','wmedia',
+    // NEW — App / Package Search
+    'playstore','appstore','googleplay',
+    'happymod','hmod','moddedapk',
+    'apkmirror','apkm','apksearch',
+    'npmsearch','npm','npmfind',
+    'wattpad','stories','wattfind',
 ]
 handle.tags = ['media', 'search', 'sports', 'tools', 'info', 'ai']
 
