@@ -544,7 +544,7 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
     const t = timeoutMs || 30000
 
     if (agentMode) {
-        // ── AGENT MODE: OpenRouter PRIMARY → Bera → Overchat → Groq → Pollinations ──
+        // ── AGENT MODE: ch.at PRIMARY → OpenRouter → Bera → Overchat → Groq → Pollinations ──
 
         // 0. ch.at — PRIMARY (free, no API key, OpenAI-compatible, 16k context)
         try {
@@ -579,11 +579,11 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
             } catch {}
         }
 
-        // 1. Bera AI — secondary
+        // 2. Bera AI — tertiary
         const beraR = await callBeraAI(messages, Math.min(t, 20000))
         if (beraR && beraR.length > 2) return _sanitizeIdentity(beraR)
 
-        // 1. Gifted Overchat / DeepSeek — secondary
+        // 3. Gifted Overchat / DeepSeek — quaternary
         const oc = await callOverchatAgent(messages, Math.min(t, 25000))
         if (oc && oc.length > 2) return _sanitizeIdentity(oc)
 
@@ -608,8 +608,19 @@ const callAI = async (messages, timeoutMs, agentMode = false) => {
         return null
     }
 
-    // Normal chat mode — Groq first, then fallbacks
-    const r1 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
+    // Normal chat mode
+      // 0. ch.at — PRIMARY (free, no key, OpenAI-compatible)
+      try {
+          const _nChatR = await axios.post('https://ch.at/v1/chat/completions',
+              { messages: messages.map(msg => ({ role: msg.role, content: String(msg.content || '').slice(0, 16000) })) },
+              { headers: { 'Content-Type': 'application/json' }, timeout: Math.min(t, 25000) }
+          )
+          const _nChatTxt = _nChatR.data?.choices?.[0]?.message?.content
+          if (_nChatTxt && _nChatTxt.length > 2) return _sanitizeIdentity(_nChatTxt)
+      } catch {}
+
+      // 1. All other providers — fallback chain
+      const r1 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
     if (r1) return _sanitizeIdentity(r1)
 
     await new Promise(r => setTimeout(r, 1000))
