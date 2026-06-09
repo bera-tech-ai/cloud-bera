@@ -213,7 +213,7 @@ const callAI = async (systemPrompt, userMsg) => {
     try {
         const _chatMsgs = []
         if (systemPrompt) _chatMsgs.push({ role: 'system', content: String(systemPrompt).slice(0, 16000) })
-        _chatMsgs.push({ role: 'user', content: String(userMsg || '') })
+        _chatMsgs.push({ role: 'user', content: String(userMsg || '').slice(0, 16000) })
         const _chatR = await axios.post('https://ch.at/v1/chat/completions',
             { messages: _chatMsgs },
             { headers: { 'Content-Type': 'application/json' }, timeout: 25000 }
@@ -229,7 +229,7 @@ const callAI = async (systemPrompt, userMsg) => {
     const orR = await callDeepSeekAI(_orMsgs, 22000)
     if (orR) return { success: true, text: orR }
 
-    // 1. Bera AI — secondary
+    // 2. Bera AI — tertiary
     const _beraMsgs = []
     if (systemPrompt) _beraMsgs.push({ role: 'system', content: String(systemPrompt) })
     _beraMsgs.push({ role: 'user', content: String(userMsg || '') })
