@@ -44,27 +44,40 @@ const _sanitizeIdentity = (text) => {
   const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
   const OR_MODELS = ['openai/gpt-oss-120b:free', 'nvidia/nemotron-3-ultra-550b-a55b:free']
   const callDeepSeekAI = async (userText, systemPrompt, timeoutMs) => {
-      if (!OPENROUTER_API_KEY) return null
       const messages = []
-      if (systemPrompt) messages.push({ role: 'system', content: systemPrompt.slice(0, 4000) })
-      messages.push({ role: 'user', content: String(userText || '').slice(0, 4000) })
-      for (const model of OR_MODELS) {
-          try {
-              const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-                  model, messages, max_tokens: 1024, temperature: 0.7
-              }, {
-                  headers: {
-                      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-                      'Content-Type': 'application/json',
-                      'HTTP-Referer': 'https://bera-tech-ai.github.io',
-                      'X-Title': 'Bera AI'
-                  },
-                  timeout: timeoutMs || 20000
-              })
-              const text = res.data?.choices?.[0]?.message?.content
-              if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
-          } catch (e) {
-              if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 1000))
+      if (systemPrompt) messages.push({ role: 'system', content: systemPrompt.slice(0, 16000) })
+      messages.push({ role: 'user', content: String(userText || '').slice(0, 16000) })
+
+      // 0. ch.at — PRIMARY (free, no key, OpenAI-compatible)
+      try {
+          const chatRes = await axios.post('https://ch.at/v1/chat/completions',
+              { messages },
+              { headers: { 'Content-Type': 'application/json' }, timeout: timeoutMs || 25000 }
+          )
+          const chatTxt = chatRes.data?.choices?.[0]?.message?.content
+          if (chatTxt && typeof chatTxt === 'string' && chatTxt.trim().length > 2) return chatTxt.trim()
+      } catch {}
+
+      // 1. OpenRouter — secondary
+      if (OPENROUTER_API_KEY) {
+          for (const model of OR_MODELS) {
+              try {
+                  const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+                      model, messages, max_tokens: 1024, temperature: 0.7
+                  }, {
+                      headers: {
+                          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                          'Content-Type': 'application/json',
+                          'HTTP-Referer': 'https://bera-tech-ai.github.io',
+                          'X-Title': 'Bera AI'
+                      },
+                      timeout: timeoutMs || 20000
+                  })
+                  const text = res.data?.choices?.[0]?.message?.content
+                  if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
+              } catch (e) {
+                  if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 1000))
+              }
           }
       }
       return null
