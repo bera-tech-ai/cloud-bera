@@ -209,7 +209,20 @@ const callPollinationsAgent = async (systemPrompt, userMsg) => {
 
 // ── Primary AI caller — Overchat/DeepSeek first, then Groq, then fallbacks ────
 const callAI = async (systemPrompt, userMsg) => {
-    // 0. OpenRouter — primary (fast, follows system prompts, no truncation issues)
+    // 0. ch.at — PRIMARY (free, no API key, OpenAI-compatible, format-following)
+    try {
+        const _chatMsgs = []
+        if (systemPrompt) _chatMsgs.push({ role: 'system', content: String(systemPrompt).slice(0, 16000) })
+        _chatMsgs.push({ role: 'user', content: String(userMsg || '') })
+        const _chatR = await axios.post('https://ch.at/v1/chat/completions',
+            { messages: _chatMsgs },
+            { headers: { 'Content-Type': 'application/json' }, timeout: 25000 }
+        )
+        const _chatTxt = _chatR.data?.choices?.[0]?.message?.content
+        if (_chatTxt && _chatTxt.length > 2) return { success: true, text: _chatTxt.trim() }
+    } catch {}
+
+    // 1. OpenRouter — secondary (fast fallback)
     const _orMsgs = []
     if (systemPrompt) _orMsgs.push({ role: 'system', content: String(systemPrompt) })
     _orMsgs.push({ role: 'user', content: String(userMsg || '') })
