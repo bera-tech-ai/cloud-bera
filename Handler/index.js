@@ -1503,10 +1503,12 @@ const handleMessage = async (conn, rawMsg) => {
                 // ══ AGENT: CODE EXECUTION (uses evaljs.js plugin) ═══════════════
                 if (intent === 'js_eval') {
                     if (!isOwner && !isSudo) { await reply('❌ Code execution is owner/sudo only.'); return }
+                    // Match code block, OR explicit "eval code: ...", OR bare "eval <expr>"
                     const codeMatch = text.match(/```(?:js|javascript)?\s*([\s\S]+?)```/) ||
-                                      text.match(/(?:run|eval|execute)\s+(?:this\s+)?(?:code|js|javascript)?[:\s]+(.+)/is)
+                                      text.match(/(?:run|eval|execute)\s+(?:this\s+)?(?:code|js|javascript)[:\s]+(.+)/is) ||
+                                      text.match(/(?:eval|execute|run)\s+([\s\S]+)/i)
                     const code = codeMatch ? codeMatch[1].trim() : null
-                    if (!code) { await reply('❓ Provide the JS code to run.\nExample: *bera eval: console.log(sock.user)*'); return }
+                    if (!code) { await reply('❓ Provide the JS code to run.\nExamples:\n• *bera eval sock.user*\n• *bera eval: require("fs").readdirSync("Plugins").length*'); return }
                     try {
                         const evalPlugin = require('../Plugins/evaljs')
                         const extCtx = {
@@ -1519,7 +1521,8 @@ const handleMessage = async (conn, rawMsg) => {
                             safeSend: (j, c, o) => conn.sendMessage(j, c, o || {}),
                             sender, prefix,
                         }
-                        await evalPlugin.run(conn, m, code.split(/\s+/), extCtx)
+                        // Pass code as a single element so args.join(' ') reconstructs it intact
+                        await evalPlugin.run(conn, m, [code], extCtx)
                     } catch(e) { await react('❌'); await reply('❌ Eval error: ' + e.message) }
                     return
                 }
