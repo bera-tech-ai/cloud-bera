@@ -4,6 +4,7 @@
   const { exec }  = require('child_process')
   const crypto    = require('crypto')
   const fs        = require('fs')
+  const { fetchTts } = require('./tts')
 
   let axios
   try { axios = require('axios').default || require('axios') } catch(_) {}
@@ -195,22 +196,12 @@
       } catch(e) { return { success: false, error: 'Algos: md5, sha1, sha256, sha512' } }
   }
 
-  // ── TTS via Google Translate (free, no key) ────────────────────────────────────
+  // ── TTS — 4-provider fallback chain (returns Buffer) ──────────────────────────
   const tts = async (text, lang = 'en') => {
       try {
-          const safe = text.replace(/['"\\]/g, '').slice(0, 200)
-          const url = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=' + lang + '&client=tw-ob&q=' + encodeURIComponent(safe)
-          const tmpFile = '/tmp/bera_tts_' + Date.now() + '.mp3'
-          await new Promise((res, rej) => {
-              const file = require('fs').createWriteStream(tmpFile)
-              https_mod.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, r => {
-                  r.pipe(file)
-                  file.on('finish', () => { file.close(); res() })
-              }).on('error', rej)
-          })
-          const stat = require('fs').statSync(tmpFile)
-          if (stat.size < 1000) return { success: false, error: 'TTS returned empty audio' }
-          return { success: true, file: tmpFile }
+          const buf = await fetchTts(text, lang)
+          if (!buf) return { success: false, error: 'All TTS providers unavailable' }
+          return { success: true, buf }
       } catch(e) { return { success: false, error: e.message } }
   }
 
