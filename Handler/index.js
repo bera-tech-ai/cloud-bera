@@ -23,7 +23,7 @@ const loadPlugins = () => {
         try {
             const plugin = require(path.join(pluginDir, file))
             const isFunc = plugin && typeof plugin === 'function'
-            const isObj  = plugin && typeof plugin === 'object' && (plugin.command || plugin.all)
+            const isObj  = plugin && typeof plugin === 'object' && (plugin.command || plugin.commands || plugin.all || plugin.run)
             if (isFunc || isObj) {
                 handlers.push(plugin)
                 console.log(`[PLUGIN] Loaded: ${file}`)
@@ -46,7 +46,9 @@ try {
 const buildCommandMap = () => {
     const map = new Map()
     for (const handler of handlers) {
-        const cmds = Array.isArray(handler.command) ? handler.command : [handler.command].filter(Boolean)
+        const cmds = Array.isArray(handler.commands) ? handler.commands
+                   : Array.isArray(handler.command)  ? handler.command
+                   : [handler.command].filter(Boolean)
         for (const cmd of cmds) {
             map.set(cmd.toLowerCase(), handler)
         }
@@ -805,6 +807,7 @@ const handleMessage = async (conn, rawMsg) => {
         const chat = m.chat
 
         const { authorized, isOwner } = isAuthorized(sender)
+        const isSudo = !!(global.db?.data?.sudo || []).includes(sender)
 
         const existingUser = global.db?.data?.users?.[sender]
         if (existingUser?.banned) return
@@ -1497,27 +1500,104 @@ const handleMessage = async (conn, rawMsg) => {
                     return
                 }
 
-                // ══ AGENT: CODE EXECUTION ═══════════════════════════════════════
+                // ══ AGENT: CODE EXECUTION (uses evaljs.js plugin) ═══════════════
                 if (intent === 'js_eval') {
-                    if (!isOwner) { await reply('❌ Code execution is owner-only.'); return }
-                    const codeMatch = text.match(/[```]{1,3}(?:js|javascript)?\s*([\s\S]+?)[```]{1,3}/) ||
+                    if (!isOwner && !isSudo) { await reply('❌ Code execution is owner/sudo only.'); return }
+                    const codeMatch = text.match(/```(?:js|javascript)?\s*([\s\S]+?)```/) ||
                                       text.match(/(?:run|eval|execute)\s+(?:this\s+)?(?:code|js|javascript)?[:\s]+(.+)/is)
                     const code = codeMatch ? codeMatch[1].trim() : null
-                    if (!code) { await reply('❓ Provide the code to run, e.g.:\n*Bera run: console.log("hello")*'); return }
+                    if (!code) { await reply('❓ Provide the JS code to run.\nExample: *bera eval: console.log(sock.user)*'); return }
                     try {
-                        await react('⚙️')
-                        const sandbox = { conn, m, chat, text, reply, console: { log: (...a) => a.join(' '), error: (...a) => a.join(' ') }, require, global, process: { env: process.env } }
-                        const result  = await new Promise((res, rej) => {
-                            try {
-                                const fn = new Function(...Object.keys(sandbox), '"use strict"; return (async()=>{ ' + code + ' })()')
-                                fn(...Object.values(sandbox)).then(res).catch(rej)
-                            } catch(e) { rej(e) }
-                        })
-                        const out = result !== undefined ? String(result).slice(0, 2000) : '✅ (no return value)'
-                        await reply('╭══〘 *⚙️ JS OUTPUT* 〙═⊷\n' + out.split('\n').slice(0,30).map(l=>'┃ '+l).join('\n') + '\n╰══════════════════⊷')
-                    } catch(e) {
-                        await reply('❌ *Error:* ' + e.message.slice(0,500))
-                    }
+                        const evalPlugin = require('../Plugins/evaljs')
+                        const extCtx = {
+                            conn, jid: chat, from: sender, reply, react,
+                            isOwner: isOwner || isSudo,
+                            isAdmin, isGroup: m.isGroup,
+                            groupId: m.isGroup ? chat : null,
+                            mentionedJid: m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [],
+                            contextInfo:  m.msg?.contextInfo || m.message?.extendedTextMessage?.contextInfo || {},
+                            safeSend: (j, c, o) => conn.sendMessage(j, c, o || {}),
+                            sender, prefix,
+                        }
+                        await evalPlugin.run(conn, m, code.split(/\s+/), extCtx)
+                    } catch(e) { await react('❌'); await reply('❌ Eval error: ' + e.message) }
+                    return
+                }
+
+                // ══ AGENT: PROFILE PICTURE (uses spp.js plugin) ══════════════════
+                if (intent === 'get_pfp') {
+                    try {
+                        const sppPlugin = require('../Plugins/spp')
+                        const target = m.mentionedJid?.[0] || m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || m.quoted?.sender || sender
+                        const extCtx = {
+                            conn, jid: chat, from: sender, reply, react, isOwner, isAdmin, isGroup: m.isGroup,
+                            groupId: m.isGroup ? chat : null, mentionedJid: m.mentionedJid || [],
+                            contextInfo: m.msg?.contextInfo || {},
+                            safeSend: (j, c, o) => conn.sendMessage(j, c, o || {}), sender, prefix,
+                        }
+                        await sppPlugin.run(conn, m, [target], extCtx)
+                    } catch(e) { await react('❌'); await reply('❌ Profile pic error: ' + e.message) }
+                    return
+                }
+
+                // ══ AGENT: OCR (uses ocr2.js plugin) ═════════════════════════════
+                if (intent === 'ocr_img') {
+                    try {
+                        const ocrPlugin = require('../Plugins/ocr2')
+                        const extCtx = {
+                            conn, jid: chat, from: sender, reply, react, isOwner, isAdmin, isGroup: m.isGroup,
+                            groupId: m.isGroup ? chat : null, mentionedJid: m.mentionedJid || [],
+                            contextInfo: m.msg?.contextInfo || {},
+                            safeSend: (j, c, o) => conn.sendMessage(j, c, o || {}), sender, prefix,
+                        }
+                        await ocrPlugin.run(conn, m, [], extCtx)
+                    } catch(e) { await react('❌'); await reply('❌ OCR error: ' + e.message) }
+                    return
+                }
+
+                // ══ AGENT: VIEW-ONCE REVEAL (uses vv.js plugin) ══════════════════
+                if (intent === 'view_once') {
+                    try {
+                        const vvPlugin = require('../Plugins/vv')
+                        const extCtx = {
+                            conn, jid: chat, from: sender, reply, react, isOwner, isAdmin, isGroup: m.isGroup,
+                            groupId: m.isGroup ? chat : null, mentionedJid: m.mentionedJid || [],
+                            contextInfo: m.msg?.contextInfo || {},
+                            safeSend: (j, c, o) => conn.sendMessage(j, c, o || {}), sender, prefix,
+                        }
+                        await vvPlugin.run(conn, m, [], extCtx)
+                    } catch(e) { await react('❌'); await reply('❌ View-once error: ' + e.message) }
+                    return
+                }
+
+                // ══ AGENT: STICKER → IMAGE (uses tojpeg.js plugin) ═══════════════
+                if (intent === 'sticker_to_img') {
+                    try {
+                        const toImgPlugin = require('../Plugins/tojpeg')
+                        const extCtx = {
+                            conn, jid: chat, from: sender, reply, react, isOwner, isAdmin, isGroup: m.isGroup,
+                            groupId: m.isGroup ? chat : null, mentionedJid: m.mentionedJid || [],
+                            contextInfo: m.msg?.contextInfo || {},
+                            safeSend: (j, c, o) => conn.sendMessage(j, c, o || {}), sender, prefix,
+                        }
+                        await toImgPlugin.run(conn, m, [], extCtx)
+                    } catch(e) { await react('❌'); await reply('❌ Convert error: ' + e.message) }
+                    return
+                }
+
+                // ══ AGENT: WA PROFILE INFO (uses whatsappprofile.js plugin) ══════
+                if (intent === 'wa_profile') {
+                    try {
+                        const profilePlugin = require('../Plugins/whatsappprofile')
+                        const target = m.mentionedJid?.[0] || m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || m.quoted?.sender || sender
+                        const extCtx = {
+                            conn, jid: chat, from: sender, reply, react, isOwner, isAdmin, isGroup: m.isGroup,
+                            groupId: m.isGroup ? chat : null, mentionedJid: m.mentionedJid || [],
+                            contextInfo: m.msg?.contextInfo || {},
+                            safeSend: (j, c, o) => conn.sendMessage(j, c, o || {}), sender, prefix,
+                        }
+                        await profilePlugin.run(conn, m, [target], extCtx)
+                    } catch(e) { await react('❌'); await reply('❌ Profile error: ' + e.message) }
                     return
                 }
 
@@ -3577,14 +3657,18 @@ const handleMessage = async (conn, rawMsg) => {
                 // ══ TEXT TO SPEECH ════════════════════════════════════════════════
                 if (intent === 'tts_msg') {
                     const ttsText = text.replace(/^(tts|text\s+to\s+speech|speak|say|read\s+aloud|send\s+(a\s+)?voice\s+(note|message))\s*/i, '').trim()
-                    if (!ttsText) { await reply('❓ What should I say?\nExample: *agent tts Hello everyone!*'); return }
+                    if (!ttsText) { await reply('❓ What should I say?\nExample: *bera say Hello everyone!*'); return }
                     try {
                         await react('🔊')
-                        await reply('⏳ Generating voice note...')
                         const r = await adv.tts(ttsText)
-                        if (!r.success) { await reply('❌ TTS failed: ' + r.error); return }
-                        await conn.sendMessage(chat, { audio: require('fs').readFileSync(r.file), mimetype: 'audio/mpeg', ptt: true }, { quoted: m })
-                        try { require('fs').unlinkSync(r.file) } catch(_) {}
+                        if (!r.success) { await react('❌'); await reply('❌ TTS failed: ' + r.error); return }
+                        await conn.sendMessage(chat, {
+                            audio:    r.buf,
+                            mimetype: 'audio/mpeg',
+                            ptt:      false,
+                            fileName: 'bera-tts.mp3',
+                        }, { quoted: m })
+                        await react('✅')
                     } catch(e) { await react('❌'); await reply('❌ TTS error: ' + e.message) }
                     return
                 }
@@ -4179,6 +4263,17 @@ const handleMessage = async (conn, rawMsg) => {
 
         if (typeof handler === 'function') {
             await handler(m, ctx)
+        } else if (typeof handler?.run === 'function') {
+            const extCtx = {
+                ...ctx,
+                jid: chat,
+                from: sender,
+                groupId: ctx.isGroup ? chat : null,
+                mentionedJid: m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [],
+                contextInfo:  m.msg?.contextInfo || m.message?.extendedTextMessage?.contextInfo || {},
+                safeSend: ctx.reply,
+            }
+            await handler.run(conn, m, args, extCtx)
         } else if (typeof handler?.all === 'function') {
             await handler.all(m, ctx)
         } else {
@@ -4235,6 +4330,18 @@ const runCommand = async (commandName, argsString, m, conn) => {
             isOwner, isGroup, isAdmin, isAuthorized: !!_authd, reply
         }
         if (typeof handler === 'function') await handler(m, ctx)
+        else if (typeof handler?.run === 'function') {
+            const extCtx = {
+                ...ctx,
+                jid: chat,
+                from: sender,
+                groupId: !!(chat && chat.includes('@g.us')) ? chat : null,
+                mentionedJid: m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [],
+                contextInfo:  m.msg?.contextInfo || m.message?.extendedTextMessage?.contextInfo || {},
+                safeSend: ctx.reply,
+            }
+            await handler.run(conn, m, args, extCtx)
+        }
         else if (typeof handler.all === 'function') await handler.all(m, ctx)
         else if (typeof handler.handler === 'function') await handler.handler(m, ctx)
         else return { success: false, error: 'Handler has no callable function.' }
