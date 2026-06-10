@@ -277,6 +277,30 @@ const detectIntent = (text) => {
     if (/\b(eval|evaluate)\b.{0,20}\b(this|code|js|javascript|script|snippet)\b/.test(t) ||
         /\b(run|execute)\b.{0,20}\b(javascript|js|node|this code|this script)\b/.test(t)) return 'js_eval'
 
+    // ── Profile picture ───────────────────────────────────────────────────────
+    if (/\b(get|send|show|fetch|grab|download)\b.{0,20}\b(profile\s*pic(ture)?|pfp|dp|avatar|photo)\b/.test(t) ||
+        /\b(profile\s*pic(ture)?|pfp|dp)\b.{0,10}\b(of|for)\b/.test(t)) return 'get_pfp'
+
+    // ── OCR / read text from image ────────────────────────────────────────────
+    if (/\b(read|extract|get|scan|ocr|recogni[sz]e)\b.{0,20}\b(text|words?|writing|content)\b.{0,20}\b(image|photo|pic(ture)?|this)\b/.test(t) ||
+        /\b(text|words?)\b.{0,15}\b(in|from|on)\b.{0,15}\b(image|photo|pic(ture)?)\b/.test(t) ||
+        /\bwhat\s+(does\s+it\s+say|is\s+written|text\s+is)\b/.test(t)) return 'ocr_img'
+
+    // ── View-once reveal ──────────────────────────────────────────────────────
+    if (/\b(open|reveal|show|view|unseal|unlock)\b.{0,20}\b(view.?once|one.?time|disappearing|hidden)\b/.test(t) ||
+        /\bview.?once\b/.test(t) ||
+        /\b(open|show)\s+(this|the)\s+(view|photo|video|message)\b/.test(t)) return 'view_once'
+
+    // ── Sticker to image ──────────────────────────────────────────────────────
+    if (/\b(convert|turn|change|save|get)\b.{0,20}\b(sticker)\b.{0,20}\b(image|photo|jpg|jpeg|png|pic)\b/.test(t) ||
+        /\bsticker\s+to\s+(image|photo|jpg)\b/.test(t) ||
+        /\b(remove|strip)\b.{0,15}\bsticker\s*(format)?\b/.test(t)) return 'sticker_to_img'
+
+    // ── WhatsApp profile info ─────────────────────────────────────────────────
+    if (/\b(whatsapp|wa|bot)\s+(profile|info|about|status|bio|number)\b/.test(t) ||
+        /\b(show|get|fetch)\b.{0,15}\b(profile|info|account\s*info|wa\s*info)\b.{0,15}\b(of|for|about)?\b/.test(t) ||
+        /\bmyprofile\b/.test(t)) return 'wa_profile'
+
     // ── File operations ───────────────────────────────────────────────────────
     if (/^(cat|read|open|view|show)\s+\S+\.(js|ts|json|txt|py|md|sh)/.test(t) ||
         /\b(read|cat|view|show|open)\b.{0,20}\b(file|content|source)\b/.test(t)) return 'file_read'
@@ -378,6 +402,27 @@ const detectIntent = (text) => {
     // ── Code execution ──────────────────────────────────────────────────
     if (/\b(?:run|exec(?:ute)?|eval|evaluate)\s+(?:this\s+)?(?:code|script|js|javascript)\b/i.test(t) || /\beval\s+[`'"]/i.test(t)) return 'js_eval'
     if (/\b(?:run|exec(?:ute)?)\s+(?:this\s+)?(?:shell|bash|terminal|command)\b/i.test(t) || /\b(?:shell|bash)\s+command/i.test(t)) return 'shell'
+
+    // ── Profile picture ─────────────────────────────────────────────────
+    if (/\b(?:get|send|show|fetch|grab|download)\b.{0,20}\b(?:profile\s*pic(?:ture)?|pfp|dp|avatar)\b/i.test(t) ||
+        /\bprofile\s*pic(?:ture)?\s+(?:of|for)\b/i.test(t)) return 'get_pfp'
+
+    // ── OCR ─────────────────────────────────────────────────────────────
+    if (/\b(?:read|extract|ocr|scan|recogni[sz]e)\b.{0,20}\b(?:text|words?)\b.{0,20}\b(?:image|photo|pic)\b/i.test(t) ||
+        /\bwhat\s+(?:does\s+it\s+say|is\s+written)\b/i.test(t)) return 'ocr_img'
+
+    // ── View-once ────────────────────────────────────────────────────────
+    if (/\b(?:open|reveal|show|view|unseal)\b.{0,20}\b(?:view.?once|one.?time|disappearing)\b/i.test(t) ||
+        /\bview.?once\b/i.test(t)) return 'view_once'
+
+    // ── Sticker to image ─────────────────────────────────────────────────
+    if (/\b(?:convert|turn|save)\b.{0,15}\bsticker\b.{0,15}\b(?:image|photo|jpg|jpeg)\b/i.test(t) ||
+        /\bsticker\s+to\s+(?:image|photo|jpg)\b/i.test(t)) return 'sticker_to_img'
+
+    // ── WhatsApp profile info ────────────────────────────────────────────
+    if (/\b(?:whatsapp|wa)\s+(?:profile|info|status|bio)\b/i.test(t) ||
+        /\b(?:show|get)\b.{0,15}\b(?:profile|wa\s*info)\b/i.test(t) ||
+        /\bmyprofile\b/i.test(t)) return 'wa_profile'
 
     // ── Bot management ──────────────────────────────────────────────────
     if (/\b(?:update|upgrade|pull)\s+(?:the\s+)?bot\b/i.test(t) || /\b(?:pull\s+latest|hot\s*reload|reload\s+(?:plugins?|bot))\b/i.test(t)) return 'bot_update'
