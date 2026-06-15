@@ -2,11 +2,8 @@ const config = require('../Config')
   const moment = require('moment-timezone')
   const { makeSticker } = require('../Library/actions/sticker')
 
-  // ── Button mode helper (graceful if missing) ──────────────────────────────────
   let _getBtnMode = () => true
   try { _getBtnMode = require('../Library/actions/btnmode').getBtnMode } catch {}
-
-  // ── sendButtons wrapper (graceful if missing) ─────────────────────────────────
   let _sendButtons = null
   try { _sendButtons = require('gifted-btns').sendButtons } catch {}
 
@@ -19,9 +16,9 @@ const config = require('../Config')
       if (opts.text)  lines.push(opts.text)
       if (opts.buttons?.length) {
           lines.push('')
-          opts.buttons.forEach((b, i) => {
-              const label = b.text || b.label || (b.buttonParamsJson ? (() => { try { return JSON.parse(b.buttonParamsJson).display_text } catch { return 'Option ' + (i+1) } })() : 'Option ' + (i+1))
-              lines.push('  [' + (i+1) + '] ' + label)
+          opts.buttons.forEach((b,i) => {
+              const lbl = b.text || b.label || (b.buttonParamsJson ? (() => { try{return JSON.parse(b.buttonParamsJson).display_text}catch{return 'Opt '+(i+1)} })() : 'Opt '+(i+1))
+              lines.push('  ❑ ' + lbl)
           })
       }
       if (opts.footer) lines.push('\n_' + opts.footer + '_')
@@ -34,400 +31,109 @@ const config = require('../Config')
       const chat = m.chat || m.key?.remoteJid
       const p = prefix
       const btnOn = _getBtnMode(chat)
+      const fmtUp = s => { const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),mn=Math.floor((s%3600)/60); return d>0?d+'d '+h+'h '+mn+'m':h>0?h+'h '+mn+'m':mn+'m '+Math.floor(s%60)+'s' }
 
-      const formatUptime = (sec) => {
-          const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600)
-          const mn = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60)
-          return d > 0 ? d + 'd ' + h + 'h ' + mn + 'm' : h > 0 ? h + 'h ' + mn + 'm ' + s + 's' : mn + 'm ' + s + 's'
-      }
+      if (command==='ping') { const t=Date.now(); await reply('...'); return sb(conn,chat,{title:'\u26a1 Pong!',text:'\ud83c\udfd3 '+(Date.now()-t)+'ms  \u23f1\ufe0f '+fmtUp(process.uptime()),footer:config.botName,buttons:[{id:p+'menu',text:'\ud83d\udccb Menu'},{id:p+'status',text:'\ud83d\udcca Status'}]}) }
+      if (command==='uptime'||command==='up') return reply('\u23f1\ufe0f *Uptime:* '+fmtUp(process.uptime()))
 
-      // ── PING ──────────────────────────────────────────────────────────────────
-      if (command === 'ping') {
-          const start = Date.now()
-          await reply('...')
-          const ms = Date.now() - start
-          return sb(conn, chat, {
-              title: '⚡ Bera AI',
-              text: '🏓 *Pong!* ' + ms + 'ms\n⏱️ Uptime: ' + formatUptime(process.uptime()),
-              footer: config.botName + ' v' + config.version,
-              buttons: [
-                  { id: p + 'menu', text: '📋 Menu' },
-                  { id: p + 'status', text: '📊 Status' },
-              ]
-          })
-      }
-
-      // ── UPTIME ────────────────────────────────────────────────────────────────
-      if (command === 'uptime' || command === 'up') {
-          return reply('⏱️ *Uptime:* ' + formatUptime(process.uptime()))
-      }
-
-      // ── STATUS DASHBOARD ──────────────────────────────────────────────────────
-      if (['status', 'dashboard', 'botstat'].includes(command)) {
-          await reply('⏳ Fetching status...')
+      if (['status','dashboard','botstat'].includes(command)) {
+          await reply('\u23f3 Fetching...')
           try {
               const { richServerStats } = require('../Library/actions/beraai')
               const sys = await richServerStats()
-              const bhKey = global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY
-              const gitKey = global.db?.data?.settings?.gitToken || process.env.GIT_TOKEN
-              const users = Object.keys(global.db?.data?.users || {}).length
-              const premiums = Object.values(global.db?.data?.users || {}).filter(u => u.premium).length
-              const isPrivate = global.db?.data?.settings?.mode === 'private'
-              const monitors = Object.keys(global._monitors || {}).length
-              const crons = Object.keys(global._cronJobs || {}).length
-              return reply(
-                  '╭══〘 🤖 *BERA AI STATUS* 〙═⊷\n' +
-                  '┃ ⏱️ Uptime: ' + sys.uptime + '\n' +
-                  '┃ 🧠 RAM: ' + sys.memory.used + ' / ' + sys.memory.total + ' (' + sys.memory.pct + ')\n' +
-                  '┃ 💾 Disk: ' + sys.disk.used + ' / ' + sys.disk.total + ' (' + sys.disk.pct + ')\n' +
-                  '┃ 📈 Load: ' + sys.load + '\n┃\n' +
-                  '┃ 👥 Users: ' + users + ' | Premium: ' + premiums + '\n' +
-                  '┃ 🔒 Mode: ' + (isPrivate ? 'Private' : 'Public') + ' | Prefix: ' + p + '\n' +
-                  '┃ 🔑 BeraHost: ' + (bhKey ? '✅' : '❌') + ' | GitHub: ' + (gitKey ? '✅' : '❌') + '\n' +
-                  '┃ 👁️ Monitors: ' + monitors + ' | Crons: ' + crons + '\n' +
-                  '╰══════════════════⊷'
-              )
-          } catch (e) { return reply('❌ Status error: ' + e.message) }
+              const users = Object.keys(global.db?.data?.users||{}).length
+              const prems = Object.values(global.db?.data?.users||{}).filter(u=>u.premium).length
+              const bhKey = global.db?.data?.settings?.bhApiKey||process.env.BH_API_KEY
+              const gitKey = global.db?.data?.settings?.gitToken||process.env.GIT_TOKEN
+              return reply('\u256d\u2550\u2550\u3008 \ud83e\udd16 *BERA AI STATUS* \u3009\u2550\u22b7\n\u2503 \u23f1\ufe0f '+sys.uptime+' | \ud83e\udde0 '+sys.memory.used+'/'+sys.memory.total+'\n\u2503 \ud83d\udcbe '+sys.disk.used+'/'+sys.disk.total+' | \ud83d\udcc8 '+sys.load+'\n\u2503 \ud83d\udc65 Users: '+users+' | \ud83d\udc8e Premium: '+prems+'\n\u2503 \ud83d\udd12 Mode: '+(global.db?.data?.settings?.mode==='private'?'Private':'Public')+' | Prefix: '+p+'\n\u2503 \ud83d\udd11 BH: '+(bhKey?'\u2705':'\u274c')+' | GH: '+(gitKey?'\u2705':'\u274c')+'\n\u2570\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u22b7')
+          } catch(e){ return reply('\u274c '+e.message) }
       }
 
-      // ── INFO ──────────────────────────────────────────────────────────────────
-      if (command === 'info') {
-          return reply(
-              '╭══〘 *🤖 BERA AI INFO* 〙═⊷\n' +
-              '┃ 🤖 Bot: ' + config.botName + ' v' + config.version + '\n' +
-              '┃ 👨\u200d💻 Dev: ' + config.developer + '\n' +
-              '┃ 🔗 GitHub: ' + config.github + '\n' +
-              '┃ ⚡ Prefix: ' + p + '\n' +
-              '┃ ⏱️ Uptime: ' + formatUptime(process.uptime()) + '\n' +
-              '╰══════════════════⊷'
-          )
-      }
+      if (command==='info') return reply('\u256d\u2550\u2550\u3008 *\ud83e\udd16 BERA AI INFO* \u3009\u2550\u22b7\n\u2503 \ud83e\udd16 '+config.botName+' v'+config.version+'\n\u2503 \ud83d\udc68\u200d\ud83d\udcbb '+config.developer+' | \ud83d\udd17 '+config.github+'\n\u2503 \u26a1 Prefix: '+p+' | \u23f1\ufe0f '+fmtUp(process.uptime())+'\n\u2570\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u22b7')
 
-      // ══════════════════════════════════════════════════════════════════════════
-      //  MAIN MENU — atassa-style: bot image + caption + category buttons
-      // ══════════════════════════════════════════════════════════════════════════
-      if (['menu', 'help', 'start', 'commands', 'men', 'menus', 'mainmenu'].includes(command)) {
-          const now    = moment().tz('Africa/Nairobi')
-          const time   = now.format('hh:mm:ss A')
-          const date   = now.format('dddd, DD MMM YYYY')
-          const uptime = formatUptime(process.uptime())
-          const pushName  = m.pushName || 'User'
-          const isPrivate = global.db?.data?.settings?.mode === 'private'
-
-          const caption =
-              '*🦄 Uᴘᴛɪᴍᴇ :* ' + uptime + '\n' +
-              '*🍁 Dᴀᴛᴇ Tᴏᴅᴀʏ:* ' + date + '\n' +
-              '*🎗 Tɪᴍᴇ Nᴏᴡ:* ' + time + '\n\n' +
-              '➮Fᴏᴜɴᴅᴇʀ - Bera Tech\n' +
-              '➮Usᴇʀ - ' + pushName + '\n' +
-              '➮Mᴏᴅᴇ - ' + (isPrivate ? '🔒 Private' : '🌐 Public') + '\n' +
-              '➮Pʀᴇꜰɪx - ' + p + '\n\n' +
-              '╭──❰ *BERA AI MENU* ❱\n' +
-              '│🏮 ' + p + 'aimenu       — 🧠 AI & Agent\n' +
-              '│🏮 ' + p + 'dlmenu       — 📥 Downloads\n' +
-              '│🏮 ' + p + 'searchmenu   — 🔍 Search\n' +
-              '│🏮 ' + p + 'groupmenu    — 👥 Groups\n' +
-              '│🏮 ' + p + 'toolsmenu    — 🛠️ Tools\n' +
-              '│🏮 ' + p + 'gamesmenu    — 🎮 Games\n' +
-              '│🏮 ' + p + 'convertmenu  — 🔄 Converter\n' +
-              '│🏮 ' + p + 'musicmenu    — 🎵 Music & Media\n' +
-              '│🏮 ' + p + 'sportsmenu   — ⚽ Sports & Finance\n' +
-              '│🏮 ' + p + 'deploymenu   — 🚀 Deploy (BeraHost)\n' +
-              '│🏮 ' + p + 'devmenu      — 💻 Dev Tools\n' +
-              '│🏮 ' + p + 'ptmenu       — 🦕 Pterodactyl\n' +
-              '│🏮 ' + p + 'keymenu      — 🔑 Key System\n' +
-              '│🏮 ' + p + 'religionmenu — ⛪ Bible & Religion\n' +
-              '│🏮 ' + p + 'tempmailmenu — ✉️ Temp Mail\n' +
-              '│🏮 ' + p + 'settingsmenu — ⚙️ Settings\n' +
-              (isOwner ? '│🏮 ' + p + 'ownermenu    — 👑 Owner/Admin\n' : '') +
-              '│🏮 ' + p + 'list         — 📋 All Commands\n' +
-              '╰─────────────⦁'
-
-          const botPic = config.botImage || './assets/bera-ai-profile.png'
-          const fs = require('fs')
-          try {
-              if (fs.existsSync(botPic)) {
-                  await conn.sendMessage(chat, {
-                      image: { url: botPic },
-                      caption,
-                      contextInfo: { mentionedJid: [sender] }
-                  }, { quoted: m })
-              } else {
-                  await reply(caption)
-              }
-          } catch { await reply(caption) }
-
-          if (btnOn && _sendButtons) {
-              try {
-                  await _sendButtons(conn, chat, {
-                      title: '🤖 ' + config.botName,
-                      text: 'Tap a category to see its commands:',
-                      footer: config.botName + ' v' + config.version,
-                      buttons: [
-                          { id: p + 'aimenu',     text: '🧠 AI & Agent' },
-                          { id: p + 'dlmenu',     text: '📥 Downloads' },
-                          { id: p + 'searchmenu', text: '🔍 Search' },
-                          { id: p + 'groupmenu',  text: '👥 Groups' },
-                          { id: p + 'toolsmenu',  text: '🛠️ Tools' },
-                          { id: p + 'gamesmenu',  text: '🎮 Games' },
-                      ]
-                  })
-                  await _sendButtons(conn, chat, {
-                      title: '🤖 More Categories',
-                      text: 'More Bera AI categories:',
-                      footer: config.botName + ' v' + config.version,
-                      buttons: [
-                          { id: p + 'convertmenu',  text: '🔄 Converter' },
-                          { id: p + 'musicmenu',    text: '🎵 Music & Media' },
-                          { id: p + 'sportsmenu',   text: '⚽ Sports' },
-                          { id: p + 'deploymenu',   text: '🚀 Deploy' },
-                          { id: p + 'devmenu',      text: '💻 Dev Tools' },
-                          { id: p + 'settingsmenu', text: '⚙️ Settings' },
-                      ]
-                  })
-              } catch {}
-          }
+      if (['menu','help','start','commands','men','menus','mainmenu'].includes(command)) {
+          const now = moment().tz('Africa/Nairobi')
+          const isPrivate = global.db?.data?.settings?.mode==='private'
+          const pushName = m.pushName||'User'
+          const caption = '*\ud83e\udd84 U\u1d18\u1d1b\u026a\u1d0d\u1d07 :* '+fmtUp(process.uptime())+'\n*\ud83c� D\u1d00\u1d1b\u1d07 :* '+now.format('ddd DD MMM YYYY')+'\n*\ud83c� T\u026a\u1d0d\u1d07 :* '+now.format('hh:mm A')+'\n\n\u27ae F\u1d0f\u1d1c\u1d0f\u1d1b\u1d07\u0280 \u00bb Bera Tech\n\u27ae U\u0455\u1d07\u0280   \u00bb '+pushName+'\n\u27ae M\u1d0f\u1d0b\u1d07   \u00bb '+(isPrivate?'\ud83d\udd12 Private':'\ud83c\udf10 Public')+'\n\u27ae P\u0280\u1d07\u0493\u026a\u0445 \u00bb *'+p+'*\n\n\u256d\u2500\u2500\u2740 *BERA AI CATEGORIES* \u2740\n\u2502\u2b25 '+p+'aimenu       . \ud83e\udde0 AI & Agent (140 tools)\n\u2502\u2b25 '+p+'dlmenu       . \ud83d\udce5 Downloads\n\u2502\u2b25 '+p+'searchmenu   . \ud83d\udd0d Search\n\u2502\u2b25 '+p+'groupmenu    . \ud83d� Groups\n\u2502\u2b25 '+p+'toolsmenu    . \ud83d�\ufe0f Tools\n\u2502\u2b25 '+p+'gamesmenu    . \ud83c� Games\n\u2502\u2b25 '+p+'convertmenu  . \ud83d� Converter\n\u2502\u2b25 '+p+'musicmenu    . \ud83c� Music & Media\n\u2502\u2b25 '+p+'sportsmenu   . \u26bd Sports & Finance\n\u2502\u2b25 '+p+'deploymenu   . \ud83d� Deploy & Host\n\u2502\u2b25 '+p+'devmenu      . \ud83d� Dev Tools\n\u2502\u2b25 '+p+'ptmenu       . \ud83e\udd95 Pterodactyl\n\u2502\u2b25 '+p+'keymenu      . \ud83d\udd11 Key System\n\u2502\u2b25 '+p+'funmenu      . \ud83c\udfad Fun & Extras\n\u2502\u2b25 '+p+'notesmenu    . \ud83d\udcdd Notes\n\u2502\u2b25 '+p+'religionmenu . \u26ea Religion\n\u2502\u2b25 '+p+'tempmailmenu . \u2709\ufe0f Temp Mail\n\u2502\u2b25 '+p+'settingsmenu . \u2699\ufe0f Settings\n'+(isOwner?'\u2502\u2b25 '+p+'ownermenu    . \ud83d� Owner\n':'')+'\u2502\u2b25 '+p+'list         . \ud83d\udccb All Commands\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2022\n\n> _Toggle buttons: *'+p+'btnmode on/off*_'
+          const botPic = config.botImage||'./assets/bera-ai-profile.png'
+          try { const fs=require('fs'); if(fs.existsSync(botPic)){ await conn.sendMessage(chat,{image:{url:botPic},caption,contextInfo:{mentionedJid:[sender]}},{quoted:m}) } else await reply(caption) } catch { await reply(caption) }
+          if (btnOn && _sendButtons) { try { await _sendButtons(conn,chat,{title:'\ud83e\udd16 '+config.botName,text:'Select a category:',footer:'Type '+p+'list for all commands',buttons:[{id:p+'aimenu',text:'\ud83e\udde0 AI & Agent'},{id:p+'dlmenu',text:'\ud83d\udce5 Downloads'},{id:p+'searchmenu',text:'\ud83d\udd0d Search'},{id:p+'groupmenu',text:'\ud83d\udc65 Groups'},{id:p+'toolsmenu',text:'\ud83d\udee0\ufe0f Tools'},{id:p+'gamesmenu',text:'\ud83c\udfae Games'}]}); await _sendButtons(conn,chat,{title:'\ud83e\udd16 More Categories',text:'More Bera AI:',footer:'Type '+p+'list for all commands',buttons:[{id:p+'convertmenu',text:'\ud83d\udd04 Converter'},{id:p+'musicmenu',text:'\ud83c\udfb5 Music'},{id:p+'sportsmenu',text:'\u26bd Sports'},{id:p+'deploymenu',text:'\ud83d\ude80 Deploy'},{id:p+'devmenu',text:'\ud83d\udcbb Dev Tools'},{id:p+'settingsmenu',text:'\u2699\ufe0f Settings'}]}) } catch {} }
           return
       }
 
-      // ══════════════════════════════════════════════════════════════════════════
-      //  LIST — full command dump, atassa style
-      // ══════════════════════════════════════════════════════════════════════════
-      if (['list', 'listmenu', 'listmen', 'cmds', 'allcmds'].includes(command)) {
-          const sections = [
-              { title: '🧠 AI & AGENT', cmds: [
-                  [p+'bera <msg>','Chat with Bera AI'],[p+'agent <task>','Autonomous agent (140 tools)'],
-                  [p+'imagine <desc>','Generate AI image'],[p+'see / vision','Analyze an image'],
-                  [p+'tts <text>','Text to speech'],[p+'summarize <text>','Summarize text'],
-                  [p+'explain <topic>','Explain clearly'],[p+'improve <text>','Improve writing'],
-                  [p+'proofread <text>','Fix grammar'],[p+'rewrite <text>','Rephrase'],
-                  [p+'formal / casual','Change tone'],[p+'eli5 <topic>',"Explain like I'm 5"],
-                  [p+'tweet <topic>','Write tweet'],[p+'caption2 <desc>','IG caption'],
-                  [p+'essay <topic>','Write essay'],[p+'debugcode <code>','Debug code'],
-                  [p+'eng2code <desc>','Generate code'],[p+'code2eng <code>','Explain code'],
-                  [p+'berareset','Clear AI history'],[p+'chatbot on/off','Auto AI replies'],
-                  [p+'gpt / gemini','Direct AI models'],[p+'gpt4 / gpt4o','GPT-4 / GPT-4o'],
-                  [p+'venice','Venice AI'],[p+'giftedai','Gifted AI'],
-              ]},
-              { title: '📥 DOWNLOADS', cmds: [
-                  [p+'play <song>','Download song (MP3)'],[p+'video <url>','YouTube MP4'],
-                  [p+'tiktok <url>','Download TikTok'],[p+'ig / insta <url>','Instagram'],
-                  [p+'fb <url>','Facebook video'],[p+'twitter <url>','Twitter/X video'],
-                  [p+'sendaudio <url>','Any audio URL'],[p+'sendvideo <url>','Any video URL'],
-                  [p+'gitclone <url>','GitHub repo as ZIP'],[p+'snack <url>','Snack Video'],
-                  [p+'dl <url>','Auto-detect & download'],[p+'spotifydl <url>','Spotify track'],
-              ]},
-              { title: '🔍 SEARCH', cmds: [
-                  [p+'google <q>','Google search'],[p+'yts <q>','YouTube search'],
-                  [p+'lyrics <song>','Song lyrics'],[p+'shazam','Identify music (quote audio)'],
-                  [p+'weather <city>','Weather info'],[p+'wiki <topic>','Wikipedia'],
-                  [p+'npm <package>','NPM package info'],[p+'ggleimage <q>','Google Images'],
-                  [p+'unsplash <q>','Unsplash photos'],[p+'wallpapers <q>','HD Wallpapers'],
-                  [p+'wattpad <q>','Wattpad stories'],[p+'spotifysearch <q>','Spotify search'],
-                  [p+'happymod <app>','HappyMod APK'],[p+'apkmirror <app>','APK Mirror'],
-                  [p+'stickersearch <q>','Sticker search'],[p+'movie <title>','Movie info'],
-                  [p+'anime <title>','Anime info'],
-              ]},
-              { title: '👥 GROUPS', cmds: [
-                  [p+'kick @user','Remove member'],[p+'add <number>','Add member'],
-                  [p+'promote @user','Make admin'],[p+'demote @user','Remove admin'],
-                  [p+'mute / unmute','Lock / unlock group'],[p+'tagall <msg>','Tag all members'],
-                  [p+'hidetag <msg>','Silent tag all'],[p+'tagadmins <msg>','Tag all admins'],
-                  [p+'link / revoke','Invite link / reset'],[p+'groupname <name>','Change group name'],
-                  [p+'gcdesc <text>','Change group desc'],[p+'gcpp / getgcpp','Set / get group pic'],
-                  [p+'antilink on/off','Block links'],[p+'antispam on/off','Anti spam'],
-                  [p+'welcome on/off','Welcome message'],[p+'warn @user','Warn member'],
-                  [p+'del','Delete quoted message'],[p+'disapp on/off','Disappearing messages'],
-                  [p+'listmembers','List all members'],[p+'listadmins','List all admins'],
-                  [p+'newgroup <name>','Create new group'],[p+'killgc','Terminate group'],
-                  [p+'everyone / tag','Tag all with message'],[p+'vcf','Export members as VCF'],
-                  [p+'accept / reject','Handle join requests'],[p+'online','List online members'],
-              ]},
-              { title: '🛠️ TOOLS', cmds: [
-                  [p+'fetch <url>','Fetch URL content'],[p+'ssweb <url>','Screenshot website'],
-                  [p+'ssphone / sstab','Mobile / tablet screenshot'],[p+'createqr <text>','Generate QR code'],
-                  [p+'readqr','Read QR code (quote image)'],[p+'define <word>','Word definition'],
-                  [p+'fancy <text>','Fancy Unicode text'],[p+'ttp <text>','Text to image sticker'],
-                  [p+'ebinary / debinary','Encode / decode binary'],[p+'ebase / dbase','Encode / decode Base64'],
-                  [p+'emojimix <e1> <e2>','Mix two emojis'],[p+'createpdf','Create PDF'],
-                  [p+'photoeditor','AI photo editor'],[p+'remini','Enhance photo with AI'],
-                  [p+'domaincheck <url>','Domain WHOIS info'],[p+'web2zip <url>','Website as ZIP'],
-                  [p+'rename','Rename a document'],[p+'shortener','URL shortener list'],
-                  [p+'password','Generate strong password'],[p+'shorten <url>','Shorten URL'],
-                  [p+'wacheck <num>','Check if on WhatsApp'],[p+'http <url>','HTTP request tester'],
-                  [p+'jwtgen <payload>','Generate JWT'],[p+'hash <text>','Hash text'],
-              ]},
-              { title: '🎮 GAMES', cmds: [
-                  [p+'games','Show all games'],[p+'tictactoe','Start TicTacToe'],
-                  [p+'tttai','TicTacToe vs AI'],[p+'wcg','Word Chain Game'],
-                  [p+'wcgai','Word Chain vs AI'],[p+'dice','Dice game'],
-                  [p+'diceai','Dice vs AI'],[p+'trivia','Trivia quiz'],
-              ]},
-              { title: '🔄 CONVERTER', cmds: [
-                  [p+'sticker / st','Image / video to sticker'],[p+'toimg','Sticker to image'],
-                  [p+'toaudio / tomp3','Video to audio'],[p+'toptt / tovoice','Audio to voice note'],
-                  [p+'tovideo','Audio to video'],[p+'tl / tr <lang>','Translate text'],
-                  [p+'ocr','Extract text from image'],[p+'upscale','Upscale image with AI'],
-                  [p+'removebg','Remove image background'],
-              ]},
-              { title: '🎵 MUSIC & MEDIA', cmds: [
-                  [p+'play <song>','Download & send MP3'],[p+'video <url>','YouTube MP4'],
-                  [p+'spotifydl <url>','Download Spotify'],[p+'chord <song>','Guitar chords'],
-                  [p+'soundcloud <q>','SoundCloud search'],[p+'spotifylyrics <q>','Spotify lyrics'],
-                  [p+'transcribe','Transcribe audio'],[p+'tts <text>','Text to speech'],
-              ]},
-              { title: '⚽ SPORTS & FINANCE', cmds: [
-                  [p+'livescore','Live football scores'],[p+'standings <league>','League table'],
-                  [p+'topscorers','Top goal scorers'],[p+'upcoming','Upcoming matches / fixtures'],
-                  [p+'surebet','Betting tips & odds'],[p+'sportnews','Football news'],
-                  [p+'gamehistory <id>','Match events history'],
-                  [p+'agent bitcoin price','Crypto price (live)'],[p+'agent AAPL stock','Stock price'],
-                  [p+'agent 100 USD KES','Currency converter'],[p+'agent news AI','Latest headlines'],
-              ]},
-              { title: '🚀 DEPLOY (BERAHOST)', cmds: [
-                  [p+'bh','BeraHost dashboard'],[p+'deploy beraai <num>','Deploy Bera AI bot'],
-                  [p+'bh bots','Available bot templates'],[p+'bh status <id>','Bot status'],
-                  [p+'bh logs <id>','Bot logs'],[p+'bh start/stop <id>','Start / stop bot'],
-                  [p+'bh restart <id>','Restart bot'],[p+'bh env <id> K=V','Set env variable'],
-                  [p+'bh delete <id>','Delete deployment'],[p+'bh coins','View coins balance'],
-                  [p+'bh claim','Claim daily coins'],[p+'bh pay <kes> <num>','M-Pesa payment'],
-                  [p+'setbhkey <key>','Save BeraHost API key'],[p+'sky deploy <repo>','SkyHost deploy'],
-                  [p+'sky projects','List SkyHost projects'],
-              ]},
-              { title: '💻 DEV TOOLS', cmds: [
-                  [p+'bash / $ <cmd>','Run shell command'],[p+'eval / js <code>','Eval JavaScript'],
-                  [p+'agent <task>','Autonomous dev agent'],[p+'gitclone <url>','Clone repo to workspace'],
-                  [p+'setghtoken <tok>','Save GitHub token'],[p+'workspace list','List workspace files'],
-                  [p+'ssh <host>','SSH into server'],[p+'sshexec <cmd>','Run SSH command'],
-                  [p+'vercel','Vercel deployments'],[p+'setvercel <tok>','Save Vercel token'],
-                  [p+'monitor add <url>','Monitor a URL'],[p+'cron add <expr>','Add cron job'],
-                  [p+'codescan','Scan code for bugs'],[p+'replit <task>','Replit-style dev env'],
-              ]},
-              { title: '🦕 PTERODACTYL', cmds: [
-                  [p+'ptlist / servers','List servers'],[p+'ptstatus <id>','Server status'],
-                  [p+'ptstart <id>','Start server'],[p+'ptstop <id>','Stop server'],
-                  [p+'ptrestart <id>','Restart server'],[p+'ptkill <id>','Kill server'],
-                  [p+'ptcmd <id> <cmd>','Run console command'],[p+'ptfiles <id>','List server files'],
-                  [p+'ptread <id> <file>','Read a file'],[p+'ptwrite <id>','Write a file'],
-                  [p+'ptcreate','Create new server'],[p+'ptusers <id>','Server users'],
-                  [p+'ptnodes','Panel nodes'],[p+'pthelp','Full Pterodactyl help'],
-              ]},
-              { title: '🔑 KEY SYSTEM', cmds: [
-                  [p+'activate <KEY>','Activate your key'],[p+'checkkey','Check key status'],
-                  ...(isOwner ? [
-                      [p+'genkey <num> <days>','Generate key (owner)'],
-                      [p+'revokekey <KEY>','Revoke a key'],
-                      [p+'extendkey <KEY> <d>','Extend key duration'],
-                      [p+'listkeys','List all keys'],
-                  ] : [])
-              ]},
-              { title: '⛪ RELIGION', cmds: [
-                  [p+'bible <ref>','Bible verse (e.g. John 3:16)'],[p+'verse <ref>','Same as bible'],
-                  [p+'agent quran <ref>','Quran verse via AI'],
-              ]},
-              { title: '✉️ TEMP MAIL', cmds: [
-                  [p+'tempmail','Generate temp email'],[p+'inbox','Check temp mail inbox'],
-                  [p+'readmail <n>','Read email by number'],[p+'delmail','Delete temp email'],
-                  [p+'tempmailhelp','All temp mail commands'],
-              ]},
-              { title: '⚙️ SETTINGS', cmds: [
-                  [p+'mode public/private','Bot access mode'],[p+'btnmode on/off','Toggle buttons'],
-                  [p+'setprefix <char>','Change bot prefix'],[p+'autoreply on/off','Auto reply'],
-                  [p+'autoread on/off','Auto read'],[p+'autoreact on/off','Auto react'],
-                  [p+'autobio on/off','Auto bio rotation'],[p+'setchatbot on/off','Chatbot AI mode'],
-                  [p+'settimezone <tz>','Set timezone'],[p+'setbotname <name>','Set bot name'],
-                  [p+'settings','View all settings'],
-              ]},
+      if (['list','listmenu','listmen','cmds','allcmds'].includes(command)) {
+          const S=(title,cmds)=>'\u256d\u2500\u2500\u2740 *'+title+'* \u2740\n'+cmds.map(([c,d])=>'\u2502\u2b25 *'+p+c+'* \u2014 '+d).join('\n')+'\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2022'
+          const secs=[
+              S('\ud83e\udde0 AI & AGENT',[['bera <msg>','Chat with Bera AI'],['agent <task>','Autonomous agent (140 tools)'],['imagine <desc>','Generate AI image'],['see / vision','Analyze image (quote it)'],['tts <text>','Text to voice note'],['transcribe','Audio/video to text'],['chatbot on/off','Auto AI replies'],['beratrigger <word>','Custom AI trigger'],['tagreply on/off','Reply when tagged'],['remember <k> <v>','Save agent memory'],['recall <key>','Recall memory'],['memories','List all memories'],['forget <key>','Delete memory'],['berahistory','View chat history'],['berareset','Clear history & memory'],['summarize <text>','Summarize text'],['explain <topic>','Explain a topic'],['improve <text>','Improve writing'],['proofread <text>','Fix grammar'],['rewrite <text>','Rephrase text'],['eli5 <topic>',"Explain like I'm 5"],['formal / casual <text>','Change tone'],['tweet <topic>','Write tweet'],['caption2 <desc>','Instagram caption'],['essay <topic>','Write essay'],['email <context>','Write email'],['cover <job>','Write cover letter'],['code2eng <code>','Explain code'],['eng2code <task>','Generate code'],['debugcode <code>','Debug code'],['sentiment <text>','Tone analysis'],['expand <text>','Expand content'],['roasttext <text>','Roast text'],['nameai <hint>','Generate names'],['sloganai <brand>','Generate slogans'],['bioai <info>','Write a bio'],['gpt / chatgpt','GPT model'],['gpt4','GPT-4 model'],['gpt4o','GPT-4o'],['gemini','Google Gemini'],['venice','Venice AI'],['giftedai / ai','Gifted AI'],['cron add <expr> <task>','Schedule task'],['apidocs <folder>','Generate API docs'],['codescan','Scan code for bugs'],['scaffold <name>','Scaffold project']]),
+              S('\ud83d\udce5 DOWNLOADS',[['play <song>','YouTube to MP3'],['video <url>','YouTube to MP4'],['ytmp3 <url>','YouTube audio URL'],['tiktok <url>','Download TikTok'],['ig / insta <url>','Download Instagram'],['fb <url>','Download Facebook'],['twitter / xdl <url>','Download Twitter/X'],['spotifydl <url>','Download Spotify'],['snack <url>','Snack Video'],['sendaudio <url>','Any audio URL'],['sendvideo <url>','Any video URL'],['gitclone <url>','GitHub repo ZIP'],['dl <url>','Auto-detect download']]),
+              S('\ud83d\udd0d SEARCH',[['google <q>','Google (top 5)'],['yts <q>','YouTube search'],['lyrics <song>','Song lyrics'],['shazam','Identify music (quote audio)'],['weather <city>','Weather info'],['wiki <topic>','Wikipedia'],['npm <pkg>','NPM package info'],['ggleimage / gimages <q>','Google Images'],['unsplash <q>','Stock photos'],['wallpapers <q>','HD wallpapers'],['wattpad <q>','Wattpad stories'],['spotifysearch <q>','Spotify search'],['happymod <app>','HappyMod APK'],['apkmirror <app>','APK Mirror'],['stickersearch <q>','WhatsApp stickers'],['movie <title>','Movie info'],['anime <title>','Anime search'],['playstore <app>','Play Store search'],['soundcloud <q>','SoundCloud search'],['tiktoksearch <q>','TikTok search']]),
+              S('\ud83d\udc65 GROUPS',[['kick @user','Remove member'],['add <number>','Add member'],['promote @user','Make admin'],['demote @user','Remove admin'],['mute / unmute','Lock / unlock group'],['tagall <msg>','Mention all'],['hidetag <msg>','Silent mention all'],['tagadmins <msg>','Mention admins'],['everyone / tag <msg>','Tag all'],['link','Get invite link'],['revoke / resetlink','Reset invite link'],['groupname <name>','Rename group'],['gcdesc <text>','Set description'],['gcpp','Set group picture (quote image)'],['getgcpp','Get group picture'],['antilink on/off','Block links'],['antispam on/off','Anti spam'],['antipromote','Block unauthorized promotes'],['antidemote','Block unauthorized demotes'],['welcome on/off','Welcome new members'],['setwelcomemsg <text>','Custom welcome text'],['setgoodbye <text>','Goodbye message'],['warn @user','Issue warning'],['clearwarn @user','Clear warnings'],['warnlist','List warnings'],['del','Delete quoted message'],['disapp on/off','Disappearing messages'],['listmembers','All members'],['listadmins','All admins'],['groupinfo / ginfo','Group stats'],['newgroup <name>','Create new group'],['killgc','Terminate group'],['accept / reject','Handle join requests'],['acceptall / rejectall','Bulk requests'],['listrequests','Pending requests'],['vcf','Export as VCF contacts'],['online','Members online now'],['poll <q>|o1|o2','Create group poll'],['pinmsg','Pin quoted message'],['clonegroup','Clone group'],['kickinactive','Remove inactive members']]),
+              S('\ud83d\udee0\ufe0f TOOLS',[['fetch <url>','Fetch URL content'],['ssweb <url>','Screenshot desktop'],['ssphone <url>','Screenshot mobile'],['sstab <url>','Screenshot tablet'],['sspc <url>','Screenshot PC'],['createqr <text>','Generate QR code'],['readqr','Scan QR (quote image)'],['define <word>','Word definition'],['define2 / gtdefine <word>','Extended definition'],['fancy <text>','Fancy Unicode fonts'],['ttp <text>','Text to image sticker'],['emojimix <e1> <e2>','Mix emojis'],['carbon / codeimg <code>','Code to image'],['ebinary / debinary <t>','Binary encode/decode'],['ebase64 / dbase64 <t>','Base64 encode/decode'],['encrypt <text>','Encrypt code'],['createpdf / topdf','Create PDF'],['photoeditor <prompt>','AI photo edit'],['remini / enhance','Enhance photo'],['removebg / rmbg','Remove background'],['domaincheck / whois <d>','Domain WHOIS'],['dnscheck <domain>','DNS lookup'],['httpheaders <url>','HTTP headers'],['servercheck <url>','Check server'],['web2zip <url>','Website as ZIP'],['rename','Rename document (quote it)'],['shortener','URL shortener list'],['shorten <url>','Shorten URL'],['wacheck / onwa <num>','Check WhatsApp number'],['http / httpreq <url>','HTTP request tester'],['jwtgen <payload>','Generate JWT'],['jwtverify <token>','Verify JWT'],['hash <text>','Hash text'],['mathcalc <expr>','Math calculator'],['unitconv <v> <f> <t>','Unit converter'],['regextest <p> <t>','Test regex'],['ip / iplookup <ip>','IP lookup'],['netping <host>','Ping host'],['quotecard <text>','Quote card'],['canvascard','Canvas card'],['spotifycard','Spotify-style card']]),
+              S('\ud83c\udfae GAMES',[['games','Show all games'],['tictactoe @user','Challenge TicTacToe'],['tttai','TicTacToe vs AI'],['tttplay <1-9>','Place mark'],['tttend','End TicTacToe'],['wcg','Start Word Chain Game'],['wcgjoin','Join Word Chain'],['wcgbegin','Start game (host)'],['wcgend','End Word Chain'],['wcgscores','Scoreboard'],['wcgai <word>','Word Chain vs AI'],['w <word>','Submit a word'],['dice','Start Dice game'],['dicejoin','Join Dice game'],['diceroll / roll','Roll the dice'],['diceend','End Dice game'],['diceai','Dice vs AI'],['trivia','Trivia question'],['answer <ans>','Answer trivia'],['8ball <q>','Magic 8 ball'],['truth','Truth question'],['dare','Dare challenge'],['ship @user','Love meter'],['coinflip','Flip a coin'],['joke','Random joke'],['fact','Random fact'],['quote','Motivational quote']]),
+              S('\ud83d\udd04 CONVERTER',[['sticker / st','Image/video/GIF to sticker'],['toimg / s2img','Sticker to image'],['toaudio / tomp3','Video to audio'],['toptt / tovoice','Audio to voice note'],['tovideo / tomp4','Audio to video'],['togif','Video to GIF'],['tojpeg','Image to JPEG'],['tl / tr <lang> <text>','Translate text'],['ocr / readtext','Image to text (OCR)'],['upscale / hd','AI upscale image'],['removebg / rmbg','Remove background']]),
+              S('\ud83c\udfb5 MUSIC & MEDIA',[['play <song>','Download song as MP3'],['video <url>','YouTube MP4'],['ytmp3 <url>','YouTube audio'],['spotifydl <url>','Spotify download'],['chord <song>','Guitar chord chart'],['soundcloud <q>','SoundCloud search'],['spotifylyrics <q>','Spotify lyrics + art'],['spotifyplaylist <url>','Playlist info'],['hearthis <q>','Hearthis.at music'],['lyricsv2 / lyrics2 <song>','Full lyrics + art'],['transcribe','Transcribe audio'],['tts <text>','Text to speech'],['wallpapers <q>','HD wallpapers']]),
+              S('\u26bd SPORTS & FINANCE',[['livescore','Live football scores'],['standings <league>','League table'],['topscorers','Top goal scorers'],['upcomingmatches','Upcoming fixtures'],['surebet / predictions','Betting tips'],['sportnews','Football news'],['gamehistory <id>','Match events'],['crypto <coin>','Crypto price (live)'],['stock <ticker>','Stock price'],['currency <amt> <f> <t>','Convert currency'],['news <topic>','News headlines']]),
+              S('\ud83d\ude80 DEPLOY & HOST',[['bh','BeraHost dashboard'],['bh bots','Bot templates'],['bh status <id>','Deploy status'],['bh logs <id>','Live logs'],['bh start <id>','Start bot'],['bh stop <id>','Stop bot'],['bh restart <id>','Restart bot'],['bh env <id> K=V','Set env variable'],['bh delete <id>','Delete deploy'],['bh coins','Coin balance'],['bh claim','Daily coins'],['bh pay <kes> <num>','M-Pesa pay'],['bh metrics <id>','Bot metrics'],['setbhkey <key>','Set BH API key'],['deploy beraai <num>','Deploy Bera AI'],['sky / skyhost','SkyHost dashboard'],['skydeploy <repo>','Deploy to SkyHost'],['skyprojects','SkyHost projects'],['skylogs <id>','SkyHost logs'],['setskykey <key>','Set SkyHost key'],['vercel','Vercel dashboard'],['vdeploy <proj>','Deploy to Vercel'],['setvercel <token>','Set Vercel token']]),
+              S('\ud83d\udcbb DEV TOOLS',[['bash / $ <cmd>','Run shell command'],['eval / js <code>','Evaluate JavaScript'],['runcode / jsrun','Run code snippet'],['pyrun','Run Python code'],['gitclone <url>','Clone repo to workspace'],['setghtoken <tok>','Save GitHub token'],['ghrepo <user/repo>','Repo info'],['ghuser <username>','User profile'],['ghsearch <q>','Search GitHub'],['ghgist <code>','Create a Gist'],['workspace list','List workspace files'],['workspace info','Workspace info'],['ssh <host>','Connect via SSH'],['sshexec <cmd>','Run SSH command'],['sshinfo','SSH session info'],['monitor <url>','Uptime monitor'],['cron add <expr> <task>','Add cron job'],['pm2list','PM2 processes'],['pm2start <script>','Start PM2 app'],['pm2stop <name>','Stop PM2 app'],['pm2logs <name>','PM2 logs'],['replit <task>','Replit dev env'],['scaffold <name>','Scaffold project'],['ghwebhook','GitHub webhook']]),
+              S('\ud83e\udd95 PTERODACTYL',[['ptlist / servers','List all servers'],['ptstatus <id>','Server status'],['ptstart <id>','Start server'],['ptstop <id>','Stop server'],['ptrestart <id>','Restart server'],['ptkill <id>','Kill server'],['ptcmd <id> <cmd>','Console command'],['ptfiles <id>','List server files'],['ptread <id> <file>','Read a file'],['ptwrite <id> <file>','Write a file'],['ptcreate','Create new server'],['ptusers <id>','User list'],['ptpromote / ptdemote','Manage user roles'],['ptallservers','All servers (admin)'],['ptnodes','Panel nodes'],['pthelp','Full Pterodactyl guide']]),
+              S('\ud83d\udd11 KEY SYSTEM',[['activate <KEY>','Activate premium key'],['checkkey','Check key status'],...(isOwner?[['genkey <n> <days>','Generate key(s)'],['revokekey <KEY>','Revoke key'],['extendkey <KEY> <d>','Extend expiry'],['listkeys','All keys']]:[])]),
+              S('\ud83c\udfad FUN & EXTRAS',[['joke','Random joke'],['meme','Random meme'],['cat','Cat picture'],['dog','Dog picture'],['wyr','Would You Rather'],['nhie','Never Have I Ever'],['compliment','Random compliment'],['dadjoke','Dad joke'],['roastme','Get roasted'],['confession','Anonymous confession'],['horoscope <sign>','Daily horoscope'],['bmi <w> <h>','BMI calculator'],['age <date>','Age calculator'],['randomchoice <a> <b>','Pick for me'],['slots','Slot machine'],['rps','Rock Paper Scissors'],['numfact <n>','Number fact'],['catfact','Cat fact'],['dogfact','Dog fact'],['showerthought','Shower thought'],['uuid','Generate UUID'],['color <hex>','Color info']]),
+              S('\ud83d\udcdd NOTES',[['addnote / note <title> <text>','Save a note'],['getnote / viewnote <title>','View a note'],['notes / mynotes','List all notes'],['delnote <title>','Delete a note'],['delallnotes','Delete all notes']]),
+              S('\u26ea RELIGION',[['bible <ref>','Bible verse (e.g. John 3:16)'],['verse <ref>','Alias for bible'],['agent quran <ref>','Quran verse via agent']]),
+              S('\u2709\ufe0f TEMP MAIL',[['tempmail','Generate temp email'],['inbox / tempinbox','Check inbox'],['readmail <n>','Read email'],['delmail / deltempmail','Delete temp email'],['tempmailhelp','All temp mail commands']]),
+              S('\u2699\ufe0f SETTINGS',[['mode public/private','Bot access mode'],['btnmode on/off','Toggle interactive buttons'],['setprefix <char>','Change prefix'],['autoreply on/off','Auto-reply'],['autoread on/off','Auto-read'],['autoreact on/off/dm/groups','Auto-react mode'],['autobio on/off','Auto-rotate bio'],['addbio <text>','Add bio entry'],['setchatbot on/off','AI chatbot mode'],['autolikestatus on/off','Auto-like statuses'],['autoreadstatus on/off','Auto-read statuses'],['statusreply on/off','Auto-reply statuses'],['setpmpermit on/off','PM permit'],['setpackname <name>','Sticker pack name'],['setpackauthor <name>','Sticker author'],['settings','View all settings'],['getsetting <key>','Get setting value'],['setsetting <key> <val>','Set any setting'],['resetsetting <key>','Reset setting'],['resetallsettings','Reset everything']])
           ]
-          if (isOwner) sections.push({ title: '👑 OWNER / ADMIN', cmds: [
-              [p+'broadcast <msg>','Broadcast to all users'],[p+'backup','Backup DB + session'],
-              [p+'ban / unban @user','Ban / unban user'],[p+'sudo @user','Add sudo user'],
-              [p+'delsudo @user','Remove sudo user'],[p+'block / unblock','Block / unblock number'],
-              [p+'stats','Bot statistics'],[p+'update','Check for bot updates'],
-              [p+'join / left','Join / leave group'],[p+'forward <jid>','Forward message'],
-              [p+'resetdb','Reset entire database'],[p+'resetsudo','Clear all sudo users'],
-          ]})
-
-          const listText = sections.map(sec => {
-              const cmdLines = sec.cmds.map(([cmd, desc]) => '┃❍ *' + cmd + '* — ' + desc).join('\n')
-              return '╭══〘 ' + sec.title + ' 〙═⊷\n' + cmdLines + '\n╰══════════════════⊷'
-          }).join('\n\n')
-          return reply(listText)
+          if (isOwner) secs.push(S('\ud83d\udc51 OWNER / ADMIN',[['broadcast <msg>','Message all users'],['backup','Backup DB + session'],['ban / unban @user','Ban / unban user'],['premium / depremium @user','Toggle premium'],['sudo @user','Add sudo user'],['delsudo @user','Remove sudo'],['getsudo / listsudo','List sudo users'],['resetsudo','Clear all sudos'],['block / unblock <num>','Block / unblock'],['blocklist','Blocked numbers'],['stats','Bot stats'],['update / updatenow','Update bot'],['reload / hotreload','Reload plugins'],['join <link>','Join group by link'],['left','Leave current group'],['forward <jid>','Forward message'],['tostatus','Post quoted to status'],['vv / vv2','Reveal view-once media'],['save / sv','Save quoted message'],['jid','Get user/group JID'],['mygroups','List all bot groups'],['resetdb','Reset entire database'],['cleandb','Clean stale DB'],['resetlimit','Reset user limits'],['listusers','All bot users'],['schedule <t> <task>','Schedule task'],['noprefix on/off','Prefix-free mode']]))
+          return reply(secs.join('\n\n'))
       }
 
-      // ══════════════════════════════════════════════════════════════════════════
-      //  CATEGORY SUBMENUS
-      // ══════════════════════════════════════════════════════════════════════════
-      const subMenus = {
-          aimenu:       { title: '🧠 AI & AGENT', cmds: [[p+'bera <msg>','Chat with Bera AI'],[p+'agent <task>','Autonomous agent'],[p+'imagine <desc>','Generate image'],[p+'see','Analyze image (quote)'],[p+'tts <text>','Text to speech'],[p+'summarize','Summarize text'],[p+'explain','Explain topic'],[p+'improve','Improve writing'],[p+'rewrite','Rephrase text'],[p+'eli5','Explain like I am 5'],[p+'tweet','Write tweet'],[p+'essay','Write essay'],[p+'debugcode','Debug code'],[p+'eng2code','Generate code'],[p+'berareset','Clear history'],[p+'chatbot on/off','Auto AI replies'],[p+'gpt / gemini','Direct AI models']] },
-          dlmenu:       { title: '📥 DOWNLOADS', cmds: [[p+'play <song>','Song MP3'],[p+'video <url>','YouTube MP4'],[p+'tiktok <url>','TikTok'],[p+'ig <url>','Instagram'],[p+'fb <url>','Facebook'],[p+'twitter <url>','Twitter/X'],[p+'sendaudio <url>','Any audio URL'],[p+'sendvideo <url>','Any video URL'],[p+'gitclone <url>','GitHub repo ZIP'],[p+'snack <url>','Snack Video'],[p+'dl <url>','Auto detect'],[p+'spotifydl <url>','Spotify']] },
-          searchmenu:   { title: '🔍 SEARCH', cmds: [[p+'google <q>','Google'],[p+'yts <q>','YouTube search'],[p+'lyrics <song>','Lyrics'],[p+'shazam','ID music (quote audio)'],[p+'weather <city>','Weather'],[p+'wiki <q>','Wikipedia'],[p+'npm <pkg>','NPM package'],[p+'ggleimage <q>','Google images'],[p+'unsplash <q>','Unsplash'],[p+'wallpapers <q>','Wallpapers'],[p+'wattpad <q>','Wattpad'],[p+'movie <title>','Movie info'],[p+'anime <title>','Anime info'],[p+'stickersearch <q>','Stickers']] },
-          groupmenu:    { title: '👥 GROUPS', cmds: [[p+'kick @user','Remove member'],[p+'add <num>','Add member'],[p+'promote @user','Make admin'],[p+'demote @user','Remove admin'],[p+'mute / unmute','Lock/unlock'],[p+'tagall <msg>','Tag all'],[p+'hidetag <msg>','Silent tag'],[p+'tagadmins','Tag admins'],[p+'link / revoke','Invite link'],[p+'antilink on/off','Block links'],[p+'welcome on/off','Welcome msg'],[p+'warn @user','Warn user'],[p+'del','Delete msg'],[p+'listmembers','Member list'],[p+'everyone <msg>','Tag everyone'],[p+'vcf','Export as VCF']] },
-          toolsmenu:    { title: '🛠️ TOOLS', cmds: [[p+'fetch <url>','Fetch URL'],[p+'ssweb <url>','Screenshot web'],[p+'createqr <text>','Make QR'],[p+'readqr','Scan QR (quote)'],[p+'define <word>','Definition'],[p+'fancy <text>','Fancy text'],[p+'ttp <text>','Text to sticker'],[p+'ebinary <text>','To binary'],[p+'ebase <text>','To base64'],[p+'emojimix <e1> <e2>','Emoji mix'],[p+'remini','Enhance photo'],[p+'photoeditor','AI photo edit'],[p+'domaincheck <url>','WHOIS'],[p+'wacheck <num>','Check WA'],[p+'password','Gen password'],[p+'shorten <url>','Shorten URL']] },
-          gamesmenu:    { title: '🎮 GAMES', cmds: [[p+'tictactoe','TicTacToe (2 players)'],[p+'tttai','TicTacToe vs AI'],[p+'wcg','Word Chain Game'],[p+'wcgai','Word Chain vs AI'],[p+'dice','Dice game'],[p+'diceai','Dice vs AI'],[p+'trivia','Trivia quiz'],[p+'games','All games list']] },
-          convertmenu:  { title: '🔄 CONVERTER', cmds: [[p+'sticker','Image/video to sticker'],[p+'toimg','Sticker to image'],[p+'toaudio','Video to audio'],[p+'toptt','Audio to voice note'],[p+'tovideo','Audio to video'],[p+'tl / tr <lang>','Translate'],[p+'ocr','Extract text from image'],[p+'upscale','Upscale image'],[p+'removebg','Remove background']] },
-          musicmenu:    { title: '🎵 MUSIC & MEDIA', cmds: [[p+'play <song>','Download song MP3'],[p+'video <url>','YouTube MP4'],[p+'spotifydl <url>','Spotify download'],[p+'chord <song>','Guitar chords'],[p+'soundcloud <q>','SoundCloud'],[p+'spotifylyrics','Spotify lyrics'],[p+'transcribe','Transcribe audio'],[p+'tts <text>','Text to speech']] },
-          sportsmenu:   { title: '⚽ SPORTS & FINANCE', cmds: [[p+'livescore','Live scores'],[p+'standings <league>','League table'],[p+'topscorers','Top scorers'],[p+'upcoming','Fixtures'],[p+'surebet','Betting tips'],[p+'sportnews','Football news'],[p+'gamehistory <id>','Match events'],[p+'agent bitcoin price','Crypto price'],[p+'agent AAPL stock','Stock price'],[p+'agent 100 USD KES','Currency']] },
-          deploymenu:   { title: '🚀 DEPLOY', cmds: [[p+'bh','BeraHost dashboard'],[p+'deploy beraai <num>','Deploy bot'],[p+'bh bots','Bot templates'],[p+'bh status <id>','Bot status'],[p+'bh logs <id>','Bot logs'],[p+'bh start/stop <id>','Control bot'],[p+'bh coins','Coins balance'],[p+'bh claim','Claim coins'],[p+'bh pay <kes> <num>','M-Pesa payment'],[p+'setbhkey <key>','Set API key'],[p+'sky deploy <repo>','SkyHost deploy'],[p+'sky projects','SkyHost list']] },
-          devmenu:      { title: '💻 DEV TOOLS', cmds: [[p+'bash / $ <cmd>','Shell command'],[p+'eval / js <code>','Run JS'],[p+'agent <task>','Dev agent'],[p+'gitclone <url>','Clone repo'],[p+'setghtoken <tok>','GitHub token'],[p+'workspace list','Workspace'],[p+'ssh <host>','SSH connect'],[p+'sshexec <cmd>','SSH command'],[p+'monitor add <url>','URL monitor'],[p+'cron add <expr>','Schedule task'],[p+'replit <task>','Replit-style env']] },
-          ptmenu:       { title: '🦕 PTERODACTYL', cmds: [[p+'ptlist','List servers'],[p+'ptstatus <id>','Status'],[p+'ptstart <id>','Start'],[p+'ptstop <id>','Stop'],[p+'ptrestart <id>','Restart'],[p+'ptcmd <id> <cmd>','Console cmd'],[p+'ptfiles <id>','List files'],[p+'ptread <id> <f>','Read file'],[p+'ptcreate','Create server'],[p+'ptnodes','Panel nodes']] },
-          keymenu:      { title: '🔑 KEY SYSTEM', cmds: [[p+'activate <KEY>','Activate key'],[p+'checkkey','Check my key'],...(isOwner?[[p+'genkey <num> <days>','Generate key'],[p+'revokekey <KEY>','Revoke key'],[p+'extendkey <KEY> <d>','Extend key'],[p+'listkeys','All keys']]:[]) ] },
-          religionmenu: { title: '⛪ RELIGION', cmds: [[p+'bible <ref>','Bible verse (e.g. John 3:16)'],[p+'verse <ref>','Same as bible'],[p+'agent quran <ref>','Quran verse']] },
-          tempmailmenu: { title: '✉️ TEMP MAIL', cmds: [[p+'tempmail','Generate temp email'],[p+'inbox','Check inbox'],[p+'readmail <n>','Read email'],[p+'delmail','Delete email'],[p+'tempmailhelp','All commands']] },
-          settingsmenu: { title: '⚙️ SETTINGS', cmds: [[p+'mode public/private','Access mode'],[p+'btnmode on/off','Toggle buttons'],[p+'setprefix <char>','Change prefix'],[p+'autoreply on/off','Auto reply'],[p+'autoread on/off','Auto read'],[p+'autoreact on/off','Auto react'],[p+'autobio on/off','Auto bio'],[p+'setchatbot on/off','Chatbot'],[p+'settimezone <tz>','Timezone'],[p+'settings','View all settings']] },
-          ownermenu:    { title: '👑 OWNER / ADMIN', cmds: isOwner ? [[p+'broadcast <msg>','Broadcast'],[p+'backup','Backup DB'],[p+'ban / unban @user','Ban user'],[p+'sudo @user','Add sudo'],[p+'delsudo @user','Remove sudo'],[p+'block / unblock','Block user'],[p+'stats','Bot stats'],[p+'update','Check updates'],[p+'join <link>','Join group'],[p+'left','Leave group'],[p+'resetdb','Reset database'],[p+'resetsudo','Clear sudo']] : [] },
+      const TILES={
+          aimenu:{title:'\ud83e\udde0 AI & AGENT',lines:['bera \u2022 agent \u2022 imagine \u2022 see \u2022 tts','transcribe \u2022 chatbot \u2022 beratrigger \u2022 tagreply','summarize \u2022 explain \u2022 improve \u2022 proofread \u2022 eli5','rewrite \u2022 formal \u2022 casual \u2022 tweet \u2022 caption2','essay \u2022 email \u2022 cover \u2022 expand \u2022 roasttext','code2eng \u2022 eng2code \u2022 debugcode \u2022 sentiment','remember \u2022 recall \u2022 memories \u2022 forget \u2022 berareset','gpt \u2022 gpt4 \u2022 gpt4o \u2022 gemini \u2022 venice \u2022 giftedai','cron \u2022 apidocs \u2022 codescan \u2022 scaffold'],note:'Usage: '+p+'<command> <text/task>'},
+          dlmenu:{title:'\ud83d\udce5 DOWNLOADS',lines:['play \u2022 video \u2022 ytmp3 \u2022 tiktok','ig / insta \u2022 fb \u2022 twitter / xdl','spotifydl \u2022 snack \u2022 sendaudio \u2022 sendvideo','gitclone \u2022 dl (auto-detect)'],note:'Usage: '+p+'play <song> or '+p+'tiktok <url>'},
+          searchmenu:{title:'\ud83d\udd0d SEARCH',lines:['google \u2022 yts \u2022 lyrics \u2022 shazam','weather \u2022 wiki \u2022 npm \u2022 movie \u2022 anime','ggleimage \u2022 unsplash \u2022 wallpapers \u2022 stickersearch','wattpad \u2022 spotifysearch \u2022 happymod \u2022 apkmirror','playstore \u2022 soundcloud \u2022 tiktoksearch'],note:'Usage: '+p+'google <query>'},
+          groupmenu:{title:'\ud83d\udc65 GROUPS',lines:['kick \u2022 add \u2022 promote \u2022 demote','mute \u2022 unmute \u2022 del \u2022 disapp','tagall \u2022 hidetag \u2022 tagadmins \u2022 everyone','link \u2022 revoke \u2022 groupname \u2022 gcdesc \u2022 gcpp','antilink \u2022 antispam \u2022 antipromote \u2022 antidemote','welcome \u2022 setwelcomemsg \u2022 warn \u2022 clearwarn','listmembers \u2022 listadmins \u2022 groupinfo','newgroup \u2022 killgc \u2022 accept \u2022 reject \u2022 vcf','poll \u2022 pinmsg \u2022 clonegroup \u2022 kickinactive'],note:'Admin/owner required for most commands'},
+          toolsmenu:{title:'\ud83d\udee0\ufe0f TOOLS',lines:['fetch \u2022 ssweb \u2022 ssphone \u2022 sstab \u2022 sspc','createqr \u2022 readqr \u2022 define \u2022 define2','fancy \u2022 ttp \u2022 emojimix \u2022 carbon \u2022 codeimg','ebinary \u2022 debinary \u2022 ebase64 \u2022 dbase64','createpdf \u2022 photoeditor \u2022 remini \u2022 removebg','domaincheck \u2022 dnscheck \u2022 httpheaders \u2022 servercheck','web2zip \u2022 rename \u2022 shortener \u2022 shorten','wacheck \u2022 http \u2022 jwtgen \u2022 hash \u2022 mathcalc','unitconv \u2022 regextest \u2022 ip \u2022 netping','quotecard \u2022 canvascard \u2022 spotifycard'],note:'Most tools work on quoted images/text'},
+          gamesmenu:{title:'\ud83c\udfae GAMES',lines:['\ud83c\udfaf TicTacToe: tictactoe @user \u2022 tttai \u2022 tttplay \u2022 tttend','\u26d3\ufe0f Word Chain: wcg \u2022 wcgjoin \u2022 wcgbegin \u2022 wcgend \u2022 wcgai','          Word: w <word>  \u2022  Scores: wcgscores','\ud83c\udfb2 Dice: dice \u2022 dicejoin \u2022 diceroll \u2022 diceai \u2022 diceend','\ud83c\udfa4 Quick: trivia \u2022 8ball \u2022 truth \u2022 dare \u2022 ship','\ud83e\ude99 Other: coinflip \u2022 roll \u2022 joke \u2022 fact \u2022 quote'],note:'Most games work best in groups'},
+          convertmenu:{title:'\ud83d\udd04 CONVERTER',lines:['sticker / st \u2014 image/video/GIF to sticker','toimg / s2img \u2014 sticker to image','toaudio / tomp3 \u2014 video to audio (MP3)','toptt / tovoice \u2014 audio to voice note','tovideo / tomp4 \u2014 audio to video','togif \u2014 video to GIF','tojpeg \u2014 image to JPEG','tl / tr <lang> \u2014 translate text','ocr / readtext \u2014 image to text','upscale / hd \u2014 AI upscale image','removebg / rmbg \u2014 remove background'],note:'Quote media then type the command'},
+          musicmenu:{title:'\ud83c\udfb5 MUSIC & MEDIA',lines:['play <song> \u2022 video <url> \u2022 ytmp3 <url>','spotifydl \u2022 spotifylyrics \u2022 spotifyplaylist','chord <song> \u2022 soundcloud <q> \u2022 hearthis <q>','lyricsv2 <song> \u2022 transcribe \u2022 tts <text>','wallpapers <q>'],note:'Usage: '+p+'play <song name or YouTube URL>'},
+          sportsmenu:{title:'\u26bd SPORTS & FINANCE',lines:['\u26bd Football:','livescore \u2022 standings \u2022 topscorers','upcomingmatches \u2022 surebet \u2022 sportnews \u2022 gamehistory','','\ud83d\udcb0 Finance:','crypto <coin> \u2022 stock <ticker>','currency <amt> <from> <to> \u2022 news <topic>'],note:'Usage: '+p+'livescore or '+p+'crypto BTC'},
+          deploymenu:{title:'\ud83d\ude80 DEPLOY & HOST',lines:['\ud83c\udfd7\ufe0f BeraHost:','bh \u2022 bh bots \u2022 bh status <id>','bh logs \u2022 bh start/stop/restart <id>','bh env <id> KEY=VAL \u2022 bh coins \u2022 bh claim','bh pay <kes> <phone> \u2022 setbhkey <key>','','\u2601\ufe0f SkyHost: sky \u2022 skydeploy \u2022 skyprojects \u2022 setskykey','\u25b2 Vercel: vercel \u2022 vdeploy \u2022 setvercel'],note:'Set API keys first with setbhkey / setvercel'},
+          devmenu:{title:'\ud83d\udcbb DEV TOOLS',lines:['bash / $ <cmd> \u2014 run shell','eval / js <code> \u2014 run JavaScript','runcode / jsrun / pyrun \u2014 run code','gitclone <url> \u2022 setghtoken \u2022 ghrepo \u2022 ghuser','ghsearch \u2022 ghgist','workspace list \u2022 workspace info','ssh <host> \u2022 sshexec <cmd> \u2022 sshinfo','monitor <url> \u2022 cron add <expr> <task>','pm2list \u2022 pm2start \u2022 pm2stop \u2022 pm2logs','replit <task> \u2022 scaffold <name>'],note:'Owner/sudo required for shell & eval'},
+          ptmenu:{title:'\ud83e\udd95 PTERODACTYL',lines:['ptlist / servers \u2014 list all servers','ptstatus \u2022 ptstart \u2022 ptstop \u2022 ptrestart \u2022 ptkill','ptcmd <id> <cmd> \u2014 run console command','ptfiles \u2022 ptread \u2022 ptwrite \u2014 file management','ptcreate \u2022 ptusers \u2022 ptpromote \u2022 ptdemote','ptallservers \u2022 ptnodes \u2022 pthelp'],note:'Requires Pterodactyl panel API key'},
+          keymenu:{title:'\ud83d\udd11 KEY SYSTEM',lines:['activate <KEY> \u2014 activate premium key','checkkey \u2014 view key status & expiry',...(isOwner?['genkey <n> <days> \u2014 generate key(s) (owner)','revokekey <KEY> \u2014 deactivate key','extendkey <KEY> <d> \u2014 extend expiry','listkeys \u2014 all generated keys']:[])],note:isOwner?'Owner key tools shown above':'Contact owner to get a key'},
+          funmenu:{title:'\ud83c\udfad FUN & EXTRAS',lines:['joke \u2022 meme \u2022 cat \u2022 dog \u2022 wyr \u2022 nhie','compliment \u2022 dadjoke \u2022 roastme \u2022 confession','horoscope <sign> \u2022 bmi \u2022 age \u2022 uuid \u2022 color','randomchoice \u2022 slots \u2022 rps \u2022 numfact','catfact \u2022 dogfact \u2022 showerthought'],note:'No arguments needed for most commands!'},
+          notesmenu:{title:'\ud83d\udcdd NOTES',lines:['addnote / note <title> <text> \u2014 save note','getnote / viewnote <title> \u2014 view note','notes / mynotes \u2014 list all notes','delnote <title> \u2014 delete note','delallnotes \u2014 clear all notes'],note:'Notes are personal and private per-user'},
+          religionmenu:{title:'\u26ea RELIGION',lines:['bible <ref> \u2014 Bible verse (e.g. John 3:16)','verse <ref> \u2014 alias for bible','agent quran <ref> \u2014 Quran verse via agent'],note:'Usage: '+p+'bible John 3:16'},
+          tempmailmenu:{title:'\u2709\ufe0f TEMP MAIL',lines:['tempmail \u2014 generate temp email','inbox / tempinbox \u2014 check inbox','readmail <n> \u2014 read email','delmail / deltempmail \u2014 delete temp email','tempmailhelp \u2014 full guide'],note:'One temp email per user session'},
+          settingsmenu:{title:'\u2699\ufe0f SETTINGS',lines:['mode public/private \u2014 bot access mode','btnmode on/off \u2014 toggle buttons  \u2190 USE THIS','setprefix <char> \u2014 change prefix','autoreply \u2022 autoread \u2022 autoreact \u2022 autobio','autolikestatus \u2022 autoreadstatus \u2022 statusreply','setchatbot on/off \u2022 setpmpermit on/off','setpackname \u2022 setpackauthor \u2014 sticker settings','settings \u2014 view all \u2022 getsetting \u2022 setsetting'],note:'Usage: '+p+'btnmode on  or  '+p+'btnmode off'},
+          ownermenu:{title:'\ud83d\udc51 OWNER / ADMIN',lines:isOwner?['broadcast \u2022 backup \u2022 stats \u2022 resetdb \u2022 cleandb','ban/unban \u2022 premium/depremium \u2022 block/unblock','sudo \u2022 delsudo \u2022 getsudo \u2022 resetsudo','update \u2022 reload \u2022 hotreload','join \u2022 left \u2022 forward \u2022 tostatus \u2022 vv \u2022 save','jid \u2022 mygroups \u2022 listusers \u2022 resetlimit','schedule \u2022 noprefix \u2022 mode']:['\u26d4 Owner only section'],note:isOwner?'Use destructive commands carefully':'Not available'},
       }
 
-      const subCmd = Object.keys(subMenus).find(k => command === k)
-      if (subCmd) {
-          const { title, cmds } = subMenus[subCmd]
-          if (!cmds.length) return reply('⛔ Owner only section.')
-          const lines = cmds.map(([cmd, desc]) => '┃❍ *' + cmd + '* — ' + desc).join('\n')
-          const menuText = '╭══〘 ' + title + ' 〙═⊷\n' + lines + '\n╰══════════════════⊷'
-          if (btnOn && _sendButtons) {
-              try {
-                  return await _sendButtons(conn, chat, {
-                      title,
-                      text: menuText,
-                      footer: config.botName + ' v' + config.version,
-                      buttons: [
-                          { id: p + 'menu', text: '🏠 Main Menu' },
-                          { id: p + 'list', text: '📋 Full List' },
-                      ]
-                  })
-              } catch {}
-          }
-          return reply(menuText)
+      const sub=Object.keys(TILES).find(k=>command===k)
+      if (sub) {
+          const {title,lines,note}=TILES[sub]
+          const body='\u256d\u2500\u2500\u2740 *'+title+'* \u2740\n'+lines.map(l=>l?'\u2502  '+l:'\u2502').join('\n')+'\n'+(note?'\u2502\n\u2502 \u2139\ufe0f '+note+'\n':'')+'\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2022'
+          if (btnOn && _sendButtons) { try { return await _sendButtons(conn,chat,{title,text:body,footer:config.botName+' \u2014 '+p+'menu for categories',buttons:[{id:p+'menu',text:'\ud83c\udfe0 Main Menu'},{id:p+'list',text:'\ud83d\udccb Full List'}]}) } catch {} }
+          return reply(body)
       }
 
-      // ── STICKER ───────────────────────────────────────────────────────────────
-      if (['sticker', 's', 'st', 'take'].includes(command)) {
-          const quoted = m.quoted || m
-          const mime = quoted?.mimetype || ''
-          if (!mime.includes('image') && !mime.includes('video') && !mime.includes('webp'))
-              return reply('❌ Please quote or attach an image, video, or GIF.')
-          await conn.sendMessage(chat, { react: { text: '⚙️', key: m.key } }).catch(() => {})
+      if (['sticker','s','st','take'].includes(command)) {
+          const quoted=m.quoted||m; const mime=quoted?.mimetype||''
+          if (!mime.includes('image')&&!mime.includes('video')&&!mime.includes('webp')) return reply('\u274c Quote or send an image, video, or GIF first.')
+          await conn.sendMessage(chat,{react:{text:'\u2699\ufe0f',key:m.key}}).catch(()=>{})
           try {
-              const media = await conn.downloadMediaMessage(quoted)
-              const sticker = await makeSticker(media, mime, { packname: config.botName, author: config.developer })
-              await conn.sendMessage(chat, { sticker }, { quoted: m })
-              await conn.sendMessage(chat, { react: { text: '✅', key: m.key } }).catch(() => {})
-          } catch (e) {
-              await conn.sendMessage(chat, { react: { text: '❌', key: m.key } }).catch(() => {})
-              return reply('❌ Sticker failed: ' + e.message)
+              const media=await conn.downloadMediaMessage(quoted)
+              const sticker=await makeSticker(media,mime,{packname:config.botName,author:config.developer})
+              await conn.sendMessage(chat,{sticker},{quoted:m})
+              await conn.sendMessage(chat,{react:{text:'\u2705',key:m.key}}).catch(()=>{})
+          } catch(e) {
+              await conn.sendMessage(chat,{react:{text:'\u274c',key:m.key}}).catch(()=>{})
+              return reply('\u274c Sticker failed: '+e.message)
           }
       }
   }
 
-  handle.commands = [
-      'ping', 'uptime', 'up', 'status', 'dashboard', 'botstat', 'info',
-      'menu', 'help', 'start', 'commands', 'men', 'menus', 'mainmenu',
-      'list', 'listmenu', 'listmen', 'cmds', 'allcmds',
-      'aimenu', 'dlmenu', 'searchmenu', 'groupmenu', 'toolsmenu', 'gamesmenu',
-      'convertmenu', 'musicmenu', 'sportsmenu', 'deploymenu', 'devmenu',
-      'ptmenu', 'keymenu', 'religionmenu', 'tempmailmenu', 'settingsmenu', 'ownermenu',
-      'sticker', 's', 'st', 'take',
-  ]
-
+  handle.commands=['ping','uptime','up','status','dashboard','botstat','info','menu','help','start','commands','men','menus','mainmenu','list','listmenu','listmen','cmds','allcmds','aimenu','dlmenu','searchmenu','groupmenu','toolsmenu','gamesmenu','convertmenu','musicmenu','sportsmenu','deploymenu','devmenu','ptmenu','keymenu','funmenu','notesmenu','religionmenu','tempmailmenu','settingsmenu','ownermenu','sticker','s','st','take']
   module.exports = handle
   
