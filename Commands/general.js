@@ -196,7 +196,7 @@ const config = require('../Config')
       if (['list', 'listmenu', 'listmen', 'cmds', 'allcmds'].includes(command)) {
           const sections = [
               { title: '🧠 AI & AGENT', cmds: [
-                  [p+'bera <msg>','Chat with Bera AI'],[p+'agent <task>','Autonomous agent (55 tools)'],
+                  [p+'bera <msg>','Chat with Bera AI'],[p+'agent <task>','Autonomous agent (140 tools)'],
                   [p+'imagine <desc>','Generate AI image'],[p+'see / vision','Analyze an image'],
                   [p+'tts <text>','Text to speech'],[p+'summarize <text>','Summarize text'],
                   [p+'explain <topic>','Explain clearly'],[p+'improve <text>','Improve writing'],
