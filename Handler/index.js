@@ -4228,18 +4228,15 @@ const handleMessage = async (conn, rawMsg) => {
             const chatberaGroupOk = global.db?.data?.chatbera?.groupEnabled || false
             if (chatberaOn && !m.fromMe && text && !_agentAllowed && (!m.isGroup || chatberaGroupOk)) {
                 console.log('[CHATBERA] 🔥 Triggered for msg:', text.slice(0, 30), '| from:', sender)
-                try {
-                    const { generateAdvancedReply } = require('../Library/actions/beraai')
-                    conn.sendPresenceUpdate('composing', chat).catch(() => {})
-                    await new Promise(r => setTimeout(r, 800 + Math.random() * 1500))
-                    const result = await generateAdvancedReply(text, chat, conn, m)
-                    if (result.success && result.reply) {
-                        if (result.toolUsed) {
-                            await conn.sendMessage(chat, { react: { text: '🔧', key: m.key } }).catch(() => {})
-                        }
-                        await conn.sendMessage(chat, { text: result.reply }, { quoted: m })
-                    }
-                    conn.sendPresenceUpdate('paused', chat).catch(() => {})
+                  try {
+                      const { generateSimpleReply } = require('../Library/actions/beraai')
+                      conn.sendPresenceUpdate('composing', chat).catch(() => {})
+                      await new Promise(r => setTimeout(r, 800 + Math.random() * 1500))
+                      const result = await generateSimpleReply(text, chat)
+                      if (result.success && result.reply) {
+                          await conn.sendMessage(chat, { text: result.reply }, { quoted: m })
+                      }
+                      conn.sendPresenceUpdate('paused', chat).catch(() => {})
                 } catch (e) {
                     console.error('[CHATBERA]', e.message)
                 }
