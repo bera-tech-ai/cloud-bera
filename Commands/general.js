@@ -196,18 +196,18 @@ const config = require('../Config')
           tempmailmenu:{title:'\u2709\ufe0f TEMP MAIL',lines:['tempmail \u2014 generate temp email','inbox / tempinbox \u2014 check inbox','readmail <n> \u2014 read email','delmail / deltempmail \u2014 delete temp email','tempmailhelp \u2014 full guide'],note:'One temp email per user session'},
           settingsmenu:{title:'\u2699\ufe0f SETTINGS',lines:['mode public/private \u2014 bot access mode','btnmode on/off \u2014 toggle buttons  \u2190 USE THIS','setprefix <char> \u2014 change prefix','autoreply \u2022 autoread \u2022 autoreact \u2022 autobio','autolikestatus \u2022 autoreadstatus \u2022 statusreply','setchatbot on/off \u2022 setpmpermit on/off','setpackname \u2022 setpackauthor \u2014 sticker settings','settings \u2014 view all \u2022 getsetting \u2022 setsetting'],note:'Usage: '+p+'btnmode on  or  '+p+'btnmode off'},
           ownermenu:{title:'\ud83d\udc51 OWNER / ADMIN',lines:isOwner?['broadcast \u2022 backup \u2022 stats \u2022 resetdb \u2022 cleandb','ban/unban \u2022 premium/depremium \u2022 block/unblock','sudo \u2022 delsudo \u2022 getsudo \u2022 resetsudo','update \u2022 reload \u2022 hotreload','join \u2022 left \u2022 forward \u2022 tostatus \u2022 vv \u2022 save','jid \u2022 mygroups \u2022 listusers \u2022 resetlimit','schedule \u2022 noprefix \u2022 mode']:['\u26d4 Owner only section'],note:isOwner?'Use destructive commands carefully':'Not available'},
-      }
-          ai: TILES.aimenu,
-          dl: TILES.dlmenu,
-          search: TILES.searchmenu,
-          gc: TILES.groupmenu,
-          dev: TILES.devmenu,
-          bhost: TILES.deploymenu,
-          fun: TILES.funmenu,
-          cfg: TILES.settingsmenu,
-          owner: TILES.ownermenu,
           ghostmenu: {title:'👻 GHOST MODE',lines:['ghost on    — activate ghost auto-reply','ghost off   — deactivate (keeps learning silently)','ghost status — show if ON/OFF + stats','ghost stats  — learned conversation breakdown','ghost test <msg> — test a reply','ghost reset  — clear all learned data'],note:'Ghost Mode learns your style and replies as you'},
           privacymenu: {title:'🔐 PRIVACY & PROFILE',lines:['privacy         — view all privacy settings','setlastseen all/contacts/none','setonline all/contacts','setprofilepic all/contacts/none','readreceipts on/off','presence typing/recording/paused','disappear 24h/7d/90d/off — set/disable vanish mode','changename <name> — change display name','changebio <text> — change WhatsApp bio','blocklist         — show blocked contacts','blockuser @mention / unblockuser @mention'],note:'Usage: '+p+'privacy  or  '+p+'disappear 7d'},
+      }
+      TILES.ai = TILES.aimenu
+      TILES.dl = TILES.dlmenu
+      TILES.search = TILES.searchmenu
+      TILES.gc = TILES.groupmenu
+      TILES.dev = TILES.devmenu
+      TILES.bhost = TILES.deploymenu
+      TILES.fun = TILES.funmenu
+      TILES.cfg = TILES.settingsmenu
+      TILES.owner = TILES.ownermenu
 
 
       const sub=Object.keys(TILES).find(k=>command===k)
