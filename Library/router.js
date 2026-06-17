@@ -1047,7 +1047,12 @@ const detectIntent = (text) => {
     if (/\b(generate|create|make|give me).{0,15}(a )?(strong |secure |random )?password\b/i.test(t) ||
         /\b(password generator|random password|new password)\b/i.test(t)) return 'password_gen'
 
-    // ── Semantic fallback — catch natural-language intent the regex missed ──────
+    // ── Show settings ──────────────────────────────────────────────────────────
+      if (/\b(show|view|display|list|get|my|check)\b.{0,20}\b(settings?|config(uration)?|prefs?|preferences?)\b/i.test(t) ||
+          /\b(what\s+are\s+(my|the|current)|current\s+bot)\s+settings?\b/i.test(t) ||
+          /\b(settings?\s+(panel|overview|status|list|info|summary)|bot\s+config)/i.test(t)) return 'show_settings'
+
+      // ── Semantic fallback — catch natural-language intent the regex missed ──────
     try {
         const { semanticRoute } = require('./lib/semanticRouter')
         const semantic = semanticRoute(t, 0.30)
