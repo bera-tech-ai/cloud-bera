@@ -515,9 +515,12 @@ const startBot = async () => {
                     : content?.sticker ? '🎴 [sticker]'
                     : content?.document ? '📄 [document]'
                     : '[media]'
+                if (!global.jidPhoneMap) global.jidPhoneMap = {}
                 const to = jid.endsWith('@g.us')
                     ? 'grp:' + jid.split('@')[0].slice(-6)
-                    : '+' + jid.replace('@s.whatsapp.net', '')
+                    : jid.endsWith('@lid')
+                    ? (global.jidPhoneMap[jid] ? '+' + global.jidPhoneMap[jid] : 'lid:' + jid.split('@')[0].slice(-10))
+                    : '+' + jid.replace('@s.whatsapp.net', '').replace(/@.*/, '')
                 beraLog.sent(to, preview)
             }
         } catch {}
@@ -547,9 +550,17 @@ const startBot = async () => {
                         || (mtype?.includes('sticker') ? '🎴 [sticker]' : '')
                         || (mtype?.includes('document') ? '📄 [document]' : '')
                         || '[message]'
+                    if (!global.jidPhoneMap) global.jidPhoneMap = {}
+                    const _rawJid = (msg.key?.participant || msg.key?.remoteJid || '')
+                    // Cache real phone numbers as we see them
+                    if (_rawJid.endsWith('@s.whatsapp.net')) {
+                        global.jidPhoneMap[_rawJid] = _rawJid.split('@')[0]
+                    }
                     const from = msg.key?.remoteJid?.endsWith('@g.us')
                         ? 'grp:' + msg.key.remoteJid.split('@')[0].slice(-6)
-                        : '+' + (msg.key?.participant || msg.key?.remoteJid || '').replace('@s.whatsapp.net', '')
+                        : _rawJid.endsWith('@lid')
+                        ? (global.jidPhoneMap[_rawJid] ? '+' + global.jidPhoneMap[_rawJid] : 'lid:' + _rawJid.split('@')[0].slice(-10))
+                        : '+' + _rawJid.replace('@s.whatsapp.net', '').replace(/@.*/, '')
                     beraLog.recv(from, msg.pushName || '', text.replace(/\n/g, ' '))
                 }
             } catch {}
