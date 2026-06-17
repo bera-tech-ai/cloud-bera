@@ -4192,6 +4192,32 @@ const handleMessage = async (conn, rawMsg) => {
             }
             // ═══════════════════════════════════════════════════════════════
 
+            // ── Ghost Mode passive learning ───────────────────────────────────
+            // Always active — silently learns from every incoming DM (even when ghost is OFF)
+            if (!m.fromMe && !m.isGroup && text) {
+                try {
+                    const _gp = handlers.find(h => typeof h?.learnMessage === 'function')
+                    if (_gp) _gp.learnMessage(sender.split('@')[0], m.pushName || sender.split('@')[0], text).catch(() => {})
+                } catch {}
+            }
+
+            // ── Ghost Mode auto-reply: respond as Bruce Bera ──────────────────
+            // Fires ONLY when: ghost is ON, DM (not group), not from bot, no agent trigger
+            const _ghostOn = global.db?.data?.ghost?.enabled === true
+            if (_ghostOn && !m.fromMe && text && !_agentAllowed && !m.isGroup) {
+                try {
+                    const _gp = handlers.find(h => typeof h?.generateGhostReply === 'function')
+                    if (_gp) {
+                        conn.sendPresenceUpdate('composing', chat).catch(() => {})
+                        await new Promise(r => setTimeout(r, 600 + Math.random() * 1400))
+                        const _gr = await _gp.generateGhostReply(sender.split('@')[0], text, m.pushName || '')
+                        if (_gr) await conn.sendMessage(chat, { text: _gr }, { quoted: m })
+                        conn.sendPresenceUpdate('paused', chat).catch(() => {})
+                    }
+                } catch (e) { console.error('[GHOST]', e?.message || e) }
+                return
+            }
+
             // ── ChatBera mode: reply as the owner when activated ──────────────
             // ChatBera: global mode OR per-chat mode
             // Does NOT fire when the agent already handled the message (bera mentioned)
