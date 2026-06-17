@@ -4,8 +4,8 @@
 
 // Global store (persists in memory for bot session)
 const store = global.beraBtnMode || (global.beraBtnMode = {
-    global: true, // true = buttons ON by default
-    perChat: {},  // override per chat/group
+    global: false, // OFF by default — use .btnmode on to enable
+    perChat: {},
 })
 
 /**
