@@ -172,28 +172,29 @@ handle.all = async (m, { conn, command, args, prefix, reply, isOwner, isAdmin, i
         })
     }
 
-    // ── .settingspanel — full toggle panel (single_select list) ──────────────
-    else if (['settingspanel', 'settingsmenu', 'settings'].includes(command)) {
-        const on  = v => v ? '✅' : '❌'
-        const rows = [
-            { id: p + 'ai',          title: '🤖 ChatBera AI',        description: 'Currently: ' + on(cfg.chatberaEnabled) },
-            { id: p + 'chatbot',     title: '💬 Chatbot Mode',       description: 'Currently: ' + on(cfg.chatbot) },
-            { id: p + 'sv',          title: '👁️ Auto Status View',  description: 'Currently: ' + on(cfg.autoStatusView) },
-            { id: p + 'sl',          title: '❤️ Auto Status Like',  description: 'Currently: ' + on(cfg.autoStatusLike) },
-            { id: p + 'autotyping',  title: '⌨️ Auto Typing',       description: 'Currently: ' + on(cfg.autotyping) },
-            { id: p + 'noprefix',    title: '🔑 No-Prefix Mode',    description: 'Currently: ' + on(cfg.noprefix) },
-            { id: p + 'mode',        title: '🌐 Bot Mode',          description: 'Currently: ' + (cfg.mode || 'public') },
-        ]
-        return sendButtons(conn, chat, {
-            title:  '⚙️ Bot Settings',
-            text:   'Select a setting to toggle it:',
-            footer: 'Bera AI Settings',
-            buttons: [{
-                name: 'single_select',
-                buttonParamsJson: JSON.stringify({ title: '⚙️ Choose Setting', sections: [{ title: 'Bot Settings', rows }] })
-            }]
-        })
-    }
+    // ── .settingspanel — full toggle panel ───────────────────────────────────
+      else if (['settingspanel', 'settingsmenu', 'settings'].includes(command)) {
+          const on  = v => v ? '✅' : '❌'
+          const settingsText =
+              '🤖 *ChatBera AI:*  ' + on(cfg.chatberaEnabled) + '\n' +
+              '💬 *Chatbot Mode:* ' + on(cfg.chatbot) + '\n' +
+              '👁️ *Status View:*  ' + on(cfg.autoStatusView) + '\n' +
+              '❤️ *Status Like:*  ' + on(cfg.autoStatusLike) + '\n' +
+              '⌨️ *Auto Typing:*  ' + on(cfg.autotyping) + '\n' +
+              '🔑 *No-Prefix:*    ' + on(cfg.noprefix) + '\n' +
+              '🌐 *Bot Mode:*     ' + (cfg.mode || 'public') + '\n\n' +
+              'Tap a button to toggle:'
+          return sendButtons(conn, chat, {
+              title:  '⚙️ Bot Settings',
+              text:   settingsText,
+              footer: 'Bera AI Settings',
+              buttons: [
+                  { id: p + 'ai',       text: '🤖 Toggle AI' },
+                  { id: p + 'sv',       text: '👁️ Status View' },
+                  { id: p + 'noprefix', text: '🔑 No-Prefix' },
+              ]
+          })
+      }
 
     // ── .deploylist — list my deployments ────────────────────────────────────
     else if (['deploylist', 'deplist', 'mybotslist'].includes(command)) {
@@ -211,16 +212,20 @@ handle.all = async (m, { conn, command, args, prefix, reply, isOwner, isAdmin, i
         } catch {}
         if (!rows.length) return reply('❌ No deployments found. Use ' + p + 'deploy to create one.')
 
-        return sendButtons(conn, chat, {
-            title:  '🤖 My Deployments',
-            text:   'Select a deployment to view its details:',
-            footer: 'BeraHost — Bot Hosting',
-            buttons: [{
-                name: 'single_select',
-                buttonParamsJson: JSON.stringify({ title: '🤖 Select Bot', sections: [{ title: 'Active Bots', rows }] })
-            }]
-        })
-    }
+        const listing = rows.slice(0, 5).map((r, i) =>
+              (i + 1) + '. *' + r.title.replace(/^🤖 /, '') + '*\n   ' + r.description
+          ).join('\n\n')
+          return sendButtons(conn, chat, {
+              title:  '🤖 My Deployments',
+              text:   'Your active bots:\n\n' + listing,
+              footer: 'BeraHost — Bot Hosting',
+              buttons: [
+                  { id: p + 'bhstatus', text: '🟢 Check Status' },
+                  { id: p + 'deploy',   text: '🚀 New Bot' },
+                  { id: p + 'bhpanel',  text: '☁️ BH Panel' },
+              ]
+          })
+      }
 }
 
 module.exports = handle
