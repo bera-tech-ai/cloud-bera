@@ -1246,10 +1246,15 @@ const handleMessage = async (conn, rawMsg) => {
                         // Apply fancy font if requested
                         let finalName = rawName
                         if (/fancy|exceptional|stylish|cool|unicode|special/i.test(text)) {
-                            const { toFancy } = require('../Library/actions/fancy').default || require('../Library/actions/fancy') || {}
-                            if (typeof toFancy === 'function') finalName = toFancy(rawName)
-                            else {
-                                // Manual fancy: bold italic unicode
+                            let toFancy = null
+                            try {
+                                const fancyMod = require('../Library/actions/fancy')
+                                toFancy = fancyMod?.default?.toFancy || fancyMod?.toFancy || null
+                            } catch (_) {}
+                            if (typeof toFancy === 'function') {
+                                finalName = toFancy(rawName)
+                            } else {
+                                // Built-in fallback: bold unicode
                                 const bold = s => [...s].map(c => {
                                     const code = c.charCodeAt(0)
                                     if (code >= 65 && code <= 90) return String.fromCodePoint(code - 65 + 0x1D400)
