@@ -10,7 +10,7 @@ const isAuthorized = (sender) => {
     const mode = db.data?.settings?.mode || 'public'
     if (mode === 'public') return { authorized: true, isOwner: false }
     // Private mode — also allow sudo users
-    const sudoList = db.data?.sudo || []
+    const sudoList = db.data?.settings?.sudo || []
     const isSudo = sudoList.includes(sender) || sudoList.includes(phoneNumber + '@s.whatsapp.net')
     if (isSudo) return { authorized: true, isOwner: false }
     return { authorized: false, isOwner: false }
