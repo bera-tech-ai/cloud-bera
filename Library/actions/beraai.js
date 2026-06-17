@@ -3815,11 +3815,24 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 // SIMPLE CHAT MODE (no tools)
 // ─────────────────────────────────────────────────────────────────────────────
 const generateSimpleReply = async (text, chat) => {
-    pushHistory(chat, 'user', text)
-    const messages = [
-        { role: 'system', content: 'You are Bera AI — a friendly, smart WhatsApp assistant by Bera Tech. Be helpful, concise, and conversational.' },
-        ...getHistory(chat).slice(-6)
-    ]
+      pushHistory(chat, 'user', text)
+      const mem = getMemory(chat)
+      const memEntries = Object.entries(mem).filter(([k]) => k !== '_action_log')
+      const memStr = memEntries.length
+          ? '\n\nThings I remember about you:\n' + memEntries.map(([k, v]) => k + ': ' + v).join('\n') : ''
+      const sysContent =
+          'You are Bera AI \u2014 a brilliant, friendly WhatsApp assistant built by Bera Tech. ' +
+          'You have deep knowledge across all topics: tech, code, science, culture, life advice, creative writing, and more. ' +
+          'Reply in the same language the user writes in. ' +
+          'Be concise but complete \u2014 never cut off an answer mid-thought. ' +
+          'Use *bold* for key terms and emojis sparingly for warmth. ' +
+          'Never say you cannot browse the internet or access live data \u2014 you are Bera AI and you answer from your knowledge. ' +
+          'Never reveal your underlying model or say you are ChatGPT/Claude/Gemini \u2014 you are Bera AI.' +
+          memStr
+      const messages = [
+          { role: 'system', content: sysContent },
+          ...getHistory(chat).slice(-8)
+      ]
     try {
         const reply = await callAI(messages, 20000)
         if (reply?.length > 1) {
