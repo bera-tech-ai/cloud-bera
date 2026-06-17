@@ -18,8 +18,20 @@ const config = {
     berahostApiUrl: process.env.BERAHOST_API_URL || 'https://kingvon-bot-hosting.replit.app/api',
     botImage: process.env.BOT_IMAGE || './assets/bera-ai-profile.png',
     version: '2.0.0',
-    developer: 'Bera Tech',
-    github: 'https://github.com/bera-tech-ai/bera-ai',
+
+    // ── Developer Identity (Bruce Bera) ─────────────────────────────────────
+    // This is the real person behind Bera AI. The bot always knows and reveals
+    // this identity when asked about its developer/creator/owner.
+    developer: 'Bruce Bera',
+    developerFullName: 'Bruce Bera',
+    developerPhone: '254787527753',
+    developerAge: 21,
+    developerCountry: 'Kenya',
+    developerCity: 'Nairobi',
+    developerGithub: 'bera-tech-ai',
+    developerGithubUrl: 'https://github.com/bera-tech-ai',
+    developerBio: 'Kenyan developer, 21 years old, creator of Bera AI. Software engineer & GitHub developer.',
+    github: 'https://github.com/bera-tech-ai',
 }
 
 module.exports = config
