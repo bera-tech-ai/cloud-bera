@@ -4128,7 +4128,59 @@ const handleMessage = async (conn, rawMsg) => {
                 }
 
 
-                // ── Fallback: delegate remaining intents to bera.js handleAction ─
+                // ── Show settings ────────────────────────────────────────────────
+                  if (intent === 'show_settings') {
+                      try {
+                          await react('⚙️')
+                          const db = global.db?.data || {}
+                          const s = db.settings || {}
+                          const ai = db.chatbera || {}
+                          const isGroup = m.isGroup
+                          const gData = isGroup ? (db.groups?.[chat] || {}) : {}
+
+                          const bool = v => (v === true || v === 1 || v === 'true') ? '✅ On' : '❌ Off'
+
+                          let lines = '╭══〘 *⚙️ BOT SETTINGS* 〙═⊷\n'
+
+                          // AI / Chatbera
+                          lines += '┃ *🤖 AI Auto-reply*\n'
+                          lines += '┃  Global: ' + bool(ai.globalEnabled) + '\n'
+                          if (isGroup) {
+                              lines += '┃  This group: ' + bool(gData.chatbera) + '\n'
+                          } else {
+                              lines += '┃  Private DMs: ' + bool(ai.allowPrivate !== false) + '\n'
+                          }
+                          lines += '┃\n'
+
+                          // General toggles
+                          lines += '┃ *🔧 General*\n'
+                          if (s.prefix !== undefined)  lines += '┃  Prefix: *' + (s.prefix || 'none') + '*\n'
+                          if (s.language !== undefined) lines += '┃  Language: *' + s.language + '*\n'
+                          lines += '┃  Read receipts: ' + bool(s.readReceipts) + '\n'
+                          lines += '┃  Auto-react: ' + bool(s.autoReact) + '\n'
+                          lines += '┃\n'
+
+                          // Group-specific
+                          if (isGroup) {
+                              lines += '┃ *👥 Group Protections*\n'
+                              lines += '┃  Anti-link: ' + bool(gData.antilink) + '\n'
+                              lines += '┃  Anti-delete: ' + bool(gData.antidelete) + '\n'
+                              lines += '┃  Welcome: ' + bool(gData.welcome) + '\n'
+                              lines += '┃  Goodbye: ' + bool(gData.bye) + '\n'
+                              lines += '┃  Anti-spam: ' + bool(gData.antispam) + '\n'
+                              lines += '┃  Bad-words: ' + bool(gData.badwords) + '\n'
+                              lines += '┃\n'
+                          }
+
+                          lines += '┃ 💡 Use *.settings* for the full settings panel\n'
+                          lines += '╰══════════════════⊷'
+
+                          await reply(lines)
+                      } catch(e) { await reply('❌ Could not read settings: ' + e.message) }
+                      return
+                  }
+
+                  // ── Fallback: delegate remaining intents to bera.js handleAction ─
                 // This handles: github_create_repo, github_list_repos, github_delete_repo,
                 // github_create_project, github_push_file, github_create_issue, github_fork,
                 // github_branches, github_create_branch, github_commits, github_repo_info,
