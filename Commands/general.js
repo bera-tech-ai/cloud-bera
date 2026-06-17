@@ -52,13 +52,101 @@ const config = require('../Config')
       if (command==='info') return reply('\u256d\u2550\u2550\u3008 *\ud83e\udd16 BERA AI INFO* \u3009\u2550\u22b7\n\u2503 \ud83e\udd16 '+config.botName+' v'+config.version+'\n\u2503 \ud83d\udc68\u200d\ud83d\udcbb '+config.developer+' | \ud83d\udd17 '+config.github+'\n\u2503 \u26a1 Prefix: '+p+' | \u23f1\ufe0f '+fmtUp(process.uptime())+'\n\u2570\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u22b7')
 
       if (['menu','help','start','commands','men','menus','mainmenu'].includes(command)) {
-          const now = moment().tz('Africa/Nairobi')
-          const isPrivate = global.db?.data?.settings?.mode==='private'
-          const pushName = m.pushName||'User'
-          const caption = '*\ud83e\udd84 U\u1d18\u1d1b\u026a\u1d0d\u1d07 :* '+fmtUp(process.uptime())+'\n*\ud83c� D\u1d00\u1d1b\u1d07 :* '+now.format('ddd DD MMM YYYY')+'\n*\ud83c� T\u026a\u1d0d\u1d07 :* '+now.format('hh:mm A')+'\n\n\u27ae F\u1d0f\u1d1c\u1d0f\u1d1b\u1d07\u0280 \u00bb Bera Tech\n\u27ae U\u0455\u1d07\u0280   \u00bb '+pushName+'\n\u27ae M\u1d0f\u1d0b\u1d07   \u00bb '+(isPrivate?'\ud83d\udd12 Private':'\ud83c\udf10 Public')+'\n\u27ae P\u0280\u1d07\u0493\u026a\u0445 \u00bb *'+p+'*\n\n\u256d\u2500\u2500\u2740 *BERA AI CATEGORIES* \u2740\n\u2502\u2b25 '+p+'aimenu       . \ud83e\udde0 AI & Agent (140 tools)\n\u2502\u2b25 '+p+'dlmenu       . \ud83d\udce5 Downloads\n\u2502\u2b25 '+p+'searchmenu   . \ud83d\udd0d Search\n\u2502\u2b25 '+p+'groupmenu    . \ud83d� Groups\n\u2502\u2b25 '+p+'toolsmenu    . \ud83d�\ufe0f Tools\n\u2502\u2b25 '+p+'gamesmenu    . \ud83c� Games\n\u2502\u2b25 '+p+'convertmenu  . \ud83d� Converter\n\u2502\u2b25 '+p+'musicmenu    . \ud83c� Music & Media\n\u2502\u2b25 '+p+'sportsmenu   . \u26bd Sports & Finance\n\u2502\u2b25 '+p+'deploymenu   . \ud83d� Deploy & Host\n\u2502\u2b25 '+p+'devmenu      . \ud83d� Dev Tools\n\u2502\u2b25 '+p+'ptmenu       . \ud83e\udd95 Pterodactyl\n\u2502\u2b25 '+p+'keymenu      . \ud83d\udd11 Key System\n\u2502\u2b25 '+p+'funmenu      . \ud83c\udfad Fun & Extras\n\u2502\u2b25 '+p+'notesmenu    . \ud83d\udcdd Notes\n\u2502\u2b25 '+p+'religionmenu . \u26ea Religion\n\u2502\u2b25 '+p+'tempmailmenu . \u2709\ufe0f Temp Mail\n\u2502\u2b25 '+p+'settingsmenu . \u2699\ufe0f Settings\n'+(isOwner?'\u2502\u2b25 '+p+'ownermenu    . \ud83d� Owner\n':'')+'\u2502\u2b25 '+p+'list         . \ud83d\udccb All Commands\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2022\n\n> _Toggle buttons: *'+p+'btnmode on/off*_'
-          const botPic = config.botImage||'./assets/bera-ai-profile.png'
-          try { const fs=require('fs'); if(fs.existsSync(botPic)){ await conn.sendMessage(chat,{image:{url:botPic},caption,contextInfo:{mentionedJid:[sender]}},{quoted:m}) } else await reply(caption) } catch { await reply(caption) }
-          if (btnOn && _sendButtons) { try { await _sendButtons(conn,chat,{title:'\ud83e\udd16 '+config.botName,text:'Select a category:',footer:'Type '+p+'list for all commands',buttons:[{id:p+'aimenu',text:'\ud83e\udde0 AI & Agent'},{id:p+'dlmenu',text:'\ud83d\udce5 Downloads'},{id:p+'searchmenu',text:'\ud83d\udd0d Search'},{id:p+'groupmenu',text:'\ud83d\udc65 Groups'},{id:p+'toolsmenu',text:'\ud83d\udee0\ufe0f Tools'},{id:p+'gamesmenu',text:'\ud83c\udfae Games'}]}); await _sendButtons(conn,chat,{title:'\ud83e\udd16 More Categories',text:'More Bera AI:',footer:'Type '+p+'list for all commands',buttons:[{id:p+'convertmenu',text:'\ud83d\udd04 Converter'},{id:p+'musicmenu',text:'\ud83c\udfb5 Music'},{id:p+'sportsmenu',text:'\u26bd Sports'},{id:p+'deploymenu',text:'\ud83d\ude80 Deploy'},{id:p+'devmenu',text:'\ud83d\udcbb Dev Tools'},{id:p+'settingsmenu',text:'\u2699\ufe0f Settings'}]}) } catch {} }
+          const now        = moment().tz('Africa/Nairobi')
+          const isPrivate  = global.db?.data?.settings?.mode === 'private'
+          const pushName   = m.pushName || 'User'
+          const ghostOn    = global.db?.data?.ghost?.enabled === true
+          const caption =
+              `╔══〘 *⚡ B E R A  A I  v${config.version}* 〙══╗
+` +
+              `║
+` +
+              `║  👋 Hey *${pushName}*
+` +
+              `║  🕐 ${now.format('hh:mm A')}  •  📅 ${now.format('ddd DD MMM')}
+` +
+              `║  ⏱️ Up ${fmtUp(process.uptime())}  •  ${isPrivate ? '🔒 Private' : '🌐 Public'}
+` +
+              `║  👻 Ghost: ${ghostOn ? '🟢 ON' : '⚫ OFF'}  •  Prefix: ${p}
+` +
+              `╚══════════════════════════════╝
+
+` +
+              `*⟨ QUICK COMMANDS ⟩*
+` +
+              `❯ ${p}bera <msg>       — Chat with AI
+` +
+              `❯ ${p}agent <task>     — Autonomous Agent
+` +
+              `❯ ${p}imagine <desc>   — Generate AI Image
+` +
+              `❯ ${p}ghost on/off     — Ghost Mode
+` +
+              `❯ ${p}play <song>      — Music Download
+` +
+              `❯ ${p}sticker          — Make Sticker
+
+` +
+              `*⟨ CATEGORIES — SHORT CODES ⟩*
+` +
+              `⬡ ${p}ai      🧠 AI & Agent  (140+ tools)
+` +
+              `⬡ ${p}dl      📥 Downloads
+` +
+              `⬡ ${p}search  🔍 Search & Info
+` +
+              `⬡ ${p}gc      👥 Group Control
+` +
+              `⬡ ${p}dev     💻 Dev Tools & Shell
+` +
+              `⬡ ${p}bhost   🚀 Deploy & Hosting
+` +
+              `⬡ ${p}fun     🎭 Fun & Games
+` +
+              `⬡ ${p}cfg     ⚙️  Settings & Privacy
+` +
+              (isOwner ? `⬡ ${p}owner   👑 Owner Panel
+` : '') +
+              `
+> ${p}list — all 300+ commands | ${p}btnmode on — enable buttons`
+
+          const botPic = config.botImage || './assets/bera-ai-profile.png'
+          try {
+              const fs2 = require('fs')
+              if (fs2.existsSync(botPic)) {
+                  await conn.sendMessage(chat, { image: { url: botPic }, caption, contextInfo: { mentionedJid: [sender] } }, { quoted: m })
+              } else { await reply(caption) }
+          } catch { await reply(caption) }
+
+          if (btnOn && _sendButtons) {
+              try {
+                  await _sendButtons(conn, chat, {
+                      title: '⚡ ' + config.botName,
+                      text: 'Quick navigate:',
+                      footer: p + 'list for all commands',
+                      buttons: [
+                          { id: p + 'ai',     text: '🧠 AI & Agent' },
+                          { id: p + 'dl',     text: '📥 Downloads' },
+                          { id: p + 'search', text: '🔍 Search' },
+                          { id: p + 'gc',     text: '👥 Groups' },
+                          { id: p + 'dev',    text: '💻 Dev Tools' },
+                          { id: p + 'fun',    text: '🎭 Fun' },
+                      ]
+                  })
+                  await _sendButtons(conn, chat, {
+                      title: '⚡ More',
+                      text: 'More:',
+                      footer: p + 'list for all commands',
+                      buttons: [
+                          { id: p + 'bhost',   text: '🚀 Hosting' },
+                          { id: p + 'cfg',     text: '⚙️ Settings' },
+                          { id: p + 'ghost',   text: '👻 Ghost Mode' },
+                          { id: p + 'privacy', text: '🔐 Privacy' },
+                          { id: p + 'list',    text: '📋 All Commands' },
+                      ]
+                  })
+              } catch {}
+          }
           return
       }
 
@@ -109,6 +197,18 @@ const config = require('../Config')
           settingsmenu:{title:'\u2699\ufe0f SETTINGS',lines:['mode public/private \u2014 bot access mode','btnmode on/off \u2014 toggle buttons  \u2190 USE THIS','setprefix <char> \u2014 change prefix','autoreply \u2022 autoread \u2022 autoreact \u2022 autobio','autolikestatus \u2022 autoreadstatus \u2022 statusreply','setchatbot on/off \u2022 setpmpermit on/off','setpackname \u2022 setpackauthor \u2014 sticker settings','settings \u2014 view all \u2022 getsetting \u2022 setsetting'],note:'Usage: '+p+'btnmode on  or  '+p+'btnmode off'},
           ownermenu:{title:'\ud83d\udc51 OWNER / ADMIN',lines:isOwner?['broadcast \u2022 backup \u2022 stats \u2022 resetdb \u2022 cleandb','ban/unban \u2022 premium/depremium \u2022 block/unblock','sudo \u2022 delsudo \u2022 getsudo \u2022 resetsudo','update \u2022 reload \u2022 hotreload','join \u2022 left \u2022 forward \u2022 tostatus \u2022 vv \u2022 save','jid \u2022 mygroups \u2022 listusers \u2022 resetlimit','schedule \u2022 noprefix \u2022 mode']:['\u26d4 Owner only section'],note:isOwner?'Use destructive commands carefully':'Not available'},
       }
+          ai: TILES.aimenu,
+          dl: TILES.dlmenu,
+          search: TILES.searchmenu,
+          gc: TILES.groupmenu,
+          dev: TILES.devmenu,
+          bhost: TILES.deploymenu,
+          fun: TILES.funmenu,
+          cfg: TILES.settingsmenu,
+          owner: TILES.ownermenu,
+          ghostmenu: {title:'👻 GHOST MODE',lines:['ghost on    — activate ghost auto-reply','ghost off   — deactivate (keeps learning silently)','ghost status — show if ON/OFF + stats','ghost stats  — learned conversation breakdown','ghost test <msg> — test a reply','ghost reset  — clear all learned data'],note:'Ghost Mode learns your style and replies as you'},
+          privacymenu: {title:'🔐 PRIVACY & PROFILE',lines:['privacy         — view all privacy settings','setlastseen all/contacts/none','setonline all/contacts','setprofilepic all/contacts/none','readreceipts on/off','presence typing/recording/paused','disappear 24h/7d/90d/off — set/disable vanish mode','changename <name> — change display name','changebio <text> — change WhatsApp bio','blocklist         — show blocked contacts','blockuser @mention / unblockuser @mention'],note:'Usage: '+p+'privacy  or  '+p+'disappear 7d'},
+
 
       const sub=Object.keys(TILES).find(k=>command===k)
       if (sub) {
@@ -134,6 +234,6 @@ const config = require('../Config')
       }
   }
 
-  handle.commands=['ping','uptime','up','status','dashboard','botstat','info','menu','help','start','commands','men','menus','mainmenu','list','listmenu','listmen','cmds','allcmds','aimenu','dlmenu','searchmenu','groupmenu','toolsmenu','gamesmenu','convertmenu','musicmenu','sportsmenu','deploymenu','devmenu','ptmenu','keymenu','funmenu','notesmenu','religionmenu','tempmailmenu','settingsmenu','ownermenu','sticker','s','st','take']
+  handle.commands=['ping','uptime','up','status','dashboard','botstat','info','menu','help','start','commands','men','menus','mainmenu','list','listmenu','listmen','cmds','allcmds','aimenu','dlmenu','searchmenu','groupmenu','toolsmenu','gamesmenu','convertmenu','musicmenu','sportsmenu','deploymenu','devmenu','ptmenu','keymenu','funmenu','notesmenu','religionmenu','tempmailmenu','settingsmenu','ownermenu','sticker','s','st','take','ai','dl','search','gc','dev','bhost','fun','cfg','owner','ghostmenu','privacymenu']
   module.exports = handle
   
