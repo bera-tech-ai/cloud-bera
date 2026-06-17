@@ -57,12 +57,11 @@ const scheduleReconnect = (delayMs = 5000) => {
     }, delayMs)
 }
 
-// ── Suppress libsignal-protocol session dump noise ────────────────────────
-// The Signal Protocol library logs full session objects (key buffers,
-// chain data, etc.) on every session rotation. This is completely normal
-// behaviour but floods the logs with thousands of useless lines.
-// We intercept console.log/warn/error and silently drop these lines.
-const _signalNoise = [
+// ── Suppress all internal crypto / pre-key / baileys noise ───────────────
+// Filters out Signal Protocol session dumps, pre-key uploads, key bundle
+// exchanges and any other internal chatter that isn't useful at runtime.
+const _noisePatterns = [
+    // Signal Protocol session objects
     'Closing session:', 'Closing open session', 'Decrypted message with closed session',
     '_chains:', 'registrationId:', 'currentRatchet:', 'ephemeralKeyPair:',
     'pubKey: <Buffer', 'privKey: <Buffer', 'lastRemoteEphemeralKey:',
@@ -70,17 +69,75 @@ const _signalNoise = [
     'baseKeyType:', 'remoteIdentityKey:', 'pendingPreKey:', 'signedKeyId:',
     'preKeyId:', 'closed: -1', 'used: 17', 'created: 17', 'messageKeys: {}',
     'chainKey: [Object]', 'chainType:', 'SessionEntry {',
+    // Pre-key upload / refresh noise
+    'pre key', 'prekey', 'pre-key', 'uploading pre', 'need to generate',
+    'generating pre', 'key bundle', 'key count', 'uploading keys',
+    'count of pre keys', 'refilling keys', 'upload pre', 'refreshing keys',
+    'sending key bundle', 'identity key', 'signed pre key', 'one-time pre',
+    // Baileys internal noise
+    'recv', 'send node', 'got ping', 'send ping', 'keep alive', 'keepalive',
+    'noise handshake', 'decrypt', 'encrypt node', 'connecting to WA',
+    'connect to WA', 'message retry', 'waiting for', 'decrypt message',
+    'frame noise', 'frame encode', 'frame decode', 'WA noise',
 ]
-const _isSignalNoise = (args) => {
-    const s = String(args[0] || '')
-    return _signalNoise.some(p => s.includes(p))
+const _isNoise = (args) => {
+    const s = String(args[0] || '').toLowerCase()
+    return _noisePatterns.some(p => s.includes(p.toLowerCase()))
 }
 const _origLog   = console.log.bind(console)
 const _origWarn  = console.warn.bind(console)
 const _origError = console.error.bind(console)
-console.log   = (...a) => { if (!_isSignalNoise(a)) _origLog(...a) }
-console.warn  = (...a) => { if (!_isSignalNoise(a)) _origWarn(...a) }
-console.error = (...a) => { if (!_isSignalNoise(a)) _origError(...a) }
+console.log   = (...a) => { if (!_isNoise(a)) _origLog(...a) }
+console.warn  = (...a) => { if (!_isNoise(a)) _origWarn(...a) }
+console.error = (...a) => { if (!_isNoise(a)) _origError(...a) }
+
+// ── Hacker-style logger ───────────────────────────────────────────────────
+const _ts = () => {
+    const n = new Date()
+    const p = v => String(v).padStart(2, '0')
+    return chalk.dim(`${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`)
+}
+
+const _msgCount = { in: 0, out: 0 }
+
+const beraLog = {
+    recv: (from, name, text) => {
+        _msgCount.in++
+        const tag   = chalk.bgGreen.black.bold(' RECV ')
+        const who   = chalk.greenBright(from.padEnd(18))
+        const alias = name ? chalk.dim.green(`(${name}) `) : '          '
+        const bar   = chalk.dim.green('│')
+        const msg   = chalk.white(text.slice(0, 90))
+        _origLog(`${_ts()} ${tag} ${who} ${alias}${bar} ${msg}`)
+    },
+    sent: (to, text) => {
+        _msgCount.out++
+        const tag = chalk.bgCyan.black.bold(' SENT ')
+        const who = chalk.cyan(to.padEnd(18))
+        const bar = chalk.dim.cyan('│')
+        const msg = chalk.dim.white(text.slice(0, 90))
+        _origLog(`${_ts()} ${tag} ${who}           ${bar} ${msg}`)
+    },
+    sys: (msg) => {
+        const tag = chalk.bgYellow.black.bold(' SYS  ')
+        const bar = chalk.dim.yellow('│')
+        _origLog(`${_ts()} ${tag} ${chalk.dim.yellow('─────────────────────')} ${bar} ${chalk.yellow(msg)}`)
+    },
+    err: (msg) => {
+        const tag = chalk.bgRed.white.bold(' ERR  ')
+        const bar = chalk.dim.red('│')
+        _origLog(`${_ts()} ${tag} ${chalk.dim.red('─────────────────────')} ${bar} ${chalk.red(msg)}`)
+    },
+    warn: (msg) => {
+        const tag = chalk.bgHex('#FF8C00').black.bold(' WARN ')
+        const bar = chalk.dim.hex('#FF8C00')('│')
+        _origLog(`${_ts()} ${tag} ${chalk.dim.hex('#FF8C00')('─────────────────────')} ${bar} ${chalk.hex('#FF8C00')(msg)}`)
+    },
+    divider: () => {
+        _origLog(chalk.dim.green('  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄'))
+    }
+}
+global.beraLog = beraLog
 
 // ── Catch the aesDecryptGCM / noise-handler crypto error ──────────────────
 // This crash happens when an old socket and new socket share the same
@@ -108,18 +165,24 @@ process.on('unhandledRejection', (reason) => {
 })
 
 const printBanner = () => {
-    console.log(chalk.cyan(`
-  ███╗   ██╗██╗ ██████╗██╗  ██╗
-  ████╗  ██║██║██╔════╝██║ ██╔╝
-  ██╔██╗ ██║██║██║     █████╔╝ 
-  ██║╚██╗██║██║██║     ██╔═██╗ 
-  ██║ ╚████║██║╚██████╗██║  ██╗
-  ╚═╝  ╚═══╝╚═╝ ╚═════╝╚═╝  ╚═╝
-    `))
-    console.log(chalk.green(`  🤖 ${config.botName} Bot | @whiskeysockets/baileys`))
-    console.log(chalk.gray(`  Prefix: ${config.prefix} | Owner: ${config.owner}`))
-    console.log(chalk.gray(`  AI Endpoint: ${config.nickApiEndpoint}`))
-    console.log('')
+    const g = chalk.greenBright
+    const d = chalk.dim.green
+    _origLog('')
+    _origLog(g('  ██████╗ ███████╗██████╗  █████╗      █████╗ ██╗'))
+    _origLog(g('  ██╔══██╗██╔════╝██╔══██╗██╔══██╗   ██╔══██╗██║'))
+    _origLog(g('  ██████╔╝█████╗  ██████╔╝███████║   ███████║██║'))
+    _origLog(g('  ██╔══██╗██╔══╝  ██╔══██╗██╔══██║   ██╔══██║██║'))
+    _origLog(g('  ██████╔╝███████╗██║  ██║██║  ██║   ██║  ██║██║'))
+    _origLog(g('  ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝  ╚═╝╚═╝'))
+    _origLog('')
+    _origLog(d('  ╔════════════════════════════════════════════════╗'))
+    _origLog(d('  ║') + chalk.bold.white(`  🤖  ${config.botName} — WhatsApp AI Agent`.padEnd(47)) + d('║'))
+    _origLog(d('  ║') + chalk.dim(`  Prefix: ${config.prefix}  │  Owner: ${config.owner}`.padEnd(47)) + d('║'))
+    _origLog(d('  ║') + chalk.dim(`  Node ${process.version}  │  baileys/whiskeysockets`.padEnd(47)) + d('║'))
+    _origLog(d('  ╚════════════════════════════════════════════════╝'))
+    _origLog('')
+    _origLog(chalk.dim.green('  TIME     TYPE   FROM/TO              ') + chalk.dim('│') + chalk.dim.green(' MESSAGE'))
+    _origLog(chalk.dim.green('  ──────── ────── ──────────────────── ') + chalk.dim('┼') + chalk.dim.green('─────────────────────────────────────────────'))
 }
 
 const askPhoneNumber = () => {
@@ -324,19 +387,19 @@ const startBot = async () => {
 
         if (qr && phoneNumber && !pairingRequested) {
             pairingRequested = true
-            console.log(chalk.yellow('[BOT] Requesting pairing code...'))
+            beraLog.sys('Requesting pairing code...')
             try {
                 const code = await conn.requestPairingCode(phoneNumber)
                 showPairingCode(code)
             } catch (e) {
-                console.log(chalk.red(`[BOT] Pairing code request failed: ${e.message}`))
-                console.log(chalk.yellow('[BOT] Retrying in 10s... (keep WhatsApp open on link screen)'))
+                beraLog.err(`Pairing code failed: ${e.message}`)
+                beraLog.warn('Retrying in 10s — keep WhatsApp open on link screen')
                 setTimeout(async () => {
                     try {
                         const code = await conn.requestPairingCode(phoneNumber)
                         showPairingCode(code)
                     } catch (e2) {
-                        console.log(chalk.red(`[BOT] Retry failed: ${e2.message}`))
+                        beraLog.err(`Pairing retry failed: ${e2.message}`)
                     }
                 }, 10000)
             }
@@ -346,54 +409,41 @@ const startBot = async () => {
             const err        = lastDisconnect?.error
             const statusCode = err instanceof Boom ? err.output.statusCode : null
 
-            console.log(chalk.red(`[BOT] Disconnected — code: ${statusCode}`))
-
-            // ── 401: Logged out — clear session, start fresh ─────────────
             if (statusCode === DisconnectReason.loggedOut) {
-                console.log(chalk.red('[BOT] Logged out. Clearing session...'))
+                beraLog.err('Logged out — clearing session and restarting in 3s...')
                 fs.rmSync(SESSION_DIR, { recursive: true, force: true })
                 fs.mkdirSync(SESSION_DIR, { recursive: true })
-                console.log(chalk.yellow('[BOT] Session cleared. Restarting in 3s...'))
                 scheduleReconnect(3000)
                 return
             }
 
-            // ── 515: restartRequired — clean reconnect, longer delay ──────
-            // This is WhatsApp telling us to restart the stream. We MUST
-            // close the current socket fully before opening a new one or
-            // the next connection will get the crypto error.
             if (statusCode === 515) {
-                console.log(chalk.yellow('[BOT] Restart required by WhatsApp — reconnecting in 8s...'))
+                beraLog.warn('WA requested restart — reconnecting in 8s...')
                 scheduleReconnect(8000)
                 return
             }
 
-            // ── 408: connectionTimedOut ────────────────────────────────────
             if (statusCode === 408) {
                 pairingRequested = false
-                if (state.creds?.registered) {
-                    console.log(chalk.yellow('[BOT] Connection timed out — reconnecting in 6s...'))
-                } else {
-                    console.log(chalk.yellow('[BOT] Pairing timed out — requesting new code in 6s...'))
-                }
+                beraLog.warn(state.creds?.registered
+                    ? 'Connection timed out — reconnecting in 6s...'
+                    : 'Pairing timed out — new code in 6s...')
                 scheduleReconnect(6000)
                 return
             }
 
-            // ── All other codes — reconnect ───────────────────────────────
-            console.log(chalk.yellow('[BOT] Reconnecting in 5s...'))
+            beraLog.warn(`Disconnected (code: ${statusCode}) — reconnecting in 5s...`)
             scheduleReconnect(5000)
         }
 
         if (connection === 'open') {
             if (fs.existsSync(PHONE_FILE)) fs.unlinkSync(PHONE_FILE)
-            // Only stamp first-ever connect — do NOT reset on reconnects, or the
-            // message-age guard in Handler/index.js will drop messages that were
-            // sent just before a reconnect cycle.
             if (!global.botReadyAt) global.botReadyAt = Math.floor(Date.now() / 1000)
             const botJid = jidNormalizedUser(conn.user?.id || '')
-            console.log(chalk.green(`\n[BOT] ✅ Connected as ${conn.user?.name || 'Bera AI'} (${botJid})`))
-            console.log(chalk.green(`[BOT] 🤖 ${config.botName} is online and ready!\n`))
+            beraLog.divider()
+            beraLog.sys(`✅  Online as ${conn.user?.name || 'Bera AI'}  (${botJid})`)
+            beraLog.sys(`🤖  ${config.botName} is armed and ready`)
+            beraLog.divider()
             startReminderLoop(conn)
             startBioLoop(conn)
             applyBotImage(conn, botJid).catch(() => {})
@@ -452,6 +502,28 @@ const startBot = async () => {
 
     conn.ev.on('creds.update', saveCreds)
 
+    // ── Patch sendMessage to log outgoing messages ────────────────────────
+    const _origSend = conn.sendMessage.bind(conn)
+    conn.sendMessage = async (jid, content, opts) => {
+        try {
+            if (!content?.react && !content?.delete) {
+                const preview = content?.text
+                    ? content.text.slice(0, 90).replace(/\n/g, ' ')
+                    : content?.image  ? '📷 [image]'
+                    : content?.audio  ? '🎵 [audio]'
+                    : content?.video  ? '🎬 [video]'
+                    : content?.sticker ? '🎴 [sticker]'
+                    : content?.document ? '📄 [document]'
+                    : '[media]'
+                const to = jid.endsWith('@g.us')
+                    ? 'grp:' + jid.split('@')[0].slice(-6)
+                    : '+' + jid.replace('@s.whatsapp.net', '')
+                beraLog.sent(to, preview)
+            }
+        } catch {}
+        return _origSend(jid, content, opts)
+    }
+
     conn.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return
         for (const msg of messages) {
@@ -460,8 +532,27 @@ const startBot = async () => {
                 if (global.db?.data?.settings?.autoStatusView) {
                     conn.readMessages([msg.key]).catch(() => {})
                 }
-                continue // don't pass statuses to command handler
+                continue
             }
+            // ── Log incoming messages ─────────────────────────────────────
+            try {
+                if (!msg.key?.fromMe) {
+                    const M = msg.message
+                    const mtype = M ? Object.keys(M).find(k => k !== 'messageContextInfo') : ''
+                    const text = M?.[mtype]?.text || M?.[mtype]?.caption
+                        || (mtype === 'conversation' ? M.conversation : '')
+                        || (mtype?.includes('image') ? '📷 [image]' : '')
+                        || (mtype?.includes('video') ? '🎬 [video]' : '')
+                        || (mtype?.includes('audio') ? '🎵 [audio]' : '')
+                        || (mtype?.includes('sticker') ? '🎴 [sticker]' : '')
+                        || (mtype?.includes('document') ? '📄 [document]' : '')
+                        || '[message]'
+                    const from = msg.key?.remoteJid?.endsWith('@g.us')
+                        ? 'grp:' + msg.key.remoteJid.split('@')[0].slice(-6)
+                        : '+' + (msg.key?.participant || msg.key?.remoteJid || '').replace('@s.whatsapp.net', '')
+                    beraLog.recv(from, msg.pushName || '', text.replace(/\n/g, ' '))
+                }
+            } catch {}
             await handleMessage(conn, msg).catch(e => console.error('[MSG ERROR]', e.message))
         }
     })
