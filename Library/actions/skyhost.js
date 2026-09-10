@@ -9,15 +9,12 @@ const getBase = () => {
 }
 
 const getKey = () =>
-    global.db?.data?.settings?.skyApiKey ||
     process.env.SKY_HOSTING_API_KEY ||
     process.env.SKY_API_KEY ||
     ''
 
 const setKey = async (key) => {
-    if (!global.db?.data?.settings) global.db.data.settings = {}
-    global.db.data.settings.skyApiKey = key
-    await global.db?.write?.()
+    return Boolean(key && getKey())
 }
 
 const headers = () => ({

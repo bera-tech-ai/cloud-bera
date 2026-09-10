@@ -1,64 +1,54 @@
-'use strict';
+'use strict'
 
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
-
-if (typeof global.antivvEnabled === 'undefined') {
-    global.antivvEnabled = true;
-}
+const {
+    isViewOnceMessage,
+    extractMedia,
+    downloadMedia,
+    resolveDestination,
+    sendMedia,
+    claim
+} = require('../Library/lib/viewOnce')
+const { isDeveloper } = require('../Library/lib/identity')
 
 module.exports = {
-    commands:    ['vv', 'viewonce', 'open', 'openphoto', 'openvideo', 'vvphoto'],
+    commands: ['vv', 'viewonce', 'open', 'openphoto', 'openvideo', 'vvphoto'],
     description: 'Manually reveal a view-once message (reply to it)',
-    permission:  'owner',
-    group:       true,
-    private:     true,
+    permission: 'owner',
+    group: true,
+    private: true,
 
     run: async (sock, message, args, ctx) => {
-        const { jid, reply, contextInfo } = ctx;
-        const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        const { jid, reply } = ctx
+        if (!ctx.isOwner || !isDeveloper(ctx.sender || ctx.from || message.sender)) {
+            return reply('⛔ Developer only.')
+        }
+
+        const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage ||
+            message.quoted?.message
         if (!quoted) {
-            return reply('❌ *Reply to a view-once photo / video / audio with this command.*');
+            return reply('❌ Reply to a view-once photo, video, or audio with this command.')
         }
-
-        let type = null;
-        for (const k of ['imageMessage', 'videoMessage', 'audioMessage']) {
-            if (quoted[k]) { type = k; break; }
-        }
-
-        if (!type) {
-            return reply('❌ Quoted message has no image, video, or audio.');
+        if (!isViewOnceMessage(quoted)) {
+            return reply('❌ The quoted message is not a view-once photo, video, or audio.')
         }
 
         try {
-            const msgContent = quoted[type];
-            const stream = await downloadContentFromMessage(msgContent, type.replace('Message', ''));
-            let buffer = Buffer.alloc(0);
-            for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-
-            if (type === 'imageMessage') {
-                await sock.sendMessage(jid, {
-                    image:    buffer,
-                    caption:  msgContent?.caption || '',
-                    mimetype: msgContent?.mimetype || 'image/jpeg'
-                }, { quoted: message });
-            } else if (type === 'videoMessage') {
-                await sock.sendMessage(jid, {
-                    video:    buffer,
-                    caption:  msgContent?.caption || '',
-                    mimetype: msgContent?.mimetype || 'video/mp4'
-                }, { quoted: message });
-            } else if (type === 'audioMessage') {
-                await sock.sendMessage(jid, {
-                    audio:    buffer,
-                    mimetype: msgContent?.mimetype || 'audio/mp4',
-                    ptt:      msgContent?.ptt || false
-                }, { quoted: message });
+            const media = extractMedia(quoted)
+            const destination = resolveDestination(sock, jid)
+            const sourceId = message.quoted?.key?.id || message.key?.id
+            if (!media || !destination || !sourceId ||
+                !claim(`manual:${sourceId}:${destination}`)) {
+                return reply('❌ This view-once message was already handled or has no safe destination.')
             }
 
-            await sock.sendMessage(jid, { react: { text: '😍', key: message.key } });
-        } catch (err) {
-            await sock.sendMessage(jid, { react: { text: '😔', key: message.key } });
-            await reply(`❌ Failed to open media: ${err.message}`);
+            const buffer = await downloadMedia(media)
+            if (!buffer?.length) throw new Error('media unavailable')
+            await sendMedia(sock, destination, media, buffer)
+            await sock.sendMessage(jid, { react: { text: '✅', key: message.key } })
+            return reply('✅ View-once media sent securely to the bot account.')
+        } catch {
+            await sock.sendMessage(jid, { react: { text: '❌', key: message.key } }).catch(() => {})
+            await reply('❌ Failed to open the view-once media safely.')
         }
     }
-};
+}

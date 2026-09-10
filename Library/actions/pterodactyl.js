@@ -2,8 +2,8 @@ const axios = require('axios')
 const config = require('../../Config')
 
 const PANEL      = () => (config.pterodactylUrl || process.env.PTERODACTYL_URL || 'https://bera-host-bot--berahost15.replit.app').replace(/\/$/, '')
-const CLIENT_KEY = () => config.pterodactylKey    || process.env.PTERODACTYL_KEY     || 'bh_c457e4f429c2652ac6f43b09dd688c9848176880933251c8'
-const APP_KEY    = () => config.pterodactylAppKey || process.env.PTERODACTYL_APP_KEY || 'bh_c457e4f429c2652ac6f43b09dd688c9848176880933251c8'
+const CLIENT_KEY = () => config.pterodactylKey    || process.env.PTERODACTYL_KEY     || ''
+    const APP_KEY    = () => config.pterodactylAppKey || process.env.PTERODACTYL_APP_KEY || ''
 
 const NODE_ID      = 1
 const EGG_ID       = 15

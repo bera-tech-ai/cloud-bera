@@ -1,11 +1,11 @@
 const axios = require('axios')
 
 const getToken = () =>
-    global.db?.data?.settings?.githubToken || process.env.GITHUB_TOKEN || ''
+    process.env.GITHUB_TOKEN || ''
 
 const gh = (endpoint, method = 'GET', data = null) => {
     const token = getToken()
-    if (!token) return Promise.resolve({ error: 'No GitHub token set. Tell me your GitHub token like: "my github token is ghp_xxxx"' })
+    if (!token) return Promise.resolve({ error: 'No GitHub credential is configured in the host environment.' })
     return axios({
         method,
         url: `https://api.github.com${endpoint}`,

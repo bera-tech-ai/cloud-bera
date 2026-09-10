@@ -1,6 +1,9 @@
 node_modules/
 session/
 Database/db.json
+bera-ai/Database/db.json
 .env
+*.env
 *.log
 .phone
+.DS_Store

@@ -10,7 +10,7 @@ const fs = require('fs')
 const path = require('path')
 
 const GIFTED = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
+const GIFTED_KEY = process.env.GIFTED_API_KEY || ''
 const XWOLF = 'https://apis.xwolf.space'
 
 // ── Global Bera Identity Sanitizer — strips all AI identity leaks ─────────────
@@ -97,7 +97,7 @@ const _sanitizeIdentity = (text) => {
   
 // ── Bera AI — SECONDARY ENDPOINT ──────────────────────────────────────────────
 const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/gpt4o'
-const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
+const BERA_API_KEY = process.env.BERA_API_KEY || ''
 
 const callBeraAI = async (messages, timeoutMs) => {
     try {
@@ -1242,10 +1242,10 @@ BERAHOST DEPLOYMENTS  (https://bera-host--nelimadinah22.replit.app)
 {"tool":"berahost","action":"stop","id":8}             → stop deployment 8
 {"tool":"berahost","action":"logs","id":8}             → last 20 log lines
 {"tool":"berahost","action":"metrics","id":8}          → CPU, RAM, uptime
-{"tool":"berahost","action":"deploy","botId":3,"envVars":{"OWNER_NUMBER":"254787527753"}}
+{"tool":"berahost","action":"deploy","botId":3,"envVars":{"OWNER_NUMBER":"254700000000"}}
 {"tool":"berahost","action":"coins"}                   → check coin balance
 {"tool":"berahost","action":"bots"}                    → available bot templates
-NOTE: Current Bera AI deployment ID is 8. BeraHost API key: stored in BH_API_KEY env or .setbhkey command
+NOTE: Current Bera AI deployment ID is 8. BeraHost credentials are read only from the host environment.
 
 ══════════════════════════════════════════════
 DEPLOY & HOSTING
@@ -2046,7 +2046,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         const crons = Object.entries(global._cronJobs || {})
         const monitors = Object.entries(global._monitors || {})
         const notes = Object.keys(global.db?.data?.notes || {})
-        let bhLines = '┃ not connected (use .setbhkey)'
+        let bhLines = '┃ not connected (configure BH_API_KEY in the host environment)'
         try {
             const bh = require('./berahost')
             const deps = await bh.listDeployments()
@@ -2115,7 +2115,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
 
     // ── github ────────────────────────────────────────────────────────────────
     if (t === 'github') {
-        const token = tc.token || global.db?.data?.settings?.gitToken || process.env.GIT_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''
+        const token = process.env.GITHUB_TOKEN || ''
         const headers = Object.assign({ 'Accept': 'application/vnd.github.v3+json' }, token ? { 'Authorization': `token ${token}` } : {})
         const base = 'https://api.github.com'
         const action = tc.action || 'list_repos'
@@ -2187,8 +2187,8 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     // ── deploy_vercel ─────────────────────────────────────────────────────────
     if (t === 'deploy_vercel') {
         const folder = tc.folder || 'workspace/'
-        const token = tc.token || global.db?.data?.settings?.vercelToken || process.env.VERCEL_TOKEN || ''
-        if (!token) return 'ERROR: Vercel token not set. Use .setvercel <token>'
+        const token = process.env.VERCEL_TOKEN || ''
+        if (!token) return 'ERROR: VERCEL_TOKEN is not configured in the host environment.'
         const r = await runBash(`cd "${folder}" && npx vercel --token "${token}" --yes 2>&1`, 120000)
         return (r.output || 'deployment attempted').slice(0, 2000)
     }
@@ -2921,8 +2921,8 @@ cards.forEach(card => {
 
     // ── create_repo ────────────────────────────────────────────────────────────
     if (t === 'create_repo') {
-        const token = global.db?.data?.settings?.githubToken
-        if (!token) return `❌ No GitHub token set. Use: {"tool":"setghtoken","token":"ghp_..."}`
+        const token = process.env.GITHUB_TOKEN || ''
+        if (!token) return '❌ No GitHub credential is configured in the host environment.'
         try {
             const res = await axios2.post('https://api.github.com/user/repos', {
                 name: tc.name,
@@ -2940,8 +2940,8 @@ cards.forEach(card => {
 
     // ── git_push_folder ────────────────────────────────────────────────────────
     if (t === 'git_push_folder') {
-        const token = global.db?.data?.settings?.githubToken
-        if (!token) return `❌ No GitHub token set. Use: {"tool":"setghtoken","token":"ghp_..."}`
+        const token = process.env.GITHUB_TOKEN || ''
+        if (!token) return '❌ No GitHub credential is configured in the host environment.'
         const { execSync } = require('child_process')
         const nodeFsS = require('fs')
         const nodePath = require('path')

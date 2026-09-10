@@ -1,5 +1,6 @@
 const { nickAi, MAX_HISTORY } = require('../Library/lib/bera')
 const config = require('../Config')
+const { isDeveloper, isSameUser } = require('../Library/lib/identity')
 const { detectIntent } = require('../Library/router')
 const { cloneRepo, setupRepoRemote, gitPush, gitStatus, gitLog, runShell } = require('../Library/actions/shell')
 const {
@@ -87,14 +88,14 @@ const askNick = async (m, conn, reply, sender, userText, imageBuffer = null) => 
 }
 
 const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
-    const ownerNum = (config.owner || config.ownerNumber || '254116763755').replace(/[^0-9]/g, '')
     const senderNum = (sender || '').replace(/[^0-9]/g, '')
-    const isOwner = senderNum === ownerNum || (Array.isArray(global.db?.data?.settings?.sudo) && global.db.data.settings.sudo.includes(senderNum))
+    const isOwner = isDeveloper(sender) ||
+        (Array.isArray(global.db?.data?.settings?.sudo) && global.db.data.settings.sudo.includes(senderNum))
     let isAdmin = false
     try {
         if (m.isGroup) {
             const meta = await conn.groupMetadata(m.chat).catch(() => null)
-            isAdmin = meta?.participants?.find(p => p.id.split('@')[0] === senderNum)?.admin != null
+            isAdmin = meta?.participants?.find(p => isSameUser(p.id, sender))?.admin != null
         }
     } catch {}
 
@@ -720,7 +721,7 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
         return p?.admin === 'admin' || p?.admin === 'superadmin'
     }
     const senderIsAdmin = async () => {
-        if (sender === `${config.owner.replace(/\D/g, '')}@s.whatsapp.net`) return true
+        if (isDeveloper(sender)) return true
         const meta = await getGroupMeta()
         if (!meta) return false
         const p = meta.participants.find(x => x.id === sender)
@@ -2231,9 +2232,7 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, isOwner }
 
     if (command === 'setghtoken') {
         if (!isOwner) return reply(`⛔ Owner only.`)
-        if (!text) return reply(`Usage: ${prefix}setghtoken <github_personal_access_token>`)
-        process.env.GITHUB_TOKEN = text.trim()
-        return reply(`✅ GitHub token set.`)
+        return reply('🔒 GitHub tokens cannot be accepted in WhatsApp. Configure GITHUB_TOKEN through the host environment or Replit Secrets.')
     }
 
     if (command === 'transcribe' || command === 'listen') {
@@ -2260,7 +2259,6 @@ handle.before = async (m, { conn, reply, prefix }) => {
             return
         }
 
-        const ownerJid = `${config.owner.replace(/[^0-9]/g, '')}@s.whatsapp.net`
         const tagReplyKey = `tagreply_${m.chat}`
         const tagReplyOn = global.db.data.settings?.[tagReplyKey] !== false
         const isGroup = m.chat?.endsWith('@g.us')
@@ -2269,7 +2267,7 @@ handle.before = async (m, { conn, reply, prefix }) => {
             m.message?.videoMessage?.contextInfo?.mentionedJid ||
             m.msg?.contextInfo?.mentionedJid || []
 
-        if (isGroup && tagReplyOn && Array.isArray(mentionedJids) && mentionedJids.includes(ownerJid)) {
+        if (isGroup && tagReplyOn && Array.isArray(mentionedJids) && mentionedJids.some(isDeveloper)) {
             const msgText = m.text?.trim() || ''
             if (msgText.startsWith(pfx)) return
             const senderName = m.pushName || sender.split('@')[0]
@@ -2916,7 +2914,4 @@ handleWrapper.command = ['bera', 'agent', 'chatbot', 'beraclone', 'workspace', '
 handleWrapper.tags = ['ai']
 
 module.exports = handleWrapper
-module.exports.handleAction = handleAction
-
-module.exports = handle
 module.exports.handleAction = handleAction

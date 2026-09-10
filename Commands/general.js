@@ -43,8 +43,8 @@ const config = require('../Config')
               const sys = await richServerStats()
               const users = Object.keys(global.db?.data?.users||{}).length
               const prems = Object.values(global.db?.data?.users||{}).filter(u=>u.premium).length
-              const bhKey = global.db?.data?.settings?.bhApiKey||process.env.BH_API_KEY
-              const gitKey = global.db?.data?.settings?.gitToken||process.env.GIT_TOKEN
+              const bhKey = process.env.BERAHOST_API_KEY||process.env.BH_API_KEY
+              const gitKey = process.env.GITHUB_TOKEN
               return reply('\u256d\u2550\u2550\u3008 \ud83e\udd16 *BERA AI STATUS* \u3009\u2550\u22b7\n\u2503 \u23f1\ufe0f '+sys.uptime+' | \ud83e\udde0 '+sys.memory.used+'/'+sys.memory.total+'\n\u2503 \ud83d\udcbe '+sys.disk.used+'/'+sys.disk.total+' | \ud83d\udcc8 '+sys.load+'\n\u2503 \ud83d\udc65 Users: '+users+' | \ud83d\udc8e Premium: '+prems+'\n\u2503 \ud83d\udd12 Mode: '+(global.db?.data?.settings?.mode==='private'?'Private':'Public')+' | Prefix: '+p+'\n\u2503 \ud83d\udd11 BH: '+(bhKey?'\u2705':'\u274c')+' | GH: '+(gitKey?'\u2705':'\u274c')+'\n\u2570\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u22b7')
           } catch(e){ return reply('\u274c '+e.message) }
       }

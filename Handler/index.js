@@ -3,6 +3,16 @@ const { isAuthorized } = require('../Auth')
 const { getUser } = require('../Database')
 const fs = require('fs')
 const path = require('path')
+const { normalizeJid, isSameUser, isDeveloper, isSimpleGreeting } = require('../Library/lib/identity')
+const {
+    VIEW_ONCE_TYPES,
+    isViewOnceMessage,
+    extractMedia,
+    downloadMedia,
+    resolveDestination,
+    sendMedia,
+    claim: claimViewOnce
+} = require('../Library/lib/viewOnce')
 
 // Pre-warm library modules so first command has zero load delay
 try { require('../Library/actions/music') } catch {}
@@ -11,6 +21,8 @@ try { require('../Library/actions/chatbera') } catch {}
 try { require('gifted-btns') } catch {}
 
 const _seenMsgIds = new Set()
+const developerGreetingAt = new Map()
+const DEVELOPER_GREETING_COOLDOWN = 6 * 60 * 60 * 1000
 
 const commandFiles = ['general', 'bera', 'group', 'admin', 'media', 'berahost', 'gifted', 'key', 'pterodactyl', 'tools']
 const handlers = commandFiles.map(f => require(`../Commands/${f}`))
@@ -78,13 +90,19 @@ const smsg = (conn, m) => {
         (m.mtype === 'conversation' ? M.conversation : '') || ''
     m.mimetype = m.msg?.mimetype || ''
     m.body = m.text
+    m.chat = normalizeJid(m.key?.remoteJid || '') || m.key?.remoteJid || ''
+    m.isGroup = m.chat?.endsWith('@g.us') || false
 
     if (m.msg?.contextInfo?.quotedMessage) {
         const q = m.msg.contextInfo.quotedMessage
         const qtype = Object.keys(q).find(k => k !== 'messageContextInfo') || ''
-        const qSender = m.msg.contextInfo.participant || m.msg.contextInfo.remoteJid || m.key?.remoteJid || ''
+        const contextInfo = m.msg.contextInfo
+        const qSenderRaw = contextInfo.participant ||
+            (contextInfo.fromMe ? conn.user?.id : (m.isGroup ? '' : m.key?.remoteJid)) || ''
+        const qSender = normalizeJid(qSenderRaw) || qSenderRaw
+        const quotedFromMe = contextInfo.fromMe === true || isSameUser(qSender, conn.user?.id)
         m.quoted = {
-            id: m.msg.contextInfo.stanzaId,
+            id: contextInfo.stanzaId,
             sender: qSender,
             text: q[qtype]?.text || q[qtype]?.caption || (qtype === 'conversation' ? q.conversation : '') || '',
             body: q[qtype]?.text || q[qtype]?.caption || (qtype === 'conversation' ? q.conversation : '') || '',
@@ -92,21 +110,24 @@ const smsg = (conn, m) => {
             mtype: qtype,
             message: q,
             key: {
-                remoteJid: m.key?.remoteJid || '',
-                id: m.msg.contextInfo.stanzaId || '',
+                remoteJid: normalizeJid(m.key?.remoteJid) || m.key?.remoteJid || '',
+                id: contextInfo.stanzaId || '',
                 participant: qSender,
-                fromMe: false
+                fromMe: quotedFromMe
             }
         }
+        m.isReplyToBot = quotedFromMe
     } else {
         m.quoted = null
+        m.isReplyToBot = false
     }
 
     m.sender = m.key?.fromMe
-        ? (conn.user?.id || '').replace(/:[0-9]+@/, '@')
-        : (m.key?.participant || m.key?.remoteJid || '')
+        ? normalizeJid(conn.user?.id || '')
+        : (normalizeJid(m.key?.participant || m.key?.remoteJid || '') ||
+            m.key?.participant || m.key?.remoteJid || '')
 
-    m.chat = m.key?.remoteJid || ''
+    m.chat = normalizeJid(m.key?.remoteJid || '') || m.key?.remoteJid || ''
     m.fromMe = m.key?.fromMe || false
     m.isGroup = m.chat?.endsWith('@g.us') || false
     m.pushName = m.pushName || ''
@@ -116,6 +137,26 @@ const smsg = (conn, m) => {
 
 const checkLimit = (user, isOwner) => {
     return { ok: true }
+}
+
+const maybeSendDeveloperGreeting = async (conn, m, text, isOwner) => {
+    if (!isOwner || !isSimpleGreeting(text) || !m.chat) return false
+    const now = Date.now()
+    const lastSent = developerGreetingAt.get(m.chat) || 0
+    if (now - lastSent < DEVELOPER_GREETING_COOLDOWN) return true
+
+    try {
+        await conn.sendMessage(m.chat, {
+            text: 'Hello, Mr. Bera. Welcome back, my developer. How may I assist you today?'
+        }, { quoted: m })
+        developerGreetingAt.set(m.chat, now)
+        while (developerGreetingAt.size > 500) {
+            developerGreetingAt.delete(developerGreetingAt.keys().next().value)
+        }
+    } catch (error) {
+        console.error('[GREETING] delivery failed:', error?.message || 'unknown error')
+    }
+    return true
 }
 
 const checkAutoReply = async (conn, m, text) => {
@@ -293,70 +334,30 @@ const checkAntiLink = async (conn, m, text, isOwner) => {
 }
 
 // ── Anti-ViewOnce: silently re-send view-once media (sender is never notified) ─
-const VIEW_ONCE_TYPES = new Set(['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension'])
-
-const checkAntiViewOnce = async (conn, m) => {
+const checkAntiViewOnce = async (conn, m, isOwner) => {
     try {
-        if (m.key?.fromMe) return
+        if (m.key?.fromMe || !isOwner) return
         const chat = m.chat
         const raw  = m.message || {}
 
         // Detect any view-once wrapper
-        const isViewOnce = VIEW_ONCE_TYPES.has(m.mtype)
-            || Object.keys(raw).some(k => VIEW_ONCE_TYPES.has(k))
-            || m.msg?.viewOnce === true
-
-        if (!isViewOnce) return
+        if (!isViewOnceMessage(raw) && !VIEW_ONCE_TYPES.has(m.mtype) && m.msg?.viewOnce !== true) return
 
         const settingKey = m.isGroup ? `antiviewonce_${chat}` : 'antiviewonce'
         if (!global.db?.data?.settings?.[settingKey]) return
 
-        // Extract inner image/video/audio
-        let imageMsg = null, videoMsg = null, audioMsg = null
-        for (const wrapKey of VIEW_ONCE_TYPES) {
-            const wrapper = raw[wrapKey]
-            if (!wrapper) continue
-            const inner = wrapper.message || wrapper
-            imageMsg = imageMsg || inner.imageMessage || null
-            videoMsg = videoMsg || inner.videoMessage || null
-            audioMsg = audioMsg || inner.audioMessage || null
-        }
-        // Direct msg fallback
-        if (!imageMsg && !videoMsg && !audioMsg && m.msg) {
-            const mime = m.msg?.mimetype || ''
-            if (mime.startsWith('video'))      videoMsg = m.msg
-            else if (mime.startsWith('audio')) audioMsg = m.msg
-            else                               imageMsg = m.msg
-        }
-        if (!imageMsg && !videoMsg && !audioMsg) return
+        const media = extractMedia(raw) || extractMedia(m.msg)
+        if (!media || !m.key?.id) return
+        const destination = resolveDestination(conn, chat)
+        if (!destination || !claimViewOnce(`auto:${chat}:${m.key.id}:${destination}`)) return
 
-        // Download — try multiple strategies silently
-        const mediaMsg = imageMsg || videoMsg || audioMsg
-        const mediaType = imageMsg ? 'image' : videoMsg ? 'video' : 'audio'
-        let buf = null
-        try {
-            const { downloadContentFromMessage } = require('@whiskeysockets/baileys')
-            const stream = await downloadContentFromMessage(mediaMsg, mediaType)
-            const chunks = []
-            for await (const chunk of stream) chunks.push(chunk)
-            buf = Buffer.concat(chunks)
-        } catch {}
-        if (!buf || buf.length === 0) {
-            buf = await conn.downloadMediaMessage({
-                key: m.key,
-                message: raw.viewOnceMessage?.message
-                       || raw.viewOnceMessageV2?.message
-                       || raw.viewOnceMessageV2Extension?.message
-                       || raw
-            }).catch(() => null)
-        }
-        if (!buf || buf.length === 0) return
-
-        // Send silently — no caption, no mention, no alert text
-        if (imageMsg)      await conn.sendMessage(chat, { image: buf }).catch(() => {})
-        else if (videoMsg) await conn.sendMessage(chat, { video: buf }).catch(() => {})
-        else if (audioMsg) await conn.sendMessage(chat, { audio: buf, mimetype: 'audio/ogg; codecs=opus' }).catch(() => {})
-    } catch {}
+        const buffer = await downloadMedia(media)
+        if (!buffer?.length) return
+        await sendMedia(conn, destination, media, buffer)
+        await conn.sendMessage(chat, { react: { text: '✅', key: m.key } }).catch(() => {})
+    } catch (error) {
+        console.error('[VIEW-ONCE] delivery failed:', error?.message || 'unknown error')
+    }
 }
 
 // ── Anti-Badwords enforcement ──────────────────────────────────────────────
@@ -526,8 +527,7 @@ const handleGroupEvents = async (conn, event) => {
                 if (!antiprOn) continue
                 try {
                     const meta  = await conn.groupMetadata(chat)
-                    const botJid = conn.user?.id?.split(':')[0] + '@s.whatsapp.net'
-                    const botIsAdmin = meta.participants.some(p => p.id === botJid && p.admin)
+                    const botIsAdmin = meta.participants.some(p => isSameUser(p.id, conn.user?.id) && p.admin)
                     if (!botIsAdmin) continue
                     for (const jid of participants) {
                         await conn.groupParticipantsUpdate(chat, [jid], 'demote')
@@ -545,8 +545,7 @@ const handleGroupEvents = async (conn, event) => {
                 if (!antidmOn) continue
                 try {
                     const meta  = await conn.groupMetadata(chat)
-                    const botJid = conn.user?.id?.split(':')[0] + '@s.whatsapp.net'
-                    const botIsAdmin = meta.participants.some(p => p.id === botJid && p.admin)
+                    const botIsAdmin = meta.participants.some(p => isSameUser(p.id, conn.user?.id) && p.admin)
                     if (!botIsAdmin) continue
                     for (const jid of participants) {
                         await conn.groupParticipantsUpdate(chat, [jid], 'promote')
@@ -798,7 +797,10 @@ const handleMessage = async (conn, rawMsg) => {
             if (!rawText.startsWith(prefix) && !noPrefixHit && !isOwnerTrigger) return
         }
 
-        if (!m.text?.trim() && !m.mimetype) return
+        const incomingViewOnce = isViewOnceMessage(m.message || {}) ||
+            VIEW_ONCE_TYPES.has(m.mtype) ||
+            m.msg?.viewOnce === true
+        if (!m.text?.trim() && !m.mimetype && !incomingViewOnce) return
 
         // Cache for reaction triggers
         cacheMessage(m)
@@ -813,6 +815,7 @@ const handleMessage = async (conn, rawMsg) => {
         if (existingUser?.banned) return
 
         let text = m.text?.trim() || ''
+        if (await maybeSendDeveloperGreeting(conn, m, text, isOwner)) return
 
         // Command detection
         let isCmd, command, args, body
@@ -868,7 +871,7 @@ const handleMessage = async (conn, rawMsg) => {
             if (!authorized) return
 
             // Anti-viewonce (groups + DMs)
-            await checkAntiViewOnce(conn, m)
+            await checkAntiViewOnce(conn, m, isOwner)
 
             // Anti-spam / anti-link / anti-badwords for group messages
             if (m.isGroup) {
@@ -947,13 +950,14 @@ const handleMessage = async (conn, rawMsg) => {
             // Only fires when "bera" is said OR bot is @mentioned — in both
             // DMs and groups. Never fires on random messages.
             // ═══════════════════════════════════════════════════════════════
-            const _agentMentioned = (m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []).some(j => j === conn.user?.id)
+            const _agentMentioned = (m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [])
+                .some(j => isSameUser(j, conn.user?.id))
             // Toggle: settings.beraTrigger (default ON). When false, "bera/agent <text>" without prefix is ignored.
             const _beraTriggerOn   = global.db?.data?.settings?.beraTrigger !== false
             // Fires when message contains "bera" OR "agent" as a trigger word (no dot required)
             const _agentBeraCall  = _beraTriggerOn && text && /\b(bera|agent)\b/i.test(text)
             // _agentForceMode: set when user used .agent <task> and we intercepted it above
-            const _agentAllowed   = _agentMentioned || _agentBeraCall || _agentForceMode
+            const _agentAllowed   = _agentMentioned || _agentBeraCall || _agentForceMode || m.isReplyToBot
             if ((!m.fromMe || _agentForceMode || isOwner) && text && _agentAllowed) {
                 const { detectIntent } = require('../Library/router')
                 // Strip the trigger word ("bera" or "agent") from the start of the text
@@ -1115,12 +1119,7 @@ const handleMessage = async (conn, rawMsg) => {
 
                 if (intent === 'bh_set_client_key') {
                     if (!isOwner) { await reply('Owner only.'); return }
-                    const km = text.match(/ptlc_[\w]+/)
-                    if (!km) { await reply('Usage: setbhclientkey ptlc_yourKey\n\nGet it from: https://lordeagle.tech/account/api'); return }
-                    if (!global.db.data.settings) global.db.data.settings = {}
-                    global.db.data.settings.bhClientKey = km[0]
-                    await global.db.write()
-                    await reply('BeraHost client key saved! File manager + console commands are now unlocked.')
+                    await reply('🔒 Client keys cannot be accepted or stored in WhatsApp. Configure the required provider secret through the host environment or Replit Secrets.')
                     return
                 }
                 if (intent === 'bh_deploy') {
@@ -2427,8 +2426,11 @@ const handleMessage = async (conn, rawMsg) => {
                     try {
                         await react('👇')
                         const meta = await conn.groupMetadata(chat)
-                        const ownerJid = config.owner + '@s.whatsapp.net'
-                        const admins = meta.participants.filter(p => p.admin && p.id !== ownerJid && p.id !== conn.user.id)
+                        const admins = meta.participants.filter(p =>
+                            p.admin &&
+                            !isDeveloper(p.id) &&
+                            !isSameUser(p.id, conn.user?.id)
+                        )
                         if (!admins.length) { await reply('ℹ️ No other admins to demote.'); return }
                         await conn.groupParticipantsUpdate(chat, admins.map(p => p.id), 'demote')
                         await react('✅')
@@ -3114,7 +3116,7 @@ const handleMessage = async (conn, rawMsg) => {
                 // ── GitHub token ─────────────────────────────────────────────
                 if (intent === 'github_token') {
                     await react('🔑')
-                    const r = await agent.githubTokenRegen(global.db?.data?.github?.token)
+                    const r = await agent.githubTokenRegen()
                     await reply(r.success
                         ? `╭══〘 *🔑 GITHUB TOKEN* 〙═⊷\n┃ Account: *${r.username}*\n┃ Status: ✅ Active\n┃\n┃ ${r.message.replace(/\n/g,'\n┃ ')}\n╰══════════════════⊷`
                         : `❌ GitHub token error: ${r.error}`)
@@ -3227,9 +3229,9 @@ const handleMessage = async (conn, rawMsg) => {
                     try {
                         await react('🧹')
                         const meta    = await conn.groupMetadata(chat)
-                        const botJid  = conn.user.id
-                        const ownerJid = config.owner + '@s.whatsapp.net'
-                        const toKick  = meta.participants.filter(p => !p.admin && p.id !== botJid && p.id !== ownerJid).map(p => p.id)
+                        const toKick  = meta.participants
+                            .filter(p => !p.admin && !isSameUser(p.id, conn.user?.id) && !isDeveloper(p.id))
+                            .map(p => p.id)
                         if (!toKick.length) { await reply('ℹ️ No non-admin members to remove.'); return }
                         await reply('⚠️ Removing *' + toKick.length + '* non-admin member(s)...')
                         for (let i = 0; i < toKick.length; i += 10) {
@@ -4321,7 +4323,7 @@ const handleMessage = async (conn, rawMsg) => {
 
         const isGroup = m.isGroup || (chat && chat.includes('@g.us')) || false
         const isAdmin = isGroup
-            ? ((await (async()=>{ try{ const meta = await conn.groupMetadata(chat); const me = conn.user?.id?.split(':')[0]+'@s.whatsapp.net'; return (meta.participants||[]).some(p=>p.id===me && p.admin) }catch{return false} })()))
+            ? ((await (async()=>{ try{ const meta = await conn.groupMetadata(chat); return (meta.participants||[]).some(p=>isSameUser(p.id, conn.user?.id) && p.admin) }catch{return false} })()))
             : false
         const ctx = {
             conn,
@@ -4398,8 +4400,7 @@ const runCommand = async (commandName, argsString, m, conn) => {
         if (isGroup) {
             try {
                 const meta = await conn.groupMetadata(chat)
-                const me = (sender || '')
-                isAdmin = (meta.participants || []).some(p => p.id === me && p.admin)
+                isAdmin = (meta.participants || []).some(p => isSameUser(p.id, conn.user?.id) && p.admin)
             } catch {}
         }
         const prefix = getPrefix()

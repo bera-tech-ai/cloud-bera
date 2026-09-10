@@ -2,6 +2,7 @@ const fs = require('fs')
 const path = require('path')
 const archiver = require('archiver')
 const os = require('os')
+const { isDeveloper } = require('../Library/lib/identity')
 
 const handle = async (m, { conn, text, reply, react, prefix, command, sender, chat, isOwner, args }) => {
 
@@ -328,8 +329,7 @@ const handle = async (m, { conn, text, reply, react, prefix, command, sender, ch
         const kept = {}
         let removed = 0
         for (const [jid, u] of Object.entries(users)) {
-            const hasActivity = u.commandCount > 0 || u.premium || u.banned ||
-                jid === `${require('../Config').owner.replace(/[^0-9]/g, '')}@s.whatsapp.net`
+            const hasActivity = u.commandCount > 0 || u.premium || u.banned || isDeveloper(jid)
             if (hasActivity) {
                 kept[jid] = u
             } else {
@@ -410,42 +410,28 @@ Bera AI GitHub commands will now use this account.`)
     // ── SET GITHUB TOKEN ────────────────────────────────────────────────
     if (command === 'setgittoken') {
         if (!isOwner) return reply(`⛔ Owner only.`)
-        if (!text) return reply(`❌ Usage: ${prefix}setgittoken <your-github-token>
-Generate at: https://github.com/settings/tokens`)
-        if (!global.db.data.settings) global.db.data.settings = {}
-        global.db.data.settings.githubToken = text.trim()
-        await global.db.write()
-        return reply(`✅ GitHub token saved!\nToken: ghp_***${text.trim().slice(-4)}\n⚠️ Keep this private — it grants access to your GitHub.`)
+        return reply('🔒 GitHub tokens cannot be accepted or stored in WhatsApp. Configure GITHUB_TOKEN through the host environment or Replit Secrets.')
     }
 
     // ── SET BERAHOST API KEY ─────────────────────────────────────────────
     if (command === 'setbhkey' || command === 'psetbhkey') {
         if (!isOwner) return reply(`⛔ Owner only.`)
-        if (!text) return reply(`❌ Usage: ${prefix}setbhkey <your-berahost-api-key>\nGet yours at: https://berahost.com`)
-        if (!global.db.data.settings) global.db.data.settings = {}
-        global.db.data.settings.bhApiKey = text.trim()
-        await global.db.write()
-        return reply(`✅ BeraHost API key saved!\nKey: ***${text.trim().slice(-4)}\nAll BeraHost commands will now use your key.`)
+        return reply('🔒 API keys cannot be accepted or stored in WhatsApp. Configure BERAHOST_API_KEY or BH_API_KEY through the host environment or Replit Secrets.')
     }
 
     // ── VIEW MY CONFIG ───────────────────────────────────────────────────
     if (['myconfig', 'mykeys', 'configs'].includes(command)) {
         if (!isOwner) return reply(`⛔ Owner only.`)
         const ghUser = global.db?.data?.settings?.githubUsername || 'Not set'
-        const ghTok  = global.db?.data?.settings?.githubToken
-            ? `ghp_***${global.db.data.settings.githubToken.slice(-4)}`
-            : 'Not set'
-        const bhKey  = global.db?.data?.settings?.bhApiKey
-            ? `***${global.db.data.settings.bhApiKey.slice(-4)}`
-            : 'Not set — use .setbhkey'
+        const ghTok  = process.env.GITHUB_TOKEN ? 'Configured in environment' : 'Not set'
+        const bhKey  = process.env.BERAHOST_API_KEY || process.env.BH_API_KEY ? 'Configured in environment' : 'Not set'
         return reply(
             `╭══〘 *⚙️ MY CONFIG* 〙═⊷\n` +
             `┃❍ *GitHub User:* ${ghUser}\n` +
             `┃❍ *GitHub Token:* ${ghTok}\n` +
             `┃❍ *BeraHost Key:* ${bhKey}\n` +
             `┃\n` +
-            `┃ Use .setgitusername, .setgittoken, .setbhkey\n` +
-            `┃ to update these values.\n` +
+            `┃ Configure secrets through the host environment.\n` +
             `╰══════════════════⊷`
         )
     }
@@ -708,10 +694,10 @@ Generate at: https://github.com/settings/tokens`)
     // ── VERCEL DEPLOY ─────────────────────────────────────────────────────────
     if (command === 'vercel' || command === 'vdeploy' || command === 'deployvercl') {
         if (!isOwner) return reply(`⛔ Owner only.`)
-        const vercelToken = global.db?.data?.settings?.vercelToken || process.env.VERCEL_TOKEN
+        const vercelToken = process.env.VERCEL_TOKEN || ''
         if (!vercelToken) return reply(
-            `❌ Vercel token not set.\n\n` +
-            `Set it with: ${prefix}setvercel <your-token>\n` +
+            `❌ Vercel token is not configured in the host environment.\n\n` +
+            `Set VERCEL_TOKEN through Replit Secrets.\n` +
             `Get token at: https://vercel.com/account/tokens`
         )
         if (!text) return reply(
@@ -786,22 +772,14 @@ Generate at: https://github.com/settings/tokens`)
     // ── SET VERCEL TOKEN ──────────────────────────────────────────────────────
     if (command === 'setvercel' || command === 'verceltoken') {
         if (!isOwner) return reply(`⛔ Owner only.`)
-        if (!text) return reply(
-            `❌ Usage: ${prefix}setvercel <your-vercel-token>\n\n` +
-            `Get your token at: https://vercel.com/account/tokens\n` +
-            `Then run: ${prefix}vercel <github-url> to deploy`
-        )
-        if (!global.db.data.settings) global.db.data.settings = {}
-        global.db.data.settings.vercelToken = text.trim()
-        await global.db.write()
-        return reply(`✅ Vercel token saved!\nToken: ***${text.trim().slice(-4)}\n\nNow deploy with: ${prefix}vercel <github-url>`)
+        return reply('🔒 Vercel tokens cannot be accepted or stored in WhatsApp. Configure VERCEL_TOKEN through the host environment or Replit Secrets.')
     }
 
     // ── VERCEL PROJECT LIST ───────────────────────────────────────────────────
     if (command === 'vercellist' || command === 'vprojects') {
         if (!isOwner) return reply(`⛔ Owner only.`)
-        const vercelToken = global.db?.data?.settings?.vercelToken || process.env.VERCEL_TOKEN
-        if (!vercelToken) return reply(`❌ Set your Vercel token first: ${prefix}setvercel <token>`)
+        const vercelToken = process.env.VERCEL_TOKEN || ''
+        if (!vercelToken) return reply('❌ VERCEL_TOKEN is not configured in the host environment.')
         try {
             const ax = require('axios')
             const res = await ax.get('https://api.vercel.com/v9/projects', {
@@ -822,23 +800,15 @@ Generate at: https://github.com/settings/tokens`)
     // ── SET SKY HOSTING API KEY ───────────────────────────────────────────────
     if (command === 'setskykey' || command === 'skykey' || command === 'setskyapikey') {
         if (!isOwner) return reply(`⛔ Owner only.`)
-        if (!text) return reply(
-            `❌ Usage: ${prefix}setskykey <your-sky-api-key>\n\n` +
-            `Get your API key at: https://sky-host-live--isaacbarasa835.replit.app\n` +
-            `Then deploy with: ${prefix}skydeploy <github-url>`
-        )
-        if (!global.db.data.settings) global.db.data.settings = {}
-        const sky = require('../Library/actions/skyhost')
-        await sky.setKey(text.trim())
-        return reply(`✅ *Sky Hosting API key saved!*\nKey: ***${text.trim().slice(-4)}\n\nNow deploy with: ${prefix}skydeploy <github-url>`)
+        return reply('🔒 Sky Hosting keys cannot be accepted or stored in WhatsApp. Configure SKY_HOSTING_API_KEY through the host environment or Replit Secrets.')
     }
 
     // ── SKY HOSTING DEPLOY ────────────────────────────────────────────────────
     if (command === 'skydeploy' || command === 'skyhost' || command === 'skylaunch') {
         if (!isOwner) return reply(`⛔ Owner only.`)
         const sky = require('../Library/actions/skyhost')
-        const skyKey = sky.setKey ? (global.db?.data?.settings?.skyApiKey || process.env.SKY_HOSTING_API_KEY || '') : ''
-        if (!skyKey) return reply(`❌ Sky Hosting key not set.\nRun: ${prefix}setskykey <your-key>`)
+        const skyKey = process.env.SKY_HOSTING_API_KEY || process.env.SKY_API_KEY || ''
+        if (!skyKey) return reply('❌ SKY_HOSTING_API_KEY is not configured in the host environment.')
         if (!text) return reply(
             `❌ Usage: ${prefix}skydeploy <github-repo-url> [project-name] [branch]\n\n` +
             `Example: ${prefix}skydeploy https://github.com/bera-tech-ai/my-app\n` +
@@ -889,8 +859,8 @@ Generate at: https://github.com/settings/tokens`)
     if (command === 'skylist' || command === 'skyprojects' || command === 'skyhostlist') {
         if (!isOwner) return reply(`⛔ Owner only.`)
         const sky = require('../Library/actions/skyhost')
-        const skyKey = global.db?.data?.settings?.skyApiKey || process.env.SKY_HOSTING_API_KEY || ''
-        if (!skyKey) return reply(`❌ Set key first: ${prefix}setskykey <your-key>`)
+        const skyKey = process.env.SKY_HOSTING_API_KEY || process.env.SKY_API_KEY || ''
+        if (!skyKey) return reply('❌ SKY_HOSTING_API_KEY is not configured in the host environment.')
         try {
             const r = await sky.listProjects()
             if (!r.success) return reply(`❌ ${r.error}`)

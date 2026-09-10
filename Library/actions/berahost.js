@@ -16,11 +16,11 @@ const getBhBaseUrl = () => {
     return (fromDb || fromEnv || BH_FALLBACK_URLS[0]).replace(/\/$/, '')
 }
 const BH_API  = () => getBhBaseUrl() + '/api'
-const getKey  = () => global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY || null
+const getKey  = () => process.env.BERAHOST_API_KEY || process.env.BH_API_KEY || null
 
 const bh = () => {
     const k = getKey()
-    if (!k) throw new Error('NO_BH_KEY — run .setbhkey bh_yourkey')
+    if (!k) throw new Error('NO_BH_KEY — configure BH_API_KEY or BERAHOST_API_KEY in the host environment')
     return axios.create({
         baseURL: BH_API(),
         headers: { 'x-api-key': k, 'Content-Type': 'application/json' },

@@ -1095,7 +1095,7 @@ const deployGithubPages = async (userId, projectName, ghToken) => {
     const dir = projectDir(userId, projectName)
     if (!fs.existsSync(dir)) return { success: false, error: 'Project not found' }
 
-    const token = ghToken || process.env.GITHUB_PERSONAL_ACCESS_TOKEN
+    const token = ghToken || process.env.GITHUB_TOKEN
     if (!token) return { success: false, error: 'GitHub token not configured. Use .replit env <project> set GITHUB_TOKEN=xxx' }
 
     const r = await run(`npx --yes gh-pages -d . --dotfiles 2>&1`, dir, 120000)

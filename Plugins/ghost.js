@@ -8,7 +8,7 @@ const axios = require('axios')
 const GHOST_MAX_SAMPLES = 200
 const GHOST_MAX_CONTEXT = 14
 const OVERCHAT_URL = 'https://api.gifted.co.ke/api/ai/overchat'
-const GIFTED_KEY   = '_0u5aff45,_0l1876s8qc'
+const GIFTED_KEY   = process.env.GIFTED_API_KEY || ''
 
 const getGhostData = () => {
     if (!global.db?.data) return {}

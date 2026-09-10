@@ -11,7 +11,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const GIFTED     = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
+const GIFTED_KEY = process.env.GIFTED_API_KEY || ''
 const PROJECTS   = '/tmp/projects'
 
 const runShell = (cmd, timeout = 60000) => new Promise(resolve => {
@@ -666,8 +666,8 @@ const sqliteManage = async (action, dbPath, query = '', data = {}) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const githubManage = async (action, opts = {}) => {
-    const token = global.db?.data?.settings?.githubToken || process.env.GITHUB_TOKEN || ''
-    if (!token) return { success: false, error: 'No GitHub token. Set one with .setgithub <token>' }
+    const token = process.env.GITHUB_TOKEN || ''
+    if (!token) return { success: false, error: 'No GitHub credential is configured in the host environment.' }
 
     const gh = async (endpoint, method = 'GET', data = null) => {
         try {

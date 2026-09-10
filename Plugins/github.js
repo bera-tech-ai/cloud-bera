@@ -1,12 +1,12 @@
 /**
  * Bera AI — GitHub Integration Plugin
  * Commands: .setghtoken, .ghrepo, .ghissue, .ghsearch, .ghuser, .ghgist
- * Owner sets their GitHub token once; then Bera can manage repos and more.
+ * GitHub credentials are supplied through the host environment.
  */
 
 const axios = require('axios')
 
-const getToken = () => global.db?.data?.settings?.githubToken || process.env.GITHUB_TOKEN || ''
+const getToken = () => process.env.GITHUB_TOKEN || ''
 
 const gh = (path, method = 'GET', data = null, token = null) => {
     const t = token || getToken()
@@ -26,41 +26,15 @@ const gh = (path, method = 'GET', data = null, token = null) => {
 const handle = async (m, { conn, command, args, text, reply, isOwner, chat, prefix }) => {
     const react = (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {})
 
-    // ── .setghtoken <token> ───────────────────────────────────────────────────
+    // ── Legacy token command: credentials are never accepted over WhatsApp ──
     if (command === 'setghtoken' || command === 'setgithubtoken') {
         if (!isOwner) return reply('❌ Owner only.')
-        const token = args[0]?.trim()
-        if (!token) return reply('❌ Usage: *' + prefix + 'setghtoken ghp_yourTokenHere*\n\nGet one at: github.com/settings/tokens')
-        try {
-            await react('🔍')
-            const res = await gh('/user', 'GET', null, token)
-            const user = res.data
-            if (!global.db.data.settings) global.db.data.settings = {}
-            global.db.data.settings.githubToken = token
-            await global.db.write()
-            await react('✅')
-            return reply(
-                '✅ *GitHub Token Saved!*\n\n' +
-                '👤 *Account:* ' + user.login + '\n' +
-                '📛 *Name:* ' + (user.name || 'N/A') + '\n' +
-                '📦 *Public Repos:* ' + user.public_repos + '\n' +
-                '👥 *Followers:* ' + user.followers + '\n\n' +
-                'You can now use:\n' +
-                prefix + 'ghrepo list\n' +
-                prefix + 'ghrepo create <name>\n' +
-                prefix + 'ghuser <username>\n' +
-                prefix + 'ghsearch <query>\n' +
-                prefix + 'ghgist <title> | <content>'
-            )
-        } catch (e) {
-            await react('❌')
-            return reply('❌ Invalid token or network error: ' + (e.response?.data?.message || e.message))
-        }
+        return reply('🔒 GitHub tokens cannot be accepted or stored in WhatsApp. Configure GITHUB_TOKEN through the host environment or Replit Secrets.')
     }
 
     // All other commands require a saved token
     if (!['setghtoken','setgithubtoken','ghuser','ghsearch'].includes(command) && !getToken()) {
-        return reply('❌ No GitHub token set.\nUse: *' + prefix + 'setghtoken <your_token>*')
+        return reply('❌ No GitHub credential is configured in the host environment.')
     }
 
     // ── .ghuser <username> ────────────────────────────────────────────────────
@@ -278,7 +252,7 @@ handle.command = [
 ]
 handle.tags = ['owner', 'tools', 'github']
 handle.help = [
-    'setghtoken <token>        — Save your GitHub token',
+    'setghtoken <token>        — Disabled; configure the host environment',
     'ghrepo list               — List your repos',
     'ghrepo create <name>      — Create a new repo',
     'ghrepo info <name>        — Repo details',

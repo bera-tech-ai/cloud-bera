@@ -247,7 +247,7 @@ handle.all = async (m, { conn, command, args, prefix, reply, isOwner, isAdmin, i
         return sb('🆕 New Commands',
             '╭══〘 *🆕 Recently Added* 〙═⊷\n' +
             '┃ ── 🐙 GitHub Integration (NEW!) ──\n' +
-            '┃ setghtoken, ghrepo, ghuser\n' +
+            '┃ ghrepo, ghuser\n' +
             '┃ ghsearch, ghissue, ghgist\n' +
             '┃\n' +
             '┃ ── 🎵 Music Fix ──\n' +
@@ -281,10 +281,9 @@ handle.all = async (m, { conn, command, args, prefix, reply, isOwner, isAdmin, i
         return sb('🐙 GitHub Panel',
             '╭══〘 *🐙 GitHub Integration* 〙═⊷\n' +
             '┃ Manage GitHub from WhatsApp\n' +
-            '┃ Set token first: ' + p + 'setghtoken\n' +
+            '┃ GitHub credentials come from the host environment\n' +
             '╰══════════════════⊷',
             'Bera AI — GitHub', [
-            { id: p + 'setghtoken',   text: '🔑 Set GitHub Token' },
             { id: p + 'ghrepo list',  text: '📦 List My Repos' },
             { id: p + 'ghrepo create',text: '➕ Create New Repo' },
             { id: p + 'ghsearch ',    text: '🔍 Search GitHub Repos' },

@@ -5,7 +5,8 @@
   "main": "Connection/start.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node ./Connection/start.js"
+    "start": "node ./Connection/start.js",
+    "test": "node --test test/*.test.js"
   },
   "author": "Bera Tech",
   "license": "MIT",

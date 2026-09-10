@@ -165,7 +165,7 @@ Uses Pandoc for: md→html, html→md, rst→md, md→docx
 After conversion, sends the output file to the user
 quality: 1–100 for lossy formats (JPEG, WebP, MP3 bitrate multiplier)
 TOOL 14: Cron Scheduler
-{"tool":"cron","action":"add","id":"morning-weather","schedule":"0 9 * * *","task":"search the weather in Nairobi and send me a summary","chat":"254787527753@s.whatsapp.net"}
+{"tool":"cron","action":"add","id":"morning-weather","schedule":"0 9 * * *","task":"search the weather in Nairobi and send me a summary","chat":"254700000000@s.whatsapp.net"}
 {"tool":"cron","action":"list"}
 {"tool":"cron","action":"remove","id":"morning-weather"}
 {"tool":"cron","action":"pause","id":"morning-weather"}
@@ -298,7 +298,7 @@ video_thumbnail: extracts a frame as JPG at the specified timestamp
 video_compress: re-encodes to fit under target_mb file size using FFmpeg CRF
 video_subtitle: auto-generates subtitles via Whisper transcription and burns them in
 TOOL 25: System Monitor
-{"tool":"syswatch","action":"start","interval":60,"alert_cpu":90,"alert_ram":85,"chat":"254787527753@s.whatsapp.net"}
+{"tool":"syswatch","action":"start","interval":60,"alert_cpu":90,"alert_ram":85,"chat":"254700000000@s.whatsapp.net"}
 {"tool":"syswatch","action":"stop"}
 {"tool":"syswatch","action":"status"}
 {"tool":"netcheck","hosts":["8.8.8.8","api.openai.com","apiskeith.top"],"timeout":5}
@@ -310,7 +310,7 @@ portcheck: checks if specific ports are open on a remote host (TCP connect test)
 All alerts go to the chat JID (owner by default)
 syswatch status: returns current CPU, RAM, Disk, uptime, load average
 TOOL 26: Uptime Monitor
-{"tool":"monitor","action":"add","id":"my-site","url":"https://myapp.replit.app","interval":300,"chat":"254787527753@s.whatsapp.net"}
+{"tool":"monitor","action":"add","id":"my-site","url":"https://myapp.replit.app","interval":300,"chat":"254700000000@s.whatsapp.net"}
 {"tool":"monitor","action":"list"}
 {"tool":"monitor","action":"remove","id":"my-site"}
 {"tool":"monitor","action":"check","id":"my-site"}

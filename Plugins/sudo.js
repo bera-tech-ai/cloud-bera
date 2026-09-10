@@ -2,6 +2,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+const { isDeveloper } = require('../Library/lib/identity');
 
 const SUDO_FILE = path.join(__dirname, '../Database/sudo.json');
 function loadSudo() {
@@ -15,9 +16,8 @@ function saveSudo(list) {
 function isRealOwner(message, ctx) {
     if (message.key?.fromMe) return true;
     const fromNorm = jidNormalizedUser(ctx.sender || '');
-    const ownerNum = (process.env.OWNER_NUMBER || '').trim().replace(/\D/g, '');
     const fromNum  = fromNorm.replace(/@.*/, '').replace(/\D/g, '');
-    if (fromNum && ownerNum && fromNum === ownerNum) return true;
+    if (fromNum && isDeveloper(fromNorm)) return true;
     return ctx.isOwner === true;
 }
 

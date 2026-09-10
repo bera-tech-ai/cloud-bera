@@ -844,13 +844,13 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
     const bh = require('../Library/actions/berahost')
 
     // ── BeraHost API key guard ────────────────────────────────────────────
-    const _bhKeySet = global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY
+    const _bhKeySet = process.env.BERAHOST_API_KEY || process.env.BH_API_KEY
     const _bhFunctionalCmds = ['deploy','bhd','botdeploy','newdeploy','deployments','mybots','listdeploy','bhdlist','mydeployments','startbot','bhstart','depstart','stopbot','bhstop','depstop','deletedeploy','deldeploy','bhdel','removedeploy','botlogs','bhlogs','deplogs','logbot','botmetrics','botstats','bhmetrics','depmetrics','depstats','depinfo','bhinfo','deployinfo','botinfo','updateenv','setenv','bhenv','depenv','coins','bhcoins','mycoins','balance','claimcoins','dailycoins','claim','bhclaim','redeem','voucher','bhredeem','mpesa','pay','bhpay','bhmoney','stk','paystatus','checkpay','paycheck','payhistory','payments','bhpayments','mypayments','transactions','coinhistory','bhhistory','cointx']
     if (_bhFunctionalCmds.includes(command) && !_bhKeySet) {
         return reply(
             '🔑 *BeraHost API key not set!*\n\n' +
             'Set it first with:\n' +
-            '*' + prefix + 'setbhkey bh_yourKeyHere*\n\n' +
+            '*Configure BH_API_KEY in the host environment*\n\n' +
             '🌐 Get your key from:\n' +
             'https://berahost.com → API Access → Generate New Key'
         )
@@ -1164,13 +1164,7 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
     // ── .setbhkey <key> — update BeraHost API key ─────────────────────────────
     if (['setbhkey', 'bhkey', 'setberakey', 'bhsetkey'].includes(command)) {
         if (!isOwner) return reply('⛔ Owner only.')
-        const newKey = text?.trim()
-        if (!newKey?.startsWith('bh_')) return reply(`❓ Usage: ${prefix}setbhkey bh_yourKeyHere\n\nGet from: https://berahost.com → API Access`)
-        if (!global.db.data.settings) global.db.data.settings = {}
-        global.db.data.settings.bhApiKey = newKey
-        await global.db.write()
-        await conn.sendMessage(chat, { react: { text: '✅', key: m.key } })
-        return reply(`✅ BeraHost API key saved!\n\n🧪 Test with: ${prefix}coins`)
+        return reply('🔒 API keys cannot be accepted or stored in WhatsApp. Configure BH_API_KEY through the host environment or Replit Secrets.')
     }
 
     // ── .bhhelp ───────────────────────────────────────────────────────────────
@@ -1203,7 +1197,7 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
             `┃ ${prefix}bots — available bot types\n` +
             `┃\n` +
             `┃ *⚙️ Config*\n` +
-            `┃ ${prefix}setbhkey bh_xxx — update API key\n` +
+            `┃ Configure BH_API_KEY through Replit Secrets\n` +
             `╰══════════════════⊷`
         )
     }

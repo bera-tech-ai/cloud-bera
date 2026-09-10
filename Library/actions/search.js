@@ -2,7 +2,7 @@ const axios = require('axios')
 
 // Updated to correct base URL from the documentation
 const GIFTED = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
+const GIFTED_KEY = process.env.GIFTED_API_KEY || ''
 
 const isApiError = (data) => {
     return data?.status === false || data?.success === false || typeof data?.error === 'string'

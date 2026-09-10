@@ -4,7 +4,7 @@ const { exec, execSync } = require('child_process')
 const fs = require('fs')
 
 const GIFTED        = 'https://api.gifted.co.ke'
-const GIFTED_KEY    = '_0u5aff45,_0l1876s8qc'
+const GIFTED_KEY    = process.env.GIFTED_API_KEY || ''
 const GIFTED_SEARCH = 'gifted'
 const SILVATECH     = 'https://api.silvatech.co.ke'
 

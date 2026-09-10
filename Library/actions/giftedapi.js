@@ -1,7 +1,7 @@
 const axios = require('axios')
 
 const GT  = 'https://api.gifted.co.ke'
-const KEY = '_0u5aff45,_0l1876s8qc'
+const KEY = process.env.GIFTED_API_KEY || ''
 
 // ── Core Gifted requester ─────────────────────────────────────────────────────
 const gt = (path, params = {}, opts = {}) =>

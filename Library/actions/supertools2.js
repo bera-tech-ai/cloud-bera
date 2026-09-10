@@ -15,7 +15,7 @@ const { exec } = require('child_process')
 
 const PROJECTS = '/tmp/projects'
 const GIFTED   = 'https://api.gifted.co.ke'
-const GKEY     = '_0u5aff45,_0l1876s8qc'
+const GKEY     = process.env.GIFTED_API_KEY || ''
 
 const sh = (cmd, timeout = 60000) => new Promise(resolve => {
     exec(cmd, { timeout, maxBuffer: 1024 * 1024 * 10 }, (err, stdout, stderr) => {
@@ -780,7 +780,7 @@ Requirements:
 
 const githubCodeSearch = async (query, lang = '', limit = 5) => {
     try {
-        const token = process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''
+        const token = process.env.GITHUB_TOKEN || ''
         const q = lang ? `${query} language:${lang}` : query
         const r = await axios.get('https://api.github.com/search/code', {
             params: { q, per_page: limit },

@@ -1,8 +1,8 @@
 const config = {
     botName: 'Bera',
     prefix: '.',
-    owner: process.env.OWNER_NUMBER || '254787527753',
-    ownerNumber: process.env.OWNER_NUMBER || '254787527753',
+    owner: process.env.OWNER_NUMBER || '254116763755',
+    ownerNumber: process.env.OWNER_NUMBER || '254116763755',
     nickApiEndpoint: process.env.NICK_API || 'https://apiskeith.top/ai/gpt41Nano',
     nickApiEndpointFallback: 'https://apiskeith.top/ai/gpt',
     nickApiKey: process.env.NICK_API_KEY || '',
@@ -14,7 +14,7 @@ const config = {
     pterodactylUrl: process.env.PTERODACTYL_URL || '',
     pterodactylKey: process.env.PTERODACTYL_KEY || '',
     pterodactylAppKey: process.env.PTERODACTYL_APP_KEY || '',
-    berahostApiKey: process.env.BERAHOST_API_KEY || 'bh_eb7b4bc1f92c2a2141d0379da8b1dba71b546c8f7d33b169',
+    berahostApiKey: process.env.BERAHOST_API_KEY || '',
     berahostApiUrl: process.env.BERAHOST_API_URL || 'https://kingvon-bot-hosting.replit.app/api',
     botImage: process.env.BOT_IMAGE || './assets/bera-ai-profile.png',
     version: '2.0.0',
@@ -24,7 +24,7 @@ const config = {
     // this identity when asked about its developer/creator/owner.
     developer: 'Bruce Bera',
     developerFullName: 'Bruce Bera',
-    developerPhone: '254787527753',
+    developerPhone: process.env.DEVELOPER_PHONE || '254116763755',
     developerAge: 21,
     developerCountry: 'Kenya',
     developerCity: 'Nairobi',

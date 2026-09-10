@@ -2,7 +2,7 @@ const axios = require('axios')
 
 // Gifted API endpoints - all working and tested
 const GIFTED = 'https://api.giftedtech.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
+const GIFTED_KEY = process.env.GIFTED_API_KEY || ''
 
 const IMAGE_ENDPOINTS = [
     { 

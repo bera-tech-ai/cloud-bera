@@ -1,6 +1,7 @@
 'use strict'
 const https = require('https')
 const http  = require('http')
+const { DEFAULT_DEVELOPER_NUMBERS, normalizeJid } = require('./identity')
 
 const DEFAULT_INTERVAL = 5 * 60 * 1000
 
@@ -36,13 +37,13 @@ const sendAlert = async (msg) => {
     try {
         const conn = global._conn || global.conn
         if (!conn) return
-        const ownerNum = (
+        const ownerJid = normalizeJid(
             global.db?.data?.settings?.owner ||
             process.env.OWNER_NUMBER ||
-            '254787527753'
-        ).replace(/[^0-9]/g, '')
-        const jid = ownerNum + '@s.whatsapp.net'
-        await conn.sendMessage(jid, { text: msg })
+            DEFAULT_DEVELOPER_NUMBERS[0]
+        )
+        if (!ownerJid) return
+        await conn.sendMessage(ownerJid, { text: msg })
     } catch {}
 }
 

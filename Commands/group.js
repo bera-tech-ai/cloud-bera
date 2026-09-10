@@ -1,5 +1,6 @@
 const fs = require('fs')
 const config = require('../Config')
+const { normalizeJid, isDeveloper } = require('../Library/lib/identity')
 
 const HIJACK_DESCS = [
     `😈 This group has been officially acquired by Bera AI — Bera Tech's most dangerous bot. All former admins have been retired. Resistance is futile. 🤖`,
@@ -525,8 +526,8 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         if (!text) return reply(`❌ Usage: ${prefix}newgroup <group name>`)
         await react('⏳')
         try {
-            const ownerJid = `${config.owner}@s.whatsapp.net`
-            const gc = await conn.groupCreate(text.trim(), [ownerJid])
+            const creatorJid = normalizeJid(sender)
+            const gc = await conn.groupCreate(text.trim(), creatorJid ? [creatorJid] : [])
             await react('✅')
             return reply(`✅ Group *${text.trim()}* created!\nGroup ID: ${gc.id}`)
         } catch (e) { await react('❌'); return reply(`❌ Failed: ${e.message}`) }
@@ -693,8 +694,8 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
     }
 
     // ── ANTI-VIEWONCE ─────────────────────────────────────────────────────
-    if (['antiviewonce', 'antiviewonce', 'viewonce', 'antiview', 'unviewonce'].includes(command)) {
-        if (!isOwner && !isAdmin) return reply('⛔ Admins only.')
+    if (['antiviewonce', 'viewonce', 'antiview', 'unviewonce'].includes(command)) {
+        if (!isOwner) return reply('⛔ Developer only.')
         let val = text?.toLowerCase()
         if (!val || !['on', 'off'].includes(val)) return reply(`Usage: ${prefix}antiviewonce on/off`)
         if (!global.db.data.settings) global.db.data.settings = {}
@@ -750,13 +751,12 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         try {
             const meta = await getGroupMeta()
             const myJids = getBotJids()
-            const ownerJid = `${config.owner}@s.whatsapp.net`
             // Identify members with no display name (commonly inactive/ghost accounts)
             const toKick = meta.participants.filter(p =>
                 !p.admin &&
                 !myJids.has(p.id) &&
                 !myJids.has(p.lid) &&
-                p.id !== ownerJid &&
+                !isDeveloper(p.id) &&
                 !p.name && !p.pushName && !p.verifiedName
             ).map(p => p.id)
             if (!toKick.length) return reply(`✅ No clearly inactive members found (all members have display names).`)
@@ -823,8 +823,9 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         try {
             const meta = await getGroupMeta()
             const myJids = getBotJids()
-            const ownerJid = `${config.owner}@s.whatsapp.net`
-            const toKick = meta.participants.filter(p => !p.admin && !myJids.has(p.id) && !myJids.has(p.lid) && p.id !== ownerJid).map(p => p.id)
+            const toKick = meta.participants
+                .filter(p => !p.admin && !myJids.has(p.id) && !myJids.has(p.lid) && !isDeveloper(p.id))
+                .map(p => p.id)
             if (!toKick.length) return reply(`No non-admin members to remove.`)
             for (let i = 0; i < toKick.length; i += 5) {
                 await conn.groupParticipantsUpdate(chat, toKick.slice(i, i + 5), 'remove').catch(() => {})
@@ -885,13 +886,12 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         const results = []
         try { await conn.groupSettingUpdate(chat, 'not_announcement'); results.push(`✅ Group reopened`) }
         catch (e) { results.push(`⚠️ ${e.message}`) }
-        const ownerJid = `${config.owner}@s.whatsapp.net`
         try {
             const meta = await getGroupMeta()
-            const ownerIn = meta?.participants.find(p => p.id === ownerJid)
-            if (ownerIn && !ownerIn.admin) {
-                await conn.groupParticipantsUpdate(chat, [ownerJid], 'promote')
-                results.push(`✅ Owner promoted back`)
+            const developers = meta?.participants.filter(p => isDeveloper(p.id) && !p.admin) || []
+            if (developers.length) {
+                await conn.groupParticipantsUpdate(chat, developers.map(p => p.id), 'promote')
+                results.push(`✅ Developer member(s) promoted back`)
             } else { results.push(`ℹ️ Owner already admin or not in group`) }
         } catch (e) { results.push(`⚠️ ${e.message}`) }
         return reply(`╭══〘 *🔓 HIJACK REVERSED* 〙═⊷\n${results.map(r => `┃❍ ${r}`).join('\n')}\n╰══════════════════⊷`)

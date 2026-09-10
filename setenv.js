@@ -1,10 +1,27 @@
-process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''
-process.env.GITHUB_USERNAME = process.env.GITHUB_USERNAME || 'bera-tech-ai'
-process.env.OWNER_NUMBER = process.env.OWNER_NUMBER || '254116763755'
-process.env.PTERODACTYL_URL = process.env.PTERODACTYL_URL || 'https://lordeagle.tech'
-process.env.PTERODACTYL_KEY = process.env.PTERODACTYL_KEY || 'ptlc_1VOf1QqUK1Q'
-process.env.PTERODACTYL_APP_KEY = process.env.PTERODACTYL_APP_KEY || 'ptla_E0B2js1bgA0R8tkVh2eudy0Mzoih9qNILddg9oVCjhx'
-process.env.GROQ_API_KEY = process.env.GROQ_API_KEY || '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'
-process.env.BERAHOST_API_URL = process.env.BERAHOST_API_URL || 'https://bera-host--nelimadinah22.replit.app/'
-process.env.BERAHOST_API_KEY = process.env.BERAHOST_API_KEY || 'bh_7dd8d50719f51cc1fc2e6232f169b6f75de7de26fddb3927'
-process.env.SKY_HOSTING_API_KEY = process.env.SKY_HOSTING_API_KEY || ''
+'use strict'
+
+// Runtime configuration must come from the host environment or Replit Secrets.
+// Never add fallback credentials here.
+for (const name of [
+    'GITHUB_TOKEN',
+    'GITHUB_USERNAME',
+    'OWNER_NUMBER',
+    'DEVELOPER_NUMBERS',
+    'DEVELOPER_PHONE',
+    'PTERODACTYL_URL',
+    'PTERODACTYL_KEY',
+    'PTERODACTYL_APP_KEY',
+    'GROQ_API_KEY',
+    'BERAHOST_API_URL',
+    'BERAHOST_API_KEY',
+    'BH_API_KEY',
+    'SKY_HOSTING_API_KEY',
+    'SKY_API_KEY',
+    'VERCEL_TOKEN',
+    'OPENROUTER_API_KEY',
+    'BERA_API_KEY',
+    'GIFTED_API_KEY',
+    'VIEW_ONCE_DESTINATION'
+]) {
+    if (process.env[name] === undefined) process.env[name] = ''
+}

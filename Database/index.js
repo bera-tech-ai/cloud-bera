@@ -2,6 +2,7 @@ const low = require('lowdb')
 const FileSync = require('lowdb/adapters/FileSync')
 const path = require('path')
 const fs = require('fs')
+const { normalizeJid } = require('../Library/lib/identity')
 
 const dbDir = path.resolve('./Database')
 const dbPath = path.join(dbDir, 'db.json')
@@ -56,8 +57,9 @@ const initDb = async () => {
 
 const getUser = (sender) => {
     const state = _db.getState()
-    if (!state.users[sender]) {
-        state.users[sender] = {
+    const key = normalizeJid(sender) || String(sender || '')
+    if (!state.users[key]) {
+        state.users[key] = {
             name: '',
             banned: false,
             premium: false,
@@ -74,9 +76,9 @@ const getUser = (sender) => {
         }
         _db.setState(state).write()
     }
-    if (state.users[sender].commandCount === undefined) state.users[sender].commandCount = 0
-    if (state.users[sender].limitReset === undefined) state.users[sender].limitReset = ''
-    return state.users[sender]
+    if (state.users[key].commandCount === undefined) state.users[key].commandCount = 0
+    if (state.users[key].limitReset === undefined) state.users[key].limitReset = ''
+    return state.users[key]
 }
 
 module.exports = { initDb, getUser }

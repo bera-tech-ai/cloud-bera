@@ -28,7 +28,7 @@ const handle = async (m, ctx) => {
         const raw = db?.settings?.bhApiUrl || process.env.BH_API_URL || 'https://bera-host-clone--brucebera555.replit.app'
         return raw.replace(/\/api\/?$/, '').replace(/\/$/, '') + '/api'
     }
-    const getKey = () => db?.settings?.bhApiKey || process.env.BH_API_KEY || 'bh_67c17f42498edb4e507237b2b11ae840e4cb5c87ba439d6b'
+    const getKey = () => process.env.BERAHOST_API_KEY || process.env.BH_API_KEY || ''
     const bh = async (method, path, body) => {
         const key = getKey()
         if (!key) throw new Error('No BeraHost API key set. Use: ' + prefix + 'bh setkey <key>')
@@ -143,11 +143,7 @@ const handle = async (m, ctx) => {
 
         // ── setkey ──
         if (sub === 'setkey') {
-            if (!args[1]) return reply(`Usage: ${prefix}bh setkey <api_key>`)
-            if (!db.settings) db.settings = {}
-            db.settings.bhApiKey = args[1]
-            await global.db.write()
-            return reply('✅ BeraHost API key saved.')
+            return reply('🔒 API keys cannot be accepted or stored in WhatsApp. Configure BH_API_KEY through the host environment or Replit Secrets.')
         }
 
         // ── seturl ──

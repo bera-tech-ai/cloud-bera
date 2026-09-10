@@ -84,7 +84,7 @@ const callGroqAI = async (systemPrompt, userMsg) => {
 
 // ── Gifted API (fallback 1) ──────────────────────────────────────────────────
 const GIFTED = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
+const GIFTED_KEY = process.env.GIFTED_API_KEY || ''
 
 
   // ── DeepSeek Official API (PRIMARY — follows system prompts perfectly) ────────
@@ -122,7 +122,7 @@ const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
   
 // ── Bera AI — SECONDARY ENDPOINT ──────────────────────────────────────────────
 const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/gpt4o'
-const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
+const BERA_API_KEY = process.env.BERA_API_KEY || ''
 
 const callBeraAI = async (messages, timeoutMs) => {
     try {
@@ -606,16 +606,16 @@ app.listen(PORT, () => console.log(\`${name} running on port \${PORT}\`))
 //  GITHUB TOKEN
 // ══════════════════════════════════════════════════════════════════════════════
 
-const githubTokenRegen = async (tokenInDB) => {
+const githubTokenRegen = async () => {
     try {
-        const ghToken = process.env.GITHUB_PERSONAL_ACCESS_TOKEN || tokenInDB
+        const ghToken = process.env.GITHUB_TOKEN
         if (!ghToken) return { success: false, error: 'No GitHub token configured' }
         const meRes = await axios.get('https://api.github.com/user', {
             headers: { 'Authorization': `Bearer ${ghToken}`, 'User-Agent': 'Bera-AI' }, timeout: 10000
         })
         return {
             success: true, username: meRes.data.login, canAutoCreate: false,
-            message: `Token is valid for *${meRes.data.login}*.\n\nTo generate a new token:\n1. Go to: https://github.com/settings/tokens/new\n2. Set expiry, select repo/workflow scopes\n3. Click Generate token\n4. Send *.setgithub <token>* to update`
+            message: `GitHub credential is valid for *${meRes.data.login}*. Configure or rotate it through the host environment or Replit Secrets.`
         }
     } catch (e) {
         return { success: false, error: e.message }

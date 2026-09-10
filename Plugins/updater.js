@@ -19,7 +19,7 @@ const API_URL    = `https://api.github.com/repos/${REPO}/commits/${BRANCH}`
 const HASH_FILE  = path.join(ROOT, '.last_commit')
 
 const getGithubHeaders = () => {
-    const token = global.db?.data?.settings?.githubToken
+    const token = process.env.GITHUB_TOKEN
     const headers = { 'User-Agent': 'BeraBot/2.0', Accept: 'application/vnd.github+json' }
     if (token) headers['Authorization'] = `Bearer ${token}`
     return headers

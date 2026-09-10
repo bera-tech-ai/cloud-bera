@@ -3,10 +3,9 @@
 // Trained on 433 real WhatsApp messages from 4 different chats
 
 const axios = require('axios')
-const config = require('../../Config')
 
 const GIFTED = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
+const GIFTED_KEY = process.env.GIFTED_API_KEY || ''
 const OVERCHAT_URL = 'https://api.gifted.co.ke/api/ai/overchat'
 const XWOLF = 'https://apis.xwolf.space'
 
@@ -27,7 +26,6 @@ const _overchat = async (q, timeoutMs = 18000) => {
 const PREBUILT_PROFILE = {
     myName: 'Bruce Bera',
     myFullName: 'Bruce Bera',
-    myPhone: '254787527753',
     myAge: 21,
     myCountry: 'Kenya',
     myCity: 'Nairobi',
@@ -243,7 +241,7 @@ getSystemPrompt = (profile) => {
         .slice(0, 50)
         .join('\n')
     const name = profile?.myName || PREBUILT_PROFILE.myName || 'Bruce Bera'
-    return `You are ${name}, a 21-year-old Kenyan developer from Nairobi texting on WhatsApp. Phone: 254787527753. GitHub: bera-tech-ai. These are your REAL sent messages — match this style EXACTLY:
+    return `You are ${name}, a 21-year-old Kenyan developer from Nairobi texting on WhatsApp. GitHub: bera-tech-ai. These are your REAL sent messages — match this style EXACTLY:
 
 ${msgs}
 
