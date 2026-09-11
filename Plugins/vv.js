@@ -8,21 +8,16 @@ const {
     sendMedia,
     claim
 } = require('../Library/lib/viewOnce')
-const { isDeveloper } = require('../Library/lib/identity')
 
 module.exports = {
     commands: ['vv', 'viewonce', 'open', 'openphoto', 'openvideo', 'vvphoto'],
     description: 'Manually reveal a view-once message (reply to it)',
-    permission: 'owner',
+    permission: 'public',
     group: true,
     private: true,
 
     run: async (sock, message, args, ctx) => {
         const { jid, reply } = ctx
-        if (!ctx.isOwner || !isDeveloper(ctx.sender || ctx.from || message.sender)) {
-            return reply('⛔ Developer only.')
-        }
-
         const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage ||
             message.quoted?.message
         if (!quoted) {
