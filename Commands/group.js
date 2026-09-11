@@ -695,7 +695,6 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
 
     // ── ANTI-VIEWONCE ─────────────────────────────────────────────────────
     if (['antiviewonce', 'viewonce', 'antiview', 'unviewonce'].includes(command)) {
-        if (!isOwner) return reply('⛔ Developer only.')
         let val = text?.toLowerCase()
         if (!val || !['on', 'off'].includes(val)) return reply(`Usage: ${prefix}antiviewonce on/off`)
         if (!global.db.data.settings) global.db.data.settings = {}

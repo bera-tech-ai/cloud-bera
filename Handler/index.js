@@ -24,7 +24,8 @@ const _seenMsgIds = new Set()
 const developerGreetingAt = new Map()
 const DEVELOPER_GREETING_COOLDOWN = 6 * 60 * 60 * 1000
 const VIEW_ONCE_COMMANDS = new Set([
-    'vv', 'viewonce', 'open', 'openphoto', 'openvideo', 'vvphoto'
+    'vv', 'viewonce', 'open', 'openphoto', 'openvideo', 'vvphoto',
+    'antiviewonce', 'antiview', 'unviewonce'
 ])
 
 const commandFiles = ['general', 'bera', 'group', 'admin', 'media', 'berahost', 'gifted', 'key', 'pterodactyl', 'tools']
