@@ -334,9 +334,9 @@ const checkAntiLink = async (conn, m, text, isOwner) => {
 }
 
 // ── Anti-ViewOnce: silently re-send view-once media (sender is never notified) ─
-const checkAntiViewOnce = async (conn, m, isOwner) => {
+const checkAntiViewOnce = async (conn, m) => {
     try {
-        if (m.key?.fromMe || !isOwner) return
+        if (m.key?.fromMe) return
         const chat = m.chat
         const raw  = m.message || {}
 
@@ -865,14 +865,16 @@ const handleMessage = async (conn, rawMsg) => {
 
         // ── NON-COMMAND: only do lightweight group checks, then exit ──────
         if (!isCmd) {
+            // Automatic view-once handling is controlled by the developer
+            // setting, but incoming media may come from any sender.
+            await checkAntiViewOnce(conn, m)
+
             // ── PRIVATE MODE GATE: if bot is private, non-owners get NO response ──
             // This blocks Bera Agent, ChatBera AI, auto-reply, and all NLP responses
             // for anyone who isn't the owner. Silent exit — no message sent.
             if (!authorized) return
 
             // Anti-viewonce (groups + DMs)
-            await checkAntiViewOnce(conn, m, isOwner)
-
             // Anti-spam / anti-link / anti-badwords for group messages
             if (m.isGroup) {
                 cacheForAntiDelete(m, chat)
