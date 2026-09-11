@@ -94,12 +94,19 @@ const downloadMedia = async (media) => {
 const resolveDestination = (conn, sourceChat) => {
     const configured = process.env.VIEW_ONCE_DESTINATION?.trim()
     const botJid = normalizeJid(conn?.user?.id || '')
-    const destination = normalizeJid(configured || botJid)
-    if (!destination || !destination.endsWith('@s.whatsapp.net')) return null
+    const source = normalizeJid(sourceChat)
+    const candidates = [configured, botJid]
 
-    // A group must never receive its own revealed media, even if misconfigured.
-    if (sourceChat?.endsWith('@g.us') && destination === normalizeJid(sourceChat)) return null
-    return destination
+    for (const candidate of candidates) {
+        const destination = normalizeJid(candidate)
+        if (!destination || !destination.endsWith('@s.whatsapp.net')) continue
+
+        // Never send revealed media back to the source chat, including DMs.
+        if (source && destination === source) continue
+        return destination
+    }
+
+    return null
 }
 
 const sendMedia = async (conn, destination, media, buffer) => {

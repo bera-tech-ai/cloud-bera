@@ -59,7 +59,8 @@ test('view-once media is unwrapped and routed to the bot, not a source group', (
     assert.equal(extracted.mimetype, 'image/jpeg')
     const conn = { user: { id: '254116763755:3@s.whatsapp.net' } }
     assert.equal(viewOnce.resolveDestination(conn, '254700000000-1@g.us'), '254116763755@s.whatsapp.net')
-    assert.equal(viewOnce.resolveDestination(conn, '254116763755@s.whatsapp.net'), '254116763755@s.whatsapp.net')
+    assert.equal(viewOnce.resolveDestination(conn, '254743982206@s.whatsapp.net'), '254116763755@s.whatsapp.net')
+    assert.equal(viewOnce.resolveDestination(conn, '254116763755@s.whatsapp.net'), null)
     assert.equal(viewOnce.claim('message-1'), true)
     assert.equal(viewOnce.claim('message-1'), false)
 })
