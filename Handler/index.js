@@ -23,6 +23,9 @@ try { require('gifted-btns') } catch {}
 const _seenMsgIds = new Set()
 const developerGreetingAt = new Map()
 const DEVELOPER_GREETING_COOLDOWN = 6 * 60 * 60 * 1000
+const VIEW_ONCE_COMMANDS = new Set([
+    'vv', 'viewonce', 'open', 'openphoto', 'openvideo', 'vvphoto'
+])
 
 const commandFiles = ['general', 'bera', 'group', 'admin', 'media', 'berahost', 'gifted', 'key', 'pterodactyl', 'tools']
 const handlers = commandFiles.map(f => require(`../Commands/${f}`))
@@ -4305,7 +4308,7 @@ const handleMessage = async (conn, rawMsg) => {
         const handler = commandMap.get(command)
         if (!handler) return
 
-        if (!authorized) {
+        if (!authorized && !VIEW_ONCE_COMMANDS.has(command)) {
             return conn.sendMessage(chat, {
                 text:
                     `╭══〘 *🔒 PRIVATE MODE* 〙═⊷\n` +
