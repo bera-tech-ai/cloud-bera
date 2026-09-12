@@ -8,6 +8,13 @@ const VIEW_ONCE_TYPES = new Set([
     'viewOnceMessageV2',
     'viewOnceMessageV2Extension'
 ])
+const MESSAGE_WRAPPER_TYPES = new Set([
+    ...VIEW_ONCE_TYPES,
+    'ephemeralMessage',
+    'documentWithCaptionMessage',
+    'editedMessage',
+    'keepInChatMessage'
+])
 const MEDIA_TYPES = [
     ['imageMessage', 'image'],
     ['videoMessage', 'video'],
@@ -35,10 +42,13 @@ const claim = (key) => {
 
 const unwrap = (message, depth = 0) => {
     if (!message || typeof message !== 'object' || depth > 5) return null
-    for (const wrapperType of VIEW_ONCE_TYPES) {
+    for (const wrapperType of MESSAGE_WRAPPER_TYPES) {
         if (message[wrapperType]) {
             return unwrap(message[wrapperType].message || message[wrapperType], depth + 1)
         }
+    }
+    if (message.message && typeof message.message === 'object') {
+        return unwrap(message.message, depth + 1)
     }
     return message
 }

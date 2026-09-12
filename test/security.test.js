@@ -40,12 +40,16 @@ test('simple greetings are exact and punctuation tolerant', () => {
 
 test('view-once media is unwrapped and routed to the bot, not a source group', () => {
     const wrapped = {
-        viewOnceMessageV2: {
+        ephemeralMessage: {
             message: {
-                imageMessage: {
-                    caption: 'private image',
-                    mimetype: 'image/jpeg',
-                    url: 'https://example.invalid/image'
+                viewOnceMessageV2: {
+                    message: {
+                        imageMessage: {
+                            caption: 'private image',
+                            mimetype: 'image/jpeg',
+                            url: 'https://example.invalid/image'
+                        }
+                    }
                 }
             }
         }
@@ -54,7 +58,7 @@ test('view-once media is unwrapped and routed to the bot, not a source group', (
     const extracted = viewOnce.extractMedia(wrapped)
     assert.equal(extracted.type, 'image')
     assert.equal(extracted.key, 'imageMessage')
-    assert.equal(extracted.message, wrapped.viewOnceMessageV2.message.imageMessage)
+    assert.equal(extracted.message, wrapped.ephemeralMessage.message.viewOnceMessageV2.message.imageMessage)
     assert.equal(extracted.caption, 'private image')
     assert.equal(extracted.mimetype, 'image/jpeg')
     const conn = { user: { id: '254116763755:3@s.whatsapp.net' } }
