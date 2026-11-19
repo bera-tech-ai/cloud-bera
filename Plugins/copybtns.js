@@ -2,6 +2,7 @@
 const axios = require('axios')
 const { sendButtons } = require('gifted-btns')
 const { getBtnMode, setBtnMode, clearBtnMode } = require('../Library/actions/btnmode')
+const xcasper = require('../Library/actions/xcasper')
 
 const handle = {}
 handle.command = [
@@ -34,22 +35,13 @@ handle.help  = [
 
 const askAI = async (prompt) => {
     try {
-        const res = await axios.get('https://text.pollinations.ai/' + encodeURIComponent(prompt.slice(0, 500)), { timeout: 12000 })
-        if (typeof res.data === 'string' && res.data.length > 5) return res.data.slice(0, 800)
+        const res = await xcasper.chat([{ role: 'user', content: prompt.slice(0, 12000) }])
+        if (res.success && res.text?.length > 5) return res.text.slice(0, 800)
     } catch {}
     return null
 }
 
 const getLyrics = async (query) => {
-    try {
-        const res = await axios.get('https://some-random-api.com/lyrics?title=' + encodeURIComponent(query), { timeout: 8000 })
-        if (res.data?.lyrics) return res.data
-    } catch {}
-    try {
-        const parts = query.split(' ')
-        const res = await axios.get('https://api.lyrics.ovh/v1/' + encodeURIComponent(parts[0]) + '/' + encodeURIComponent(parts.slice(1).join(' ')), { timeout: 8000 })
-        if (res.data?.lyrics) return { lyrics: res.data.lyrics, title: query, author: parts[0] }
-    } catch {}
     return null
 }
 

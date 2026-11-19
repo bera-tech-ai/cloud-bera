@@ -5,12 +5,9 @@
 //           essay, cover, email, reply2, code2eng, eng2code, debugcode,
 //           sentiment, keyword, complete, expand
 
-const axios = require('axios')
 const { sendButtons } = require('gifted-btns')
 const { getBtnMode } = require('../Library/actions/btnmode')
-
-const GIFTED = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
+const xcasper = require('../Library/actions/xcasper')
 
 const handle = {}
 handle.command = [
@@ -75,46 +72,12 @@ handle.help = [
     'bioai <info>          — Write a bio',
 ]
 
-// Chat with Bera's AI using Gifted API (replaces apiskeith)
+// Chat with Bera's AI using the verified centralized Xcasper client.
 const askAI = async (prompt) => {
-    // Gifted AI endpoints
-    const AI_ENDPOINTS = [
-        { url: `${GIFTED}/api/ai/gemini`, param: 'q', needsKey: true },
-        { url: `${GIFTED}/api/ai/gpt`,    param: 'q', needsKey: true },
-        { url: `${GIFTED}/api/ai/ai`,     param: 'q', needsKey: true },
-        { url: `${GIFTED}/api/ai/chatgpt`,param: 'q', needsKey: true },
-    ]
-
-    // Try Gifted endpoints first
-    for (const ep of AI_ENDPOINTS) {
-        try {
-            const params = { [ep.param]: prompt.slice(0, 4000) }
-            if (ep.needsKey) params.apikey = GIFTED_KEY
-            
-            const res = await axios.get(ep.url, { params, timeout: 20000 })
-            const data = res.data
-            
-            // Skip errors
-            if (data?.status === false || data?.success === false) continue
-            if (data?.result === 'Request failed with status code 403') continue
-            
-            const result = data?.result || data?.answer || data?.response || data?.reply
-            if (typeof result === 'string' && result.length > 5 && result !== 'Request failed with status code 403') {
-                return result.slice(0, 2000)
-            }
-        } catch {}
-    }
-
-    // Fallback: try Pollinations AI (free, anonymous)
     try {
-        const encoded = encodeURIComponent(prompt)
-        const res = await axios.get('https://text.pollinations.ai/' + encoded, { timeout: 15000 })
-        const txt = typeof res.data === 'string' ? res.data.trim() : ''
-        const isErr = txt.startsWith('{') && (txt.includes('"error"') || txt.includes('"status"'))
-        if (txt && txt.length > 10 && !isErr) return txt.slice(0, 2000)
-    } catch {}
-
-    return null
+        const result = await xcasper.chat([{ role: 'user', content: String(prompt).slice(0, 14000) }])
+        return result.success ? result.text.slice(0, 4000) : null
+    } catch { return null }
 }
 
 const EMOJI_MAP = {

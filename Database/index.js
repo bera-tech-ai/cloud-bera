@@ -10,6 +10,10 @@ if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true })
 
 const defaultData = {
     users: {},
+    groups: {},
+    projects: {},
+    deployments: {},
+    audit: [],
     keys: {},
     settings: {
         autoread: false,
@@ -79,4 +83,51 @@ const getUser = (sender) => {
     return state.users[sender]
 }
 
-module.exports = { initDb, getUser }
+const getGroup = (jid) => {
+    if (!jid) return null
+    const state = _db.getState()
+    if (!state.groups[jid]) {
+        state.groups[jid] = {
+            jid,
+            enabled: true,
+            beraTrigger: true,
+            autoReply: false,
+            tagReply: true,
+            language: 'auto',
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        }
+        _db.setState(state).write()
+    }
+    return state.groups[jid]
+}
+
+const saveProject = (id, project) => {
+    if (!id) throw new Error('Project id is required')
+    const state = _db.getState()
+    state.projects[id] = { ...(state.projects[id] || {}), ...project, id, updatedAt: Date.now() }
+    _db.setState(state).write()
+    return state.projects[id]
+}
+
+const getProject = (id) => _db.getState().projects?.[id] || null
+const listProjects = (owner) => Object.values(_db.getState().projects || {}).filter(p => !owner || p.owner === owner || p.userId === owner)
+
+const saveDeployment = (id, deployment) => {
+    if (!id) throw new Error('Deployment id is required')
+    const state = _db.getState()
+    state.deployments[id] = { ...(state.deployments[id] || {}), ...deployment, id, updatedAt: Date.now() }
+    _db.setState(state).write()
+    return state.deployments[id]
+}
+
+const recordAudit = (event) => {
+    const state = _db.getState()
+    state.audit = Array.isArray(state.audit) ? state.audit : []
+    state.audit.push({ ...event, at: Date.now() })
+    if (state.audit.length > 1000) state.audit = state.audit.slice(-1000)
+    _db.setState(state).write()
+    return state.audit[state.audit.length - 1]
+}
+
+module.exports = { initDb, getUser, getGroup, saveProject, getProject, listProjects, saveDeployment, recordAudit }

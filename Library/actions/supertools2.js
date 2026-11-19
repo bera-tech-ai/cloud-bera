@@ -12,10 +12,9 @@ const axios  = require('axios')
 const fs     = require('fs')
 const path   = require('path')
 const { exec } = require('child_process')
+const xcasper = require('./xcasper')
 
 const PROJECTS = '/tmp/projects'
-const GIFTED   = 'https://api.gifted.co.ke'
-const GKEY     = '_0u5aff45,_0l1876s8qc'
 
 const sh = (cmd, timeout = 60000) => new Promise(resolve => {
     exec(cmd, { timeout, maxBuffer: 1024 * 1024 * 10 }, (err, stdout, stderr) => {
@@ -25,28 +24,11 @@ const sh = (cmd, timeout = 60000) => new Promise(resolve => {
 })
 
 const callAI = async (sys, user) => {
-    const GROQ_KEY = process.env.GROQ_API_KEY
-    if (GROQ_KEY) {
-        try {
-            const msgs = []
-            if (sys) msgs.push({ role: 'system', content: sys.slice(0, 2000) })
-            msgs.push({ role: 'user', content: user.slice(0, 5000) })
-            const r = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-                model: 'llama-3.3-70b-versatile', messages: msgs, max_tokens: 2000
-            }, { headers: { Authorization: `Bearer ${GROQ_KEY}` }, timeout: 15000 })
-            const t = r.data?.choices?.[0]?.message?.content
-            if (t) return { success: true, text: t.trim() }
-        } catch {}
-    }
-    try {
-        const q = (sys ? sys + '\n\n' : '') + user
-        const r = await axios.get(`${GIFTED}/api/ai/overchat`, {
-            params: { apikey: 'gifted', model: 'deepseek', q: q.slice(0, 4000) }, timeout: 15000
-        })
-        const t = r.data?.result
-        if (t) return { success: true, text: String(t).trim() }
-    } catch {}
-    return { success: false, text: 'AI unavailable' }
+    const messages = []
+    if (sys) messages.push({ role: 'system', content: sys.slice(0, 4000) })
+    messages.push({ role: 'user', content: user.slice(0, 12000) })
+    const result = await xcasper.chat(messages)
+    return result.success ? { success: true, text: result.text.trim() } : { success: false, text: 'AI unavailable', error: result.error }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -3,24 +3,13 @@
 // Trained on 433 real WhatsApp messages from 4 different chats
 
 const axios = require('axios')
+const xcasper = require('./xcasper')
 const config = require('../../Config')
 
-const GIFTED = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
-const OVERCHAT_URL = 'https://api.gifted.co.ke/api/ai/overchat'
-const XWOLF = 'https://apis.xwolf.space'
-
-// Shared overchat helper — used by generateStyleReply and analyzeStyle
+// Xcasper is the sole conversational provider for ChatBera.
 const _overchat = async (q, timeoutMs = 18000) => {
-    try {
-        const res = await axios.get(OVERCHAT_URL, {
-            params: { apikey: GIFTED_KEY, model: 'deepseek', q },
-            timeout: timeoutMs
-        })
-        const text = res.data?.result
-        if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
-    } catch {}
-    return null
+    const r = await xcasper.chat([{ role: 'user', content: q }], { timeout: timeoutMs })
+    return r.success ? r.text : null
 }
 
 // ── Pre-built style profile (trained on real chat exports) ────────────────────
@@ -304,19 +293,12 @@ generateStyleReply = async (incomingText, styleData) => {
             if (reply.length > 0) return { success: true, reply }
         }
 
-        // 4. Xwolf Gemini — fallback
-        try {
-            const res = await axios.get(`${XWOLF}/api/ai/gemini`, {
-                params: { q: prompt.slice(0, 1200) },
-                timeout: 15000
-            })
-            const raw = res.data?.result || res.data?.response || res.data?.answer ||
-                        (typeof res.data === 'string' ? res.data : null)
-            if (raw && typeof raw === 'string' && raw.trim().length > 1) {
-                const reply = cleanReply(raw)
-                if (reply.length > 0) return { success: true, reply }
-            }
-        } catch {}
+        // Xcasper provider chain already includes the configured fallbacks.
+        const rawFallback = await _overchat(prompt.slice(0, 2000), 20000)
+        if (rawFallback) {
+            const reply = cleanReply(rawFallback)
+            if (reply.length > 0) return { success: true, reply }
+        }
 
         // 5. Last resort — pick from real training messages
         const msgs = (profile.myMessages || PREBUILT_PROFILE.myMessages || [])
@@ -343,12 +325,8 @@ ${sample}`
         const oc = await _overchat(prompt.slice(0, 2000), 20000)
         if (oc && oc.length > 20) return oc
 
-        // Fallback: Xwolf Gemini
-        try {
-            const res = await axios.get(`${XWOLF}/api/ai/gemini`, { params: { q: prompt.slice(0, 1500) }, timeout: 20000 })
-            const text = res.data?.result || res.data?.response
-            if (text && text.length > 10) return text
-        } catch {}
+        const fallback = await _overchat(prompt.slice(0, 2000), 20000)
+        if (fallback && fallback.length > 10) return fallback
 
         return PREBUILT_PROFILE.styleAnalysis
     } catch {
@@ -427,16 +405,11 @@ function buildStylePrompt(profile, userMsg) {
     )
 }
 
-// Generate a style-matched reply using Xwolf Gemini AI
+// Generate a style-matched reply using Xcasper.
 async function generateStyleReplyXwolf(userMsg, profile) {
     try {
         const prompt = 'You mimic WhatsApp texting styles exactly. Short, natural, no asterisks or markdown.\n\n' + buildStylePrompt(profile, userMsg)
-        const r = await axios.get(`${XWOLF}/api/ai/gemini`, {
-            params: { q: prompt.slice(0, 2000) },
-            timeout: 20000
-        })
-        const reply = r.data?.result || r.data?.response || r.data?.answer ||
-                      (typeof r.data === 'string' ? r.data : null)
+        const reply = await _overchat(prompt.slice(0, 2200), 20000)
         if (!reply) return { success: false, error: 'No response' }
         return { success: true, reply: String(reply).trim() }
     } catch (e) {

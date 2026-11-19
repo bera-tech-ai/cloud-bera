@@ -5,18 +5,7 @@
  * Fallback: puppeteer-core with @sparticuz/chromium if available.
  */
 const axios = require('axios')
-
-const GIFTED = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
-
-const SCREENSHOT_APIS = [
-    // Gifted Tech screenshot API (working)
-    (url) => `${GIFTED}/api/tools/sspc?apikey=${GIFTED_KEY}&url=${encodeURIComponent(url)}`,
-    // thum.io (free, reliable fallback)
-    (url) => `https://image.thum.io/get/width/1280/crop/900/${encodeURIComponent(url)}`,
-    // ScreenshotOne (free tier fallback)
-    (url) => `https://api.screenshotone.com/take?url=${encodeURIComponent(url)}&viewport_width=1280&viewport_height=900&format=jpg`
-]
+const xcasper = require('./xcasper')
 
 /**
  * Take a screenshot of a URL and return the image buffer.
@@ -27,6 +16,17 @@ const takeScreenshot = async (url) => {
     if (!url || !url.startsWith('http')) {
         return { success: false, error: 'Invalid URL — must start with http:// or https://' }
     }
+
+    // Primary: supplied Xcasper screenshot endpoint.
+    try {
+        const data = await xcasper.screenshot(url, { device: 'desktop', format: 'png' })
+        const remote = data?.url || data?.image || data?.result?.url || data?.result
+        if (typeof remote === 'string' && remote.startsWith('http')) {
+            const image = await axios.get(remote, { responseType: 'arraybuffer', timeout: 30000 })
+            return { success: true, buffer: Buffer.from(image.data), mimetype: image.headers['content-type'] || 'image/png' }
+        }
+        if (Buffer.isBuffer(data)) return { success: true, buffer: data, mimetype: 'image/png' }
+    } catch {}
 
     // Try Puppeteer if available
     let puppeteer
@@ -55,33 +55,7 @@ const takeScreenshot = async (url) => {
         }
     }
 
-    // API fallbacks
-    for (const buildUrl of SCREENSHOT_APIS) {
-        try {
-            const ssUrl = buildUrl(url)
-            const res = await axios.get(ssUrl, { 
-                responseType: 'arraybuffer', 
-                timeout: 20000, 
-                validateStatus: s => s < 400 
-            })
-            
-            if (res.data && res.data.byteLength > 1000) {
-                const ct = res.headers['content-type'] || 'image/jpeg'
-                if (/image/.test(ct)) {
-                    return { success: true, buffer: Buffer.from(res.data), mimetype: ct.split(';')[0] }
-                }
-                
-                // Check if the response is actually HTML (not an image)
-                const dataStr = Buffer.from(res.data).toString('utf-8').slice(0, 500)
-                if (dataStr.includes('<html') || dataStr.includes('<!DOCTYPE')) {
-                    // API returned HTML instead of image — try next endpoint
-                    continue
-                }
-            }
-        } catch {
-            continue
-        }
-    }
+    // No unverified screenshot providers are used here.
 
     return { success: false, error: 'All screenshot methods failed. Check the URL and try again.' }
 }

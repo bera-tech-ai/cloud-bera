@@ -2,8 +2,6 @@ const axios = require('axios')
 const config = require('../../Config')
 
 const MAX_HISTORY = config.maxHistory || 20
-const GIFTED = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
 
 // ── Bera Identity Sanitizer — strips AI identity leaks from all responses ─────
 const _sanitizeIdentity = (text) => {
@@ -40,114 +38,21 @@ const _sanitizeIdentity = (text) => {
 
 
 
-  // ── DeepSeek Official API (PRIMARY — follows system prompts perfectly) ────────
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-  const OR_MODELS = ['openai/gpt-oss-120b:free', 'nvidia/nemotron-3-ultra-550b-a55b:free']
-  const callDeepSeekAI = async (userText, systemPrompt, timeoutMs) => {
-      const messages = []
-      if (systemPrompt) messages.push({ role: 'system', content: systemPrompt.slice(0, 16000) })
-      messages.push({ role: 'user', content: String(userText || '').slice(0, 16000) })
+  // ── Xcasper AI provider chain ────────────────────────────────────────────────
+const xcasper = require('../actions/xcasper')
 
-      // 0. ch.at — PRIMARY (free, no key, OpenAI-compatible)
-      try {
-          const chatRes = await axios.post('https://ch.at/v1/chat/completions',
-              { messages },
-              { headers: { 'Content-Type': 'application/json' }, timeout: timeoutMs || 25000 }
-          )
-          const chatTxt = chatRes.data?.choices?.[0]?.message?.content
-          if (chatTxt && typeof chatTxt === 'string' && chatTxt.trim().length > 2) return chatTxt.trim()
-      } catch {}
-
-      // 1. OpenRouter — secondary
-      if (OPENROUTER_API_KEY) {
-          for (const model of OR_MODELS) {
-              try {
-                  const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-                      model, messages, max_tokens: 1024, temperature: 0.7
-                  }, {
-                      headers: {
-                          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-                          'Content-Type': 'application/json',
-                          'HTTP-Referer': 'https://bera-tech-ai.github.io',
-                          'X-Title': 'Bera AI'
-                      },
-                      timeout: timeoutMs || 20000
-                  })
-                  const text = res.data?.choices?.[0]?.message?.content
-                  if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
-              } catch (e) {
-                  if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 1000))
-              }
-          }
-      }
-      return null
-  }
-  
-// ── Bera AI — SECONDARY ENDPOINT ──────────────────────────────────────────────
-const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/gpt4o'
-const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
-
-const callBeraAI_Nick = async (userText, systemPrompt, timeoutMs) => {
-    try {
-        const identity = systemPrompt && systemPrompt.length > 10
-            ? systemPrompt.slice(0, 800)
-            : 'You are Bera AI — a powerful WhatsApp AI assistant built by Bera Tech. NEVER say you are DeepSeek, Gemini, GPT, Claude, or any other AI. Always say your name is Bera AI, built by Bera Tech.'
-        const q = identity + '\n\nUser: ' + String(userText || '').slice(0, 1000) + '\nBera AI:'
-        const res = await axios.get(BERA_API_URL, {
-            params: { q: q.slice(0, 3000), apikey: BERA_API_KEY },
-            timeout: timeoutMs || 18000
-        })
-        const text = res.data?.result
-        if (text && typeof text === 'string' && text.trim().length > 2) return _sanitizeIdentity(text.trim())
-    } catch {}
-    return null
+const callDeepSeekAI = async (userText, systemPrompt, timeoutMs) => {
+    const r = await xcasper.chat([
+        { role: 'system', content: systemPrompt || '' },
+        { role: 'user', content: String(userText || '') }
+    ], { timeout: timeoutMs || 25000 })
+    return r.success ? _sanitizeIdentity(r.text) : null
 }
-
-
-// ── Gifted Overchat / DeepSeek (primary — accepts Bera AI identity) ───────────
-const OVERCHAT_URL = 'https://api.gifted.co.ke/api/ai/overchat'
-const callOverchat = async (userText, systemPrompt, timeoutMs) => {
-    try {
-        const identity = systemPrompt && systemPrompt.length > 20
-            ? systemPrompt.slice(0, 1200)
-            : 'You are Bera AI v4 — a powerful WhatsApp AI assistant built by Bera Tech. NEVER say you are DeepSeek, Gemini, GPT, Claude, or any other AI. Always say your name is Bera AI, built by Bera Tech. Be direct, helpful, and powerful.'
-        const q = identity + '\n\nUser: ' + String(userText || '').slice(0, 800) + '\nBera AI:'
-        const res = await axios.get(OVERCHAT_URL, {
-            params: { apikey: 'gifted', model: 'deepseek', q },
-            timeout: timeoutMs || 12000
-        })
-        const text = res.data?.result
-        if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
-    } catch {}
-    return null
-}
-
-// ── Groq AI (primary — ultra-fast, < 1 second responses) ─────────────────────
-const GROQ_API_KEY = process.env.GROQ_API_KEY
-const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
-
-const callGroqAI = async (messages) => {
-    for (const model of GROQ_MODELS) {
-        try {
-            const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-                model,
-                messages,
-                max_tokens: 1024,
-                temperature: 0.7
-            }, {
-                headers: {
-                    'Authorization': `Bearer ${GROQ_API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000
-            })
-            const text = res.data?.choices?.[0]?.message?.content
-            if (text && String(text).trim().length > 2) return String(text).trim()
-        } catch (e) {
-            if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 1000))
-        }
-    }
-    return null
+const callBeraAI_Nick = callDeepSeekAI
+const callOverchat = callDeepSeekAI
+const callGroqAI = async (messages, timeoutMs) => {
+    const r = await xcasper.chat(messages, { timeout: timeoutMs || 25000 })
+    return r.success ? _sanitizeIdentity(r.text) : null
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -476,111 +381,23 @@ const callPuterAI = async (messages) => {
     return null
 }
 
-// Gifted AI endpoints
-const AI_ENDPOINTS = [
-    `${GIFTED}/api/ai/gemini`,
-    `${GIFTED}/api/ai/gpt`,
-    `${GIFTED}/api/ai/ai`,
-    `${GIFTED}/api/ai/chatgpt`,
-    `${GIFTED}/api/ai/llama`,
-    `${GIFTED}/api/ai/mistral`,
-    `${GIFTED}/api/ai/deepseek`,
-]
-
-const tryEndpoints = async (endpoints, paramsFn, resultFn, timeout = 25000) => {
-    let lastError = null
-    for (const url of endpoints) {
-        try {
-            const params = paramsFn(url)
-            params.apikey = GIFTED_KEY
-            const res = await axios.get(url, { params, timeout })
-            const data = res.data
-            if (data?.status === false || data?.success === false) {
-                lastError = new Error(data?.error || 'API returned failure')
-                continue
-            }
-            if (data?.result === 'Request failed with status code 403') continue
-            const answer = resultFn ? resultFn(data) : (data?.result || data?.reply || data?.message || data?.response || data?.answer || data?.text)
-            if (!answer || typeof answer !== 'string' || answer.length < 2) {
-                lastError = new Error('Empty response')
-                continue
-            }
-            return answer
-        } catch (e) {
-            lastError = e
-        }
-    }
-    throw lastError || new Error('All AI endpoints failed')
-}
-
 const nickAi = async (userText, history = [], onAction = null, imageBuffer = null) => {
-    // Handle image vision — Gifted vision endpoint
     if (imageBuffer) {
-        try {
-            const imageBase64 = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`
-            const res = await axios.post(`${GIFTED}/api/ai/vision`, {
-                apikey: GIFTED_KEY,
-                image: imageBase64,
-                q: userText || 'Describe and analyse this image in detail.'
-            }, { timeout: 35000 })
-            const data = res.data
-            const answer = data?.result || data?.reply || data?.message
-            if (answer && typeof answer === 'string' && answer.length > 2) return cleanAnswer(answer)
-        } catch (e) {
-            console.error('[BERAAI] Vision failed:', e.message)
-        }
-        throw new Error('Image analysis is temporarily unavailable. Try again later.')
+        const imageUrl = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`
+        const vision = await xcasper.vision(imageUrl, userText || 'Describe and analyse this image in detail.')
+        if (vision.success) return cleanAnswer(vision.text)
+        throw new Error(vision.error || 'Image analysis is temporarily unavailable.')
     }
 
-    // 1. Bera AI — PRIMARY endpoint (try first on all requests)
-    try {
-        const beraAnswer = await callBeraAI_Nick(userText, SHORT_PERSONA, 18000)
-        if (beraAnswer && beraAnswer.length > 1) return _sanitizeIdentity(cleanAnswer(beraAnswer))
-    } catch {}
-
-    // 2. Gifted Overchat / DeepSeek (secondary)
-    try {
-        const overchatAnswer = await callOverchat(userText, SHORT_PERSONA, 12000)
-        if (overchatAnswer && overchatAnswer.length > 1) return _sanitizeIdentity(cleanAnswer(overchatAnswer))
-    } catch (e) {
-        console.error('[BERAAI] Overchat failed:', e.message)
-    }
-
-    // 3. Groq AI (backup — ultra-fast)
-    try {
-        const messages = [{ role: 'system', content: SHORT_PERSONA }]
-        const recent = (history || []).slice(-6)
-        for (const h of recent) {
-            if (h.role && h.content) messages.push({ role: h.role, content: String(h.content).slice(0, 500) })
-        }
-        messages.push({ role: 'user', content: (userText || '').slice(0, 2000) })
-        const groqAnswer = await callGroqAI(messages)
-        if (groqAnswer && groqAnswer.length > 1) return _sanitizeIdentity(cleanAnswer(groqAnswer))
-    } catch (e) {
-        console.error('[BERAAI] Groq failed:', e.message)
-    }
-
-    // 4. Gifted API fallback — GET with short query
-    const query = buildQuery(userText, history)
-    try {
-        const answer = await tryEndpoints(
-            AI_ENDPOINTS,
-            () => ({ q: query }),
-            (data) => data?.result || data?.reply || data?.message || data?.response
-        )
-        if (answer && answer.length > 1) return cleanAnswer(answer)
-    } catch (e) {
-        console.error('[BERAAI] Gifted endpoints failed:', e.message)
-    }
-
-    // 5. Ultra-short fallback
-    const shortQuery = (userText || '').slice(0, 400)
-    const answer2 = await tryEndpoints(
-        AI_ENDPOINTS.slice(0, 3),
-        () => ({ q: shortQuery }),
-        (data) => data?.result || data?.reply || data?.message || data?.response
-    )
-    return cleanAnswer(answer2)
+    const messages = [
+        { role: 'system', content: SHORT_PERSONA },
+        ...(history || []).slice(-6).filter(h => h?.role && h?.content).map(h => ({ role: h.role, content: String(h.content).slice(0, 1000) })),
+        { role: 'user', content: String(userText || '').slice(0, 6000) }
+    ]
+    const result = await xcasper.chat(messages, { timeout: 30000, maxChars: 12000 })
+    if (result.success) return _sanitizeIdentity(cleanAnswer(result.text))
+    throw new Error(result.error || 'Xcasper AI unavailable')
 }
+
 
 module.exports = { nickAi, MAX_HISTORY, PERSONALITY, SHORT_PERSONA }

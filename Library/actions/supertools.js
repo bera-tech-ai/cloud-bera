@@ -9,9 +9,7 @@ const fs     = require('fs')
 const path   = require('path')
 const crypto = require('crypto')
 const { exec } = require('child_process')
-
-const GIFTED     = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
+const xcasper = require('./xcasper')
 const PROJECTS   = '/tmp/projects'
 
 const runShell = (cmd, timeout = 60000) => new Promise(resolve => {
@@ -23,15 +21,11 @@ const runShell = (cmd, timeout = 60000) => new Promise(resolve => {
 
 const callAI = async (system, user) => {
     try {
-        const q = system ? `${system}\n\n${user}` : user
-        const res = await axios.get(`${GIFTED}/api/ai/gemini`, {
-            params: { apikey: GIFTED_KEY, q: q.slice(0, 6000) },
-            timeout: 60000
-        })
-        const text = res.data?.result || res.data?.response || res.data?.answer ||
-                     (typeof res.data === 'string' ? res.data : null)
-        if (!text) return { success: false, error: 'No AI response' }
-        return { success: true, text: String(text).trim() }
+        const messages = []
+        if (system) messages.push({ role: 'system', content: system.slice(0, 4000) })
+        messages.push({ role: 'user', content: String(user || '').slice(0, 12000) })
+        const result = await xcasper.chat(messages, { timeout: 60000 })
+        return result.success ? { success: true, text: result.text.trim() } : { success: false, error: result.error }
     } catch (e) { return { success: false, error: e.message } }
 }
 

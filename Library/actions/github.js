@@ -31,8 +31,13 @@ const listRepos = async (perPage = 50) => {
     return data.map(r => ({ name: r.name, private: r.private, url: r.html_url, updated: r.updated_at, description: r.description, language: r.language }))
 }
 
-const createRepo = (name, isPrivate = false, description = '') =>
-    gh('/user/repos', 'POST', { name, private: isPrivate, description, auto_init: true })
+const createRepo = (name, isPrivate = false, description = '', options = {}) =>
+    gh('/user/repos', 'POST', {
+        name,
+        private: isPrivate,
+        description,
+        auto_init: options.autoInit !== undefined ? Boolean(options.autoInit) : true
+    })
 
 const deleteRepo = async (owner, repo) => {
     const data = await gh(`/repos/${owner}/${repo}`, 'DELETE')

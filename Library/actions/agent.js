@@ -16,258 +16,24 @@ const resolveAgentPath = (argPath, userId) => {
     return wsResolve(userId || 'shared', p)
 }
 
-// ── Gifted Overchat / DeepSeek (primary — accepts Bera AI identity) ───────────
-const OVERCHAT_URL_AGENT = 'https://api.gifted.co.ke/api/ai/overchat'
-const {
-    gtCrypto, gtStock, gtCurrency, gtMovie, gtAnime, gtIpInfo, gtGithub,
-    gtTranslate, gtNews, gtWeather, gtLyrics, gtWiki, gtBible,
-    // NEW Gifted Tools
-    gtDnsCheck, gtHttpHeaders, gtServerCheck,
-    gtEncodeBinary, gtDecodeBinary, gtEncodeBase64, gtDecodeBase64,
-    gtFancyText, gtFancyTextV2,
-    gtEncryptCode, gtEncryptCodeV2, gtEncryptCodeV3,
-    gtGoogleImages, gtUnsplash, gtTikTokSearch,
-    gtLyricsV2, gtSpotifyLyrics, gtSpotifyPlaylist, gtSoundCloud, gtHearthis, gtChord,
-    gtDefine, gtWikimedia, gtPlaystore, gtHappyMod, gtApkMirror, gtNpmSearch, gtWattpad
-} = require('./giftedapi')
-const callOverchat = async (systemPrompt, userMsg, timeoutMs) => {
-    try {
-        const identity = systemPrompt && systemPrompt.length > 20
-            ? systemPrompt.slice(0, 1200)
-            : 'You are Bera AI v4 — a powerful WhatsApp AI assistant built by Bera Tech. NEVER say you are DeepSeek or any other AI. Always say your name is Bera AI.'
-        const q = identity + '\n\nUser: ' + String(userMsg || '').slice(0, 800) + '\nBera AI:'
-        const res = await axios.get(OVERCHAT_URL_AGENT, {
-            params: { apikey: 'gifted', model: 'deepseek', q },
-            timeout: timeoutMs || 12000
-        })
-        const text = res.data?.result
-        if (text && typeof text === 'string' && text.trim().length > 2) {
-            return { success: true, text: text.trim(), model: 'overchat/deepseek' }
-        }
-    } catch {}
-    return { success: false, error: 'Overchat unavailable' }
-}
+// ── Xcasper AI provider chain ────────────────────────────────────────────────
+const xcasper = require('./xcasper')
 
-// ── Groq AI (primary — ultra-fast, < 1 second responses) ────────────────────
-const GROQ_API_KEY = process.env.GROQ_API_KEY
-const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
-
-const callGroqAI = async (systemPrompt, userMsg) => {
+const callAI = async (systemPrompt, userMsg, timeoutMs) => {
     const messages = []
-    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt.slice(0, 4000) })
-    messages.push({ role: 'user', content: userMsg.slice(0, 6000) })
-
-    for (const model of GROQ_MODELS) {
-        try {
-            const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-                model,
-                messages,
-                max_tokens: 4096,
-                temperature: 0.7
-            }, {
-                headers: {
-                    'Authorization': `Bearer ${GROQ_API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000
-            })
-            const text = res.data?.choices?.[0]?.message?.content
-            if (text && String(text).trim().length > 2) {
-                return { success: true, text: String(text).trim(), model: `groq:${model}` }
-            }
-        } catch (e) {
-            if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 1000))
-        }
-    }
-    return { success: false, error: 'Groq AI unavailable' }
+    if (systemPrompt) messages.push({ role: 'system', content: String(systemPrompt) })
+    messages.push({ role: 'user', content: String(userMsg || '') })
+    const result = await xcasper.chat(messages, { timeout: timeoutMs || 25000, maxChars: 14000 })
+    return result.success
+        ? { success: true, text: result.text, model: result.model }
+        : { success: false, error: result.error }
 }
 
-// ── Gifted API (fallback 1) ──────────────────────────────────────────────────
-const GIFTED = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
-
-
-  // ── DeepSeek Official API (PRIMARY — follows system prompts perfectly) ────────
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-  const OR_MODELS = ['openai/gpt-oss-120b:free', 'nvidia/nemotron-3-ultra-550b-a55b:free']
-  const callDeepSeekAI = async (messages, timeoutMs) => {
-      if (!OPENROUTER_API_KEY) return null
-      for (const model of OR_MODELS) {
-          try {
-              const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-                  model,
-                  messages: (Array.isArray(messages) ? messages : []).map(m => ({
-                      role: m.role,
-                      content: String(m.content || '').slice(0, 16000)
-                  })),
-                  max_tokens: 2048,
-                  temperature: 0.7
-              }, {
-                  headers: {
-                      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-                      'Content-Type': 'application/json',
-                      'HTTP-Referer': 'https://bera-tech-ai.github.io',
-                      'X-Title': 'Bera AI'
-                  },
-                  timeout: timeoutMs || 20000
-              })
-              const text = res.data?.choices?.[0]?.message?.content
-              if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
-          } catch (e) {
-              if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 1000))
-          }
-      }
-      return null
-  }
-  
-// ── Bera AI — SECONDARY ENDPOINT ──────────────────────────────────────────────
-const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/gpt4o'
-const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
-
-const callBeraAI = async (messages, timeoutMs) => {
-    try {
-        const systemMsg = (Array.isArray(messages) ? messages : []).find(m => m.role === 'system')?.content || ''
-        const history = (Array.isArray(messages) ? messages : []).filter(m => m.role !== 'system').slice(-8)
-        const histStr = history.map(m => (m.role === 'user' ? 'User' : 'Assistant') + ': ' + String(m.content || '').slice(0, 600)).join('\n')
-        const q = (systemMsg ? systemMsg.slice(0, 800) + '\n\n' : '') + histStr
-        const res = await axios.get(BERA_API_URL, {
-            params: { q: q.slice(0, 3000), apikey: BERA_API_KEY },
-            timeout: timeoutMs || 20000
-        })
-        const text = res.data?.result
-        if (text && typeof text === 'string' && text.trim().length > 2) return { success: true, text: text.trim(), model: 'bera/gpt4o' }
-    } catch {}
-    return { success: false, error: 'Bera AI unavailable' }
-}
-
-
-const callGiftedAI = async (systemPrompt, userMsg) => {
-    const q = (systemPrompt ? systemPrompt + '\n\n' : '') + userMsg
-    const endpoints = [
-        `${GIFTED}/api/ai/gemini`,
-        `${GIFTED}/api/ai/gpt4o`,
-        `${GIFTED}/api/ai/llama`,
-        `${GIFTED}/api/ai/deepseek`,
-    ]
-    for (const url of endpoints) {
-        try {
-            const res = await axios.get(url, {
-                params: { apikey: GIFTED_KEY, q: q.slice(0, 4000) },
-                timeout: 15000
-            })
-            const text = res.data?.result || res.data?.response || res.data?.answer ||
-                         (typeof res.data === 'string' ? res.data : null)
-            if (!text || text === 'Request failed with status code 403') continue
-            const trimmed = String(text).trim()
-            if (trimmed.startsWith('{') && (trimmed.includes('"error"') || trimmed.includes('"success":false'))) continue
-            return { success: true, text: trimmed, model: 'gifted' }
-        } catch { continue }
-    }
-    return { success: false, error: 'Gifted AI unavailable' }
-}
-
-// ── Xwolf (fallback 2) ───────────────────────────────────────────────────────
-const XWOLF_URL = 'https://apis.xwolf.space/api/ai/gemini'
-
-const callXwolf = async (systemPrompt, userMsg) => {
-    try {
-        const q = systemPrompt ? `${systemPrompt}\n\n${userMsg}` : userMsg
-        const res = await axios.get(XWOLF_URL, {
-            params: { q: q.slice(0, 6000) },
-            timeout: 12000
-        })
-        const text = res.data?.result || res.data?.response || res.data?.answer ||
-                     (typeof res.data === 'string' ? res.data : null)
-        if (!text) return { success: false, error: 'No response from Xwolf' }
-        return { success: true, text: String(text).trim(), model: 'xwolf' }
-    } catch (e) {
-        return { success: false, error: e.message }
-    }
-}
-
-// ── Pollinations (fallback 3 — free, no key) ─────────────────────────────────
-const callPollinationsAgent = async (systemPrompt, userMsg) => {
-    try {
-        const messages = []
-        if (systemPrompt) messages.push({ role: 'system', content: systemPrompt.slice(0, 3000) })
-        messages.push({ role: 'user', content: userMsg.slice(0, 3000) })
-        const body = JSON.stringify({ model: 'mistral', messages, seed: Math.floor(Math.random() * 99999) })
-        const reply = await new Promise((resolve, reject) => {
-            const req = require('https').request({
-                hostname: 'text.pollinations.ai', path: '/', method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'User-Agent': 'BeraAI/3.0' }
-            }, res => {
-                let d = ''
-                res.on('data', c => d += c)
-                res.on('end', () => {
-                    if (res.statusCode >= 400) return resolve(null)
-                    const t = d.trim()
-                    if (!t || t.startsWith('{')) return resolve(null)
-                    resolve(t)
-                })
-            })
-            req.on('error', () => resolve(null))
-            req.setTimeout(18000, () => { req.destroy(); resolve(null) })
-            req.write(body); req.end()
-        })
-        if (reply && reply.length > 2) return { success: true, text: reply, model: 'pollinations' }
-    } catch {}
-    return { success: false, error: 'Pollinations unavailable' }
-}
-
-// ── Primary AI caller — Overchat/DeepSeek first, then Groq, then fallbacks ────
-const callAI = async (systemPrompt, userMsg) => {
-    // 0. ch.at — PRIMARY (free, no API key, OpenAI-compatible, format-following)
-    try {
-        const _chatMsgs = []
-        if (systemPrompt) _chatMsgs.push({ role: 'system', content: String(systemPrompt).slice(0, 16000) })
-        _chatMsgs.push({ role: 'user', content: String(userMsg || '').slice(0, 16000) })
-        const _chatR = await axios.post('https://ch.at/v1/chat/completions',
-            { messages: _chatMsgs },
-            { headers: { 'Content-Type': 'application/json' }, timeout: 25000 }
-        )
-        const _chatTxt = _chatR.data?.choices?.[0]?.message?.content
-        if (_chatTxt && _chatTxt.length > 2) return { success: true, text: _chatTxt.trim() }
-    } catch {}
-
-    // 1. OpenRouter — secondary (fast fallback)
-    const _orMsgs = []
-    if (systemPrompt) _orMsgs.push({ role: 'system', content: String(systemPrompt) })
-    _orMsgs.push({ role: 'user', content: String(userMsg || '') })
-    const orR = await callDeepSeekAI(_orMsgs, 22000)
-    if (orR) return { success: true, text: orR }
-
-    // 2. Bera AI — tertiary
-    const _beraMsgs = []
-    if (systemPrompt) _beraMsgs.push({ role: 'system', content: String(systemPrompt) })
-    _beraMsgs.push({ role: 'user', content: String(userMsg || '') })
-    const beraR = await callBeraAI(_beraMsgs, 20000)
-    if (beraR && beraR.success) return beraR
-
-    // 2. Overchat/DeepSeek — secondary
-    const oc = await callOverchat(systemPrompt, userMsg)
-    if (oc.success) return oc
-
-    // 2. Groq — ultra-fast backup
-    const groq = await callGroqAI(systemPrompt, userMsg)
-    if (groq.success) return groq
-
-    // 3. Gifted — gemini + gpt4o confirmed working
-    const gifted = await callGiftedAI(systemPrompt, userMsg)
-    if (gifted.success) return gifted
-
-    // 4. Xwolf
-    const xwolf = await callXwolf(systemPrompt, userMsg)
-    if (xwolf.success) return xwolf
-
-    // 5. Pollinations last resort last resort (free, no key)
-    const poll = await callPollinationsAgent(systemPrompt, userMsg)
-    if (poll.success) return poll
-
-    return { success: false, error: 'All AI providers failed' }
-}
-
-// Backward compatibility
+// Backward-compatible names used by existing command handlers.
+const callGroqAI = (systemPrompt, userMsg, timeoutMs) => callAI(systemPrompt, userMsg, timeoutMs)
+const callGiftedAI = (systemPrompt, userMsg, timeoutMs) => callAI(systemPrompt, userMsg, timeoutMs)
+const callXwolf = (systemPrompt, userMsg, timeoutMs) => callAI(systemPrompt, userMsg, timeoutMs)
+const callPollinationsAgent = (systemPrompt, userMsg, timeoutMs) => callAI(systemPrompt, userMsg, timeoutMs)
 const callPollinations = callAI
 
 // ── Shell runner ───────────────────────────────────────────────────────────────
@@ -802,6 +568,7 @@ DOCS & TESTING:
 
 
 SUPERTOOLS 2 — REPLIT-LEVEL AUTONOMOUS:
+- project_lifecycle  → args: { name, type, description, projectDir, sourceDir, private, deploy, environment, approveProduction, autoDeploy, envVars }  ← workspace → build/test → GitHub → BeraHost → screenshot
 - smart_extract      → args: { url, hint("product"|"job"|"article"|"price") }  ← intelligently extract structured data from any page
 - data_pipeline      → args: { sources: ["url1","url2"], hint, format("json"|"csv"|"tsv"), outputPath }  ← scrape → clean → store → export
 - scaffold_project   → args: { name, stack("express-rest"|"flask"|"next"|"react"), description, port }  ← generate full multi-file project + install + start
@@ -979,6 +746,16 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
             case 'create_project': {
                 const r = await createProject(args.name, args.type||'express', args.port||3000, args.description||'')
                 return { success: r.success, output: r.steps.map(s=>`${s.ok?'✅':'❌'} ${s.step}`).join(' | '), desc }
+            }
+            case 'project_lifecycle': {
+                const lifecycle = require('./project-lifecycle')
+                const r = await lifecycle.lifecycle({ ...args, userId })
+                return {
+                    success: r.success,
+                    output: r.report || r.error || 'Project lifecycle completed.',
+                    lifecycle: r.record,
+                    desc
+                }
             }
             case 'workspace_save': {
                 try {

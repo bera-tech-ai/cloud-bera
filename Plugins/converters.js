@@ -6,9 +6,15 @@
 const axios = require('axios')
 const config = require('../Config')
 const { searchYoutube, downloadAudio, downloadVideo, searchAndDownloadVideo } = require('../Library/actions/music')
+const xcasper = require('../Library/actions/xcasper')
 
-const APISKEITH = 'https://apiskeith.top'
-const GIFTED_API = 'https://api.giftedtech.co.ke'
+const APISKEITH = ''
+const GIFTED_API = ''
+const LEGACY_DISABLED = new Set([
+    'tiktok', 'tt', 'ig', 'instagram', 'insta', 'twitter', 'tw', 'fb', 'facebook',
+    'spotify', 'gdrive', 'googledrive', 'mediafire', 'mf', 'apk', 'yts', 'ytsearch',
+    'lyrics', 'lyric', 'google', 'gsearch', 'shazam'
+])
 
 const react = (conn, m, emoji) =>
     conn.sendMessage(m.chat, { react: { text: emoji, key: m.key } }).catch(() => {})
@@ -28,6 +34,10 @@ const tryUrl = (v) => {
 // MEDIA CONVERTERS
 // ─────────────────────────────────────────────
 const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isOwner }) => {
+
+    if (LEGACY_DISABLED.has(command)) {
+        return reply('❌ This feature is temporarily disabled because no verified Xcasper endpoint is available for it.')
+    }
 
     const quoted = m.quoted
 
@@ -441,10 +451,10 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         if (!text || !text.startsWith('http')) return reply(`🖥️ Usage: ${prefix}ssweb <url>\nExample: ${prefix}ssweb https://google.com`)
         await react(conn, m, '📷')
         try {
-            const ssUrl = `https://api.screenshotone.com/take?url=${encodeURIComponent(text)}&format=jpg&block_ads=true&block_cookie_banners=true`
-            // Fallback API
-            const alt = `https://image.thum.io/get/width/1280/${encodeURIComponent(text)}`
-            await conn.sendMessage(chat, { image: { url: alt }, caption: `🖥️ Screenshot: ${text}` }, { quoted: m })
+            const result = await xcasper.screenshot(text, { device: 'desktop', format: 'png', delay: 500 })
+            const imageUrl = result?.url || result?.data?.image_url
+            if (!imageUrl) throw new Error('Xcasper returned no screenshot URL')
+            await conn.sendMessage(chat, { image: { url: imageUrl }, caption: `🖥️ Screenshot: ${text}` }, { quoted: m })
             await react(conn, m, '✅')
         } catch (e) {
             await react(conn, m, '❌')

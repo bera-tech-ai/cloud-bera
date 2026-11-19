@@ -7,9 +7,7 @@
 const axios  = require('axios')
 const { sendBtn, sendList } = require('../Library/actions/btns')
 const { getBtnMode } = require('../Library/actions/btnmode')
-
-const GIFTED = 'https://api.giftedtech.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
+const xcasper = require('../Library/actions/xcasper')
 
 const handle = {}
 handle.command = [
@@ -40,43 +38,12 @@ const ytInfo = async (url) => {
     } catch { return null }
 }
 
-// Search YouTube — Gifted primary (confirmed working), yt.lemnoslife fallback
+// Search YouTube through the verified Xcasper endpoint.
 const searchYoutube = async (query) => {
-    // Primary: Gifted YTS
     try {
-        const res = await axios.get(`${GIFTED}/api/search/yts`, {
-            params: { apikey: GIFTED_KEY, query },
-            timeout: 12000
-        })
-        const data = res.data
-        if (data?.success === true || Array.isArray(data?.results)) {
-            const videos = (data?.results || []).filter(r => r.type === 'video')
-            if (videos.length) return videos[0]
-        }
-    } catch {}
-
-    // Fallback: yt.lemnoslife.com (no API key needed)
-    try {
-        const res = await axios.get(`https://yt.lemnoslife.com/noKey/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5`, {
-            timeout: 10000
-        })
-        const items = res.data?.items
-        if (Array.isArray(items) && items.length) {
-            const video = items.find(it => it.id?.videoId)
-            if (video) {
-                return {
-                    type: 'video',
-                    title: video.snippet?.title || query,
-                    videoId: video.id.videoId,
-                    url: `https://youtube.com/watch?v=${video.id.videoId}`,
-                    thumbnail: video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url || '',
-                    author: { name: video.snippet?.channelTitle || '' }
-                }
-            }
-        }
-    } catch {}
-
-    return null
+        const results = await xcasper.youtubeSearch(query, 6)
+        return Array.isArray(results) && results.length ? results[0] : null
+    } catch { return null }
 }
 
 handle.all = async (m, { conn, command, args, prefix, reply, sender } = {}) => {

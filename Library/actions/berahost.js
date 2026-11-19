@@ -165,6 +165,49 @@ const pollDeployment = async (id, maxWait = 120000, interval = 5000) => {
     return getDeployment(id)
 }
 
+// ── WEB DEPLOYMENTS ──────────────────────────────────────────────────────────
+// These endpoints deploy a GitHub website/app rather than a native WhatsApp bot.
+const createWebDeployment = async (payload) => {
+    try {
+        const r = await bh().post('/web-deployments', payload)
+        const d = r.data || {}
+        return { success: true, id: d.id, status: d.status, url: d.url || d.liveUrl, data: d }
+    } catch (e) { return { success: false, error: bhErr(e) } }
+}
+
+const listWebDeployments = async () => {
+    try {
+        const r = await bh().get('/web-deployments')
+        return { success: true, deployments: r.data?.deployments || r.data || [] }
+    } catch (e) { return { success: false, error: bhErr(e) } }
+}
+
+const getWebDeployment = async (id) => {
+    try {
+        const r = await bh().get(`/web-deployments/${encodeURIComponent(id)}`)
+        return { success: true, deployment: r.data }
+    } catch (e) { return { success: false, error: bhErr(e) } }
+}
+
+const deleteWebDeployment = async (id) => {
+    try {
+        await bh().delete(`/web-deployments/${encodeURIComponent(id)}`)
+        return { success: true, output: `Web deployment ${id} deleted` }
+    } catch (e) { return { success: false, error: bhErr(e) } }
+}
+
+const pollWebDeployment = async (id, maxWait = 120000, interval = 5000) => {
+    const deadline = Date.now() + maxWait
+    let current = await getWebDeployment(id)
+    while (current.success && Date.now() < deadline) {
+        const status = current.deployment?.status
+        if (!['queued', 'building', 'deploying', 'starting', 'installing'].includes(status)) break
+        await new Promise(resolve => setTimeout(resolve, interval))
+        current = await getWebDeployment(id)
+    }
+    return current
+}
+
 // ── COINS ─────────────────────────────────────────────────────────────────────
 
 const getCoins = async () => {
@@ -298,5 +341,7 @@ module.exports = {
     getCoins, getTransactions, claimDailyCoins, redeemVoucher,
     getPlans, initiateMpesa, getPaymentStatus, getPaymentHistory,
     listBots, getBot,
+    createWebDeployment, listWebDeployments, getWebDeployment,
+    deleteWebDeployment, pollWebDeployment,
     statusEmoji, fmtDeploy, pollForPairCode
 }

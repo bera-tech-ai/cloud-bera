@@ -3,12 +3,10 @@
 // When ON: replies to every DM as Bruce Bera (Sheng + Swahili + English)
 // Commands: .ghost on | off | status | stats | reset | test <msg>
 
-const axios = require('axios')
+const xcasper = require('../Library/actions/xcasper')
 
 const GHOST_MAX_SAMPLES = 200
 const GHOST_MAX_CONTEXT = 14
-const OVERCHAT_URL = 'https://api.gifted.co.ke/api/ai/overchat'
-const GIFTED_KEY   = '_0u5aff45,_0l1876s8qc'
 
 const getGhostData = () => {
     if (!global.db?.data) return {}
@@ -62,11 +60,8 @@ Incoming message from ${senderName || 'them'}: "${incomingText}"
 
 Reply as Bruce Bera:`
 
-        const res = await axios.get(OVERCHAT_URL, {
-            params: { apikey: GIFTED_KEY, model: 'deepseek', q: prompt.slice(0, 2500) },
-            timeout: 16000
-        })
-        const raw = res.data?.result?.trim()
+        const res = await xcasper.chat([{ role: 'user', content: prompt.slice(0, 12000) }])
+        const raw = res.success ? res.text?.trim() : ''
         // Strip any "Bruce:" label if model added one
         const cleaned = raw?.replace(/^(Bruce\s*:|Bera\s*:)/i, '').trim()
         if (cleaned && cleaned.length > 1) return cleaned

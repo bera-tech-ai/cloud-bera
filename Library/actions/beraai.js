@@ -9,9 +9,13 @@ const { exec } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 
-const GIFTED = 'https://api.gifted.co.ke'
-const GIFTED_KEY = '_0u5aff45,_0l1876s8qc'
-const XWOLF = 'https://apis.xwolf.space'
+// Shared bounded shell runner used by the agent tools.
+const runBash = (command, timeout = 30000) => new Promise(resolve => {
+    exec(command, { timeout, maxBuffer: 5 * 1024 * 1024 }, (err, stdout, stderr) => {
+        const output = ((stdout || '').trim() + (stderr ? '\n[stderr]: ' + stderr.trim() : '')).slice(0, 12000)
+        resolve({ success: !err, output: output || (err ? err.message : 'done') })
+    })
+})
 
 // ── Global Bera Identity Sanitizer — strips all AI identity leaks ─────────────
 // Applied to EVERY response from ALL providers before returning to the user.
@@ -62,246 +66,76 @@ const _sanitizeIdentity = (text) => {
 
 
 
-  // ── DeepSeek Official API (PRIMARY — follows system prompts perfectly) ────────
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-  const OR_MODELS = ['openai/gpt-oss-120b:free', 'nvidia/nemotron-3-ultra-550b-a55b:free']
-  const callDeepSeekAI = async (messages, timeoutMs) => {
-      if (!OPENROUTER_API_KEY) return null
-      for (const model of OR_MODELS) {
-          try {
-              const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-                  model,
-                  messages: (Array.isArray(messages) ? messages : []).map(m => ({
-                      role: m.role,
-                      content: String(m.content || '').slice(0, 4000)
-                  })),
-                  max_tokens: 2048,
-                  temperature: 0.7
-              }, {
-                  headers: {
-                      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-                      'Content-Type': 'application/json',
-                      'HTTP-Referer': 'https://bera-tech-ai.github.io',
-                      'X-Title': 'Bera AI'
-                  },
-                  timeout: timeoutMs || 20000
-              })
-              const text = res.data?.choices?.[0]?.message?.content
-              if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
-          } catch (e) {
-              if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 1000))
-          }
-      }
-      return null
-  }
-  
-// ── Bera AI — SECONDARY ENDPOINT ──────────────────────────────────────────────
-const BERA_API_URL = 'https://repo-cloner--beratech.replit.app/api/ai/gpt4o'
-const BERA_API_KEY = 'bera_c13f61f18adb86b8ae4764169eb3a8771fc4'
+  // ── Xcasper AI provider chain ────────────────────────────────────────────────
+const xcasper = require('./xcasper')
 
-const callBeraAI = async (messages, timeoutMs) => {
-    try {
-        const systemMsg = (Array.isArray(messages) ? messages : []).find(m => m.role === 'system')?.content || ''
-        const history = (Array.isArray(messages) ? messages : []).filter(m => m.role !== 'system').slice(-8)
-        const histStr = history.map(m => (m.role === 'user' ? 'User' : 'Assistant') + ': ' + String(m.content || '').slice(0, 600)).join('\n')
-        const q = (systemMsg ? systemMsg.slice(0, 800) + '\n\n' : '') + histStr
-        const res = await axios.get(BERA_API_URL, {
-            params: { q: q.slice(0, 3000), apikey: BERA_API_KEY },
-            timeout: timeoutMs || 20000
-        })
-        const text = res.data?.result
-        if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
-    } catch {}
-    return null
+const _messagesForXcasper = (messages) => (Array.isArray(messages) ? messages : [
+    { role: 'user', content: String(messages || '') }
+]).map(m => ({ role: m.role || 'user', content: String(m.content || '') }))
+
+const callAI = async (messages, timeoutMs, agentMode = false) => {
+    const result = await xcasper.chat(_messagesForXcasper(messages), {
+        timeout: Math.min(timeoutMs || 30000, 60000),
+        maxChars: agentMode ? 14000 : 12000
+    })
+    return result.success ? _sanitizeIdentity(result.text) : null
 }
 
-
-// ── Gifted Overchat / DeepSeek — PRIMARY for ALL modes ──────────────────────
-const OVERCHAT_URL = 'https://api.gifted.co.ke/api/ai/overchat'
-
-const _overchatRaw = async (q, timeoutMs) => {
-    try {
-        const res = await axios.get(OVERCHAT_URL, {
-            params: { apikey: GIFTED_KEY, model: 'deepseek', q },
-            timeout: timeoutMs || 18000
-        })
-        const text = res.data?.result
-        if (text && typeof text === 'string' && text.trim().length > 2) return text.trim()
-    } catch {}
-    return null
-}
-
-// Normal chat mode — system prompt + user message as flat string
+// Compatibility wrappers retained for modules that import these names.
 const callOverchat = async (userText, systemPrompt, timeoutMs) => {
-    const identity = 'You are Bera AI — a powerful WhatsApp AI assistant built by Bera Tech. NEVER say you are DeepSeek, Gemini, GPT, Claude, or any other AI. Always say your name is Bera AI, built by Bera Tech. Be helpful, friendly, and concise.'
-    const q = identity + '\n\nUser: ' + String(userText || '').slice(0, 800) + '\nBera AI:'
-    return _overchatRaw(q, timeoutMs)
+    const r = await xcasper.chat([
+        { role: 'system', content: systemPrompt || '' },
+        { role: 'user', content: String(userText || '') }
+    ], { timeout: timeoutMs || 25000 })
+    return r.success ? _sanitizeIdentity(r.text) : null
+}
+const callOverchatAgent = (messages, timeoutMs) => callAI(messages, timeoutMs, true)
+const callXwolf = (userText, timeoutMs, systemPrompt) => callOverchat(userText, systemPrompt, timeoutMs)
+const callPollinations = (messages, timeoutMs) => callAI(messages, timeoutMs)
+const callGiftedTech = async (userText, historyMessages = [], timeoutMs, systemPrompt = '') => {
+    const messages = [
+        { role: 'system', content: systemPrompt || '' },
+        ...(Array.isArray(historyMessages) ? historyMessages : []).slice(-6),
+        { role: 'user', content: String(userText || '') }
+    ]
+    return callAI(messages, timeoutMs)
 }
 
-// Agent / tool-calling mode — passes FULL system prompt + recent conversation
-// Compact tool reference for Overchat (overchat has URL length limits so we can't send the full 25k-char SYSTEM_PROMPT)
-const OVERCHAT_AGENT_PROMPT = `You are Bera AI, a powerful WhatsApp agent by Bera Tech. When a task needs tools, respond with ONE or MORE JSON tool calls (one per line, or an array). Otherwise reply in plain text.
-
-TOOL FORMAT — one per line or array:
-{"tool":"bash","cmd":"shell command"}
-{"tool":"runcode","lang":"node","code":"..."}  or lang:python/bash
-{"tool":"install","packages":["pkg"],"manager":"npm"}  or pip
-{"tool":"writefile","path":"workspace/file.js","content":"..."}
-{"tool":"readfile","path":"workspace/file.js"}
-{"tool":"listfiles","path":"workspace/"}
-{"tool":"mkdir","path":"workspace/dir"}
-{"tool":"deletefile","path":"workspace/file"}
-{"tool":"zipfolder","path":"workspace/dir","output":"workspace/out.zip"}
-{"tool":"scaffold","type":"express|react|static|portfolio|landing","name":"myapp"}
-{"tool":"github","action":"clone|list_repos|create_repo|push","repo":"user/repo","dest":"workspace/dir"}
-{"tool":"create_repo","name":"myrepo","private":false}
-{"tool":"git_push_folder","path":"workspace/dir","repo":"user/repo","message":"commit msg"}
-{"tool":"pm2_manage","action":"list|start|stop|restart|logs","name":"myapp"}
-{"tool":"berahost","action":"deploy|list|logs|stop","botId":1}
-{"tool":"skyhost","action":"deploy|list|logs|stop|health","repoUrl":"...","name":"mybot"}
-{"tool":"search","q":"query"}
-{"tool":"news","query":"topic"}
-{"tool":"weather","city":"Nairobi"}
-{"tool":"crypto","coins":["bitcoin","ethereum"]}
-{"tool":"stock","symbols":["AAPL","TSLA"]}
-{"tool":"ip_info","ip":"8.8.8.8"}
-{"tool":"dns","domain":"example.com","type":"A"}
-{"tool":"whois","domain":"example.com"}
-{"tool":"ping_url","url":"https://example.com"}
-{"tool":"port_scan","host":"example.com","ports":"22,80,443"}
-{"tool":"read_page","url":"https://example.com"}
-{"tool":"screenshot","url":"https://example.com"}
-{"tool":"web_scrape","url":"https://example.com"}
-{"tool":"bulk_scrape","urls":["url1","url2"]}
-{"tool":"data_pipeline","sources":["url1","url2"],"hint":"price"}
-{"tool":"parse_html","html":"...","selector":"table"}
-{"tool":"regex_extract","text":"...","pattern":"\\d+"}
-{"tool":"analyze_data","data":[...],"action":"filter|sort|group","key":"field"}
-{"tool":"ssl_check","host":"example.com"}
-{"tool":"diff_text","a":"text1","b":"text2"}
-{"tool":"hash_text","text":"hello","algo":"sha256"}
-{"tool":"summarize_text","text":"long text"}
-{"tool":"api","method":"GET","url":"https://api.example.com","params":{},"headers":{}}
-{"tool":"pastebin","content":"text to paste"}
-{"tool":"image_gen","prompt":"description","width":1024,"height":1024}
-{"tool":"tts","text":"say this","lang":"en"}
-{"tool":"translate_text","text":"hola","from":"es","to":"en"}
-{"tool":"qrgen","text":"https://example.com"}
-{"tool":"barcode","text":"1234","type":"qr|code128"}
-{"tool":"email","to":"user@mail.com","subject":"Hi","body":"message"}
-{"tool":"calc","expr":"2+2*10"}
-{"tool":"currency","amount":100,"from":"USD","to":"KES"}
-{"tool":"unit_convert","value":5,"from":"km","to":"miles"}
-{"tool":"db","action":"query|tables|schema","sql":"SELECT 1"}
-{"tool":"cron","action":"add|list|remove","schedule":"* * * * *","cmd":"echo hi"}
-{"tool":"monitor","action":"add|list|remove","url":"https://example.com"}
-{"tool":"remember","key":"mykey","value":"myvalue"}
-{"tool":"recall","key":"mykey"}
-{"tool":"recall_all"}
-{"tool":"forget","key":"mykey"}
-{"tool":"note","action":"list|save|get|delete","title":"Title","content":"text"}
-{"tool":"wa_send","number":"254712345678@s.whatsapp.net","message":"Hello"}
-{"tool":"wa_react","emoji":"👍"}
-{"tool":"wa_group_setting","action":"close|open|restrict|unrestrict"}
-{"tool":"wa_group_info"}
-{"tool":"wa_group_subject","name":"New Name"}
-{"tool":"wa_group_desc","description":"New desc"}
-{"tool":"wa_group_invite"}
-{"tool":"wa_kick","number":"254712345678"}
-{"tool":"wa_promote","number":"254712345678"}
-{"tool":"wa_demote","number":"254712345678"}
-{"tool":"wa_add","number":"254712345678"}
-{"tool":"system"}
-{"tool":"status_dashboard"}
-{"tool":"send_media","url":"https://example.com/img.jpg","caption":"text"}
-
-Rules: Use tools for real tasks. Plain text for simple Q&A. After tool results continue until fully done, then reply in plain text.`
-
-const callOverchatAgent = async (messages, timeoutMs) => {
-    const history = messages.filter(m => m.role !== 'system').slice(-6)
-    const histStr = history.map(m => (m.role === 'user' ? 'User' : 'Bera AI') + ': ' + String(m.content || '').slice(0, 500)).join('\n')
-    const q = OVERCHAT_AGENT_PROMPT + '\n\n' + histStr + '\nBera AI:'
-    return _overchatRaw(q, timeoutMs || 25000)
-}
-
-// ── Groq AI (ultra-fast, < 1 second responses) ────────────────────────────────
-const GROQ_API_KEY = process.env.GROQ_API_KEY
-const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
-
-const callGroqAI = async (messages, timeoutMs, maxTokens = 2048) => {
-    for (const model of GROQ_MODELS) {
-        try {
-            const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-                model,
-                messages,
-                max_tokens: maxTokens,
-                temperature: 0.3
-            }, {
-                headers: {
-                    'Authorization': `Bearer ${GROQ_API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: timeoutMs || 20000
-            })
-            const text = res.data?.choices?.[0]?.message?.content
-            if (text && String(text).trim().length > 2) return String(text).trim()
-        } catch (e) {
-            if (e?.response?.status === 429) await new Promise(r => setTimeout(r, 500))
-        }
-    }
-    return null
-}
-
-// ── Memory store — persists to disk so it survives bot restarts ───────────────
-const _MEM_FILE = require('path').join(__dirname, '../../Database/agent_memory.json')
+// ── Persistent memory and non-AI helpers ─────────────────────────────────────
+const _MEM_FILE = path.join(__dirname, '../../Database/agent_memory.json')
 let MEMORY = {}
-try { MEMORY = JSON.parse(require('fs').readFileSync(_MEM_FILE, 'utf8')) } catch {}
-
+try { MEMORY = JSON.parse(fs.readFileSync(_MEM_FILE, 'utf8')) } catch {}
 const _saveMEMORY = () => {
-    try { require('fs').writeFileSync(_MEM_FILE, JSON.stringify(MEMORY, null, 2)) } catch {}
+    try {
+        fs.mkdirSync(path.dirname(_MEM_FILE), { recursive: true })
+        fs.writeFileSync(_MEM_FILE, JSON.stringify(MEMORY, null, 2))
+    } catch {}
 }
-
-const remember = (chat, key, val) => {
+const remember = (chat, key, value) => {
     if (!MEMORY[chat]) MEMORY[chat] = {}
-    if (val !== undefined) { MEMORY[chat][key] = val; _saveMEMORY() }
+    if (value !== undefined) { MEMORY[chat][key] = value; _saveMEMORY() }
     return MEMORY[chat][key]
 }
 const getMemory = (chat) => MEMORY[chat] || {}
 
-// ── Shell executor ────────────────────────────────────────────────────────────
-const runBash = (cmd, timeoutMs) => new Promise(resolve => {
-    exec(cmd, { timeout: timeoutMs || 12000, maxBuffer: 512 * 1024 }, (err, stdout, stderr) => {
-        const out = (stdout || '').trim()
-        const err2 = (stderr || '').trim()
-        resolve({ success: !err, output: (out + (err2 ? '\nSTDERR: ' + err2 : '')).slice(0, 2000) || (err ? err.message : 'done') })
-    })
-})
-
-// ── Web search (Gifted API only) ─────────────────────────────────────────────
 const webSearch = async (query) => {
     try {
-        const r = await axios.get(`${GIFTED}/api/search/web`, {
-            params: { q: query, apikey: GIFTED_KEY },
-            timeout: 12000
-        })
-        const results = r.data?.results || []
-        if (Array.isArray(results) && results.length) {
-            return { success: true, results: results.slice(0, 4).map(x => ({ 
-                title: x.title || x.name || '', 
-                snippet: x.description || x.snippet || x.content || '', 
-                url: x.url || x.link || '' 
-            })) }
-        }
-    } catch {}
-    return { success: false, results: [] }
+        const data = await xcasper.youtubeSearch(query, 4)
+        const items = Array.isArray(data) ? data : (data?.results || data?.items || [])
+        return { success: true, results: items.slice(0, 4).map(item => ({
+            title: item.title || item.name || '',
+            snippet: item.description || item.snippet || '',
+            url: item.url || item.link || ''
+        })) }
+    } catch (e) {
+        return { success: false, results: [], error: e.message }
+    }
 }
 
-// ── Web scraper ───────────────────────────────────────────────────────────────
 const scrapeUrl = async (url) => {
     try {
-        const r = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BeraAI/1.0)' }, maxContentLength: 500000 })
-        const html = String(r.data || '')
-        const text = html
+        const r = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': 'BeraAI/1.0' }, maxContentLength: 500000 })
+        const text = String(r.data || '')
             .replace(/<script[\s\S]*?<\/script>/gi, '')
             .replace(/<style[\s\S]*?<\/style>/gi, '')
             .replace(/<!--[\s\S]*?-->/g, '')
@@ -309,325 +143,16 @@ const scrapeUrl = async (url) => {
             .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
             .replace(/\s+/g, ' ').trim().slice(0, 3000)
         return { success: true, text, url }
-    } catch (e) {
-        return { success: false, error: e.message }
-    }
+    } catch (e) { return { success: false, error: e.message } }
 }
 
-// ── System info ───────────────────────────────────────────────────────────────
 const systemInfo = async () => {
-    const [ram, disk, cpu, uptime, node] = await Promise.all([
+    const [ram, disk, uptime] = await Promise.all([
         runBash("free -m | awk 'NR==2{printf \"%s/%s MB (%.0f%%)\", $3,$2,$3*100/$2}'"),
         runBash("df -h / | awk 'NR==2{print $3\"/\"$2\" (\"$5\" used)\"}'"),
-        runBash("top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4\"%\"}'"),
-        runBash('uptime -p'),
-        runBash('node --version'),
+        runBash('uptime -p')
     ])
-    return { ram: ram.output, disk: disk.output, cpu: cpu.output, uptime: uptime.output, node: node.output }
-}
-
-// ── Multi-model AI caller with automatic fallback ─────────────────────────────
-const AI_MODELS = ['deepseek', 'openai', 'mistral', 'llama', 'unity', 'phi', 'mireille']
-let _modelIdx = 0
-
-const isPollinationsError = (text) => {
-    if (!text) return true
-    const t = text.trim()
-    if (t.startsWith('{') && t.includes('"error"')) return true
-    if (t.startsWith('{') && t.includes('"status"') && t.includes('404')) return true
-    if (t.startsWith('{') && t.includes('"role"')) {
-        try {
-            const obj = JSON.parse(t)
-            if (obj.role === 'assistant') {
-                if (!obj.content || obj.content === '') return true
-                if (Array.isArray(obj.tool_calls)) return true
-            }
-        } catch {}
-    }
-    return false
-}
-
-const parseAiText = (raw) => {
-    if (!raw || typeof raw !== 'string') return null
-    const t = raw.trim()
-    if (t.startsWith('{')) {
-        try {
-            const obj = JSON.parse(t)
-            if (obj.choices && Array.isArray(obj.choices) && obj.choices[0]) {
-                const c = obj.choices[0]
-                const content = c.message?.content || c.text || c.delta?.content
-                if (content && typeof content === 'string' && content.length > 1) return content.trim()
-            }
-            if (obj.content && typeof obj.content === 'string' && obj.content.length > 1) {
-                return obj.content.trim()
-            }
-            if (obj.role === 'assistant' && obj.reasoning && typeof obj.reasoning === 'string' && obj.reasoning.length > 10) {
-                const lines = obj.reasoning.split('\n').filter(l => l.trim().length > 0)
-                return lines.slice(-3).join(' ').trim().slice(0, 800)
-            }
-        } catch {}
-    }
-    return t
-}
-
-const callPollinationsModel = (messages, model, timeoutMs) => {
-    const body = JSON.stringify({ model, messages, seed: Math.floor(Math.random() * 99999) })
-    return new Promise((resolve, reject) => {
-        const req = require('https').request({
-            hostname: 'text.pollinations.ai', path: '/', method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(body),
-                'User-Agent': 'Mozilla/5.0 (compatible; BeraAI/3.0)',
-                'Referer': 'https://bera-ai.app',
-                'Origin':  'https://bera-ai.app'
-            }
-        }, res => {
-            let d = ''; res.on('data', c => d += c)
-            res.on('end', () => {
-                if (res.statusCode === 429) return resolve('RATELIMIT')
-                if (res.statusCode >= 500) return resolve('ERROR')
-                if (res.statusCode === 404 || res.statusCode === 400) return resolve('ERROR')
-                const raw = d.trim()
-                if (isPollinationsError(raw)) return resolve('ERROR')
-                const clean = parseAiText(raw)
-                if (!clean || clean.length < 2) return resolve('ERROR')
-                resolve(clean)
-            })
-        })
-        req.on('error', reject)
-        req.setTimeout(timeoutMs || 30000, () => { req.destroy(); reject(new Error('AI timeout')) })
-        req.write(body); req.end()
-    })
-}
-
-// ── Gifted Tech API — now routes through Overchat (primary endpoint) ──────────
-const callGiftedTech = async (userText, historyMessages, timeoutMs, systemPrompt) => {
-    const histCtx = (historyMessages || [])
-        .filter(m => m.role !== 'system')
-        .slice(-4)
-        .map(m => (m.role === 'user' ? 'User' : 'Bera AI') + ': ' + String(m.content || '').slice(0, 300))
-        .join('\n')
-
-    const identity = systemPrompt && systemPrompt.length > 100
-        ? systemPrompt.slice(0, 3000)
-        : 'You are Bera AI, a smart WhatsApp assistant built by Bera Tech. Always say your name is Bera AI.'
-    const userPart = String(userText || '').slice(0, 800)
-    const histPart = histCtx.slice(0, 600)
-    const q = histPart
-        ? identity + '\n\nConversation:\n' + histPart + '\nUser: ' + userPart + '\nBera AI:'
-        : identity + '\n\nUser: ' + userPart + '\nBera AI:'
-
-    // Primary: Overchat endpoint (DeepSeek)
-    const oc = await _overchatRaw(q, timeoutMs || 15000)
-    if (oc) return oc
-
-    // Fallback: other Gifted endpoints
-    const GT_CHAT_ENDPOINTS = [
-        `${GIFTED}/api/ai/gpt4o`,
-        `${GIFTED}/api/ai/gpt`,
-        `${GIFTED}/api/ai/gemini`,
-    ]
-    const isBadGTResponse = (t) => !t || t.trim().length < 3 || t.includes('<!DOCTYPE')
-    for (const url of GT_CHAT_ENDPOINTS) {
-        try {
-            const r = await axios.get(url, { params: { apikey: GIFTED_KEY, q }, timeout: timeoutMs || 10000 })
-            const text = r.data?.result || r.data?.reply || r.data?.response || r.data?.message ||
-                         r.data?.text || (typeof r.data === 'string' ? r.data : null)
-            const clean = text && parseAiText(text)
-            if (clean && !isBadGTResponse(clean)) return clean.trim()
-        } catch {}
-    }
-    return null
-}
-
-// ── Xwolf Gemini AI (fallback) ───────────────────────────────────────────────
-const callXwolf = async (userText, timeoutMs, systemPrompt) => {
-    const identity = systemPrompt && systemPrompt.length > 100
-        ? systemPrompt.slice(0, 4000)
-        : 'You are Bera AI — a smart WhatsApp assistant built by Bera Tech.'
-    const q = identity + '\n\nUser: ' + (userText || '').slice(0, 600) + '\nBera AI:'
-    try {
-        const r = await axios.get(`${XWOLF}/api/ai/gemini`, { params: { q }, timeout: timeoutMs || 10000 })
-        const text = r.data?.result || r.data?.response || r.data?.answer || (typeof r.data === 'string' ? r.data : null)
-        const clean = text && parseAiText(text)
-        if (clean && clean.length > 1) return clean.trim()
-    } catch {}
-    return null
-}
-
-// ── Pollinations rotation ─────────────────────────────────────────────────────
-const callPollinations = async (messages, timeoutMs) => {
-    // Try preferred model first if user/owner has set one
-    const preferred = global.db?.data?.settings?.aiModel
-    if (preferred) {
-        try {
-            const r = await callPollinationsModel(messages, preferred, Math.min(timeoutMs, 25000))
-            if (r && r !== 'RATELIMIT' && r !== 'ERROR' && r.length > 1) return r
-        } catch {}
-    }
-    for (let i = 0; i < AI_MODELS.length; i++) {
-        const model = AI_MODELS[(_modelIdx + i) % AI_MODELS.length]
-        try {
-            const reply = await callPollinationsModel(messages, model, Math.min(timeoutMs, 25000))
-            if (reply && reply !== 'RATELIMIT' && reply !== 'ERROR' && reply.length > 1) {
-                _modelIdx = (_modelIdx + i + 1) % AI_MODELS.length
-                return reply
-            }
-        } catch {}
-    }
-    return null
-}
-
-// ── Local fallback — last resort when ALL providers are unreachable ───────────
-const localFallback = async (userText) => {
-    // Try Bera endpoint first as absolute last resort
-    try {
-        const beraFinal = await callBeraAI([{ role: 'user', content: String(userText || '').slice(0, 800) }], 25000)
-        if (beraFinal && beraFinal.length > 2) return beraFinal
-    } catch {}
-    // One final direct overchat attempt with max timeout before giving up
-    try {
-        const finalTry = await _overchatRaw(
-            'You are Bera AI, a helpful WhatsApp assistant by Bera Tech.\n\nUser: ' + String(userText || '').slice(0, 600) + '\nBera AI:',
-            30000
-        )
-        if (finalTry && finalTry.length > 2) return finalTry
-    } catch {}
-    const t = (userText || '').trim().toLowerCase()
-    if (/^(hi|hello|hey|sup|yo|wassup|hola|habari|mambo|niaje)/i.test(t))
-        return "Hey! I'm Bera AI — I'm here and ready. What do you need?"
-    if (/\b(who are you|what are you|your name|who made you)/i.test(t))
-        return "I'm *Bera AI* — your intelligent WhatsApp assistant, built by Bera Tech."
-    if (/\b(how are you|how r u|are you okay)/i.test(t))
-        return "I'm running great, thanks for asking! Ready to work."
-    if (/\b(what can you do|help|commands|capabilities)/i.test(t))
-        return "I can: write code, run commands, search the web, manage servers, and much more. Try me!"
-    return "I'm Bera AI and I'm here! Couldn't reach my AI brain right now — please try again in a moment."
-}
-
-// ── One attempt through ALL providers ────────────────────────────────────────
-const _tryAllProviders = async (messages, lastUser, historyMsgs, systemContent, timeoutMs) => {
-    // Bera AI — PRIMARY endpoint, always call first
-    const bera = await callBeraAI(messages, Math.min(timeoutMs, 20000))
-    if (bera) return bera
-
-    // Overchat/DeepSeek — secondary endpoint
-    if (lastUser) {
-        const oc = await callOverchat(lastUser, systemContent, Math.min(timeoutMs, 22000))
-        if (oc) return oc
-    }
-    // Groq backup — ultra-fast
-    const groq = await callGroqAI(messages, Math.min(timeoutMs, 10000))
-    if (groq) return groq
-    // Gifted fallback
-    if (lastUser) {
-        const gt = await callGiftedTech(lastUser, historyMsgs, Math.min(timeoutMs, 15000), systemContent)
-        if (gt) return gt
-    }
-    // Xwolf as third option
-    if (lastUser) {
-        const xw = await callXwolf(lastUser, Math.min(timeoutMs, 10000), systemContent)
-        if (xw) return xw
-    }
-    // Pollinations as last resort (free, no key)
-    const poll = await callPollinations(messages, Math.min(timeoutMs, 20000))
-    if (poll) return poll
-    return null
-}
-
-// ── Main AI caller ───────────────────────────────────────────────────────────
-const callAI = async (messages, timeoutMs, agentMode = false) => {
-    const lastUser = [...messages].reverse().find(m => m.role === 'user')?.content || ''
-    const historyMsgs = messages.filter(m => m.role !== 'system')
-    const systemContent = messages.find(m => m.role === 'system')?.content || ''
-    const t = timeoutMs || 30000
-
-    if (agentMode) {
-        // ── AGENT MODE: ch.at PRIMARY → OpenRouter → Bera → Overchat → Groq → Pollinations ──
-
-        // 0. ch.at — PRIMARY (free, no API key, OpenAI-compatible, 16k context)
-        try {
-            const _chatR = await axios.post('https://ch.at/v1/chat/completions',
-                { messages: messages.map(msg => ({ role: msg.role, content: String(msg.content || '').slice(0, 16000) })) },
-                { headers: { 'Content-Type': 'application/json' }, timeout: Math.min(t, 25000) }
-            )
-            const _chatTxt = _chatR.data?.choices?.[0]?.message?.content
-            if (_chatTxt && _chatTxt.length > 2) return _sanitizeIdentity(_chatTxt)
-        } catch {}
-
-        // 1. OpenRouter — secondary fallback
-        const _orKey = process.env.OPENROUTER_API_KEY
-        if (_orKey) {
-            try {
-                const _orRes = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-                    model: 'openai/gpt-oss-120b:free',
-                    messages: messages.map(msg => ({ role: msg.role, content: String(msg.content || '').slice(0, 16000) })),
-                    max_tokens: 4096,
-                    temperature: 0.7
-                }, {
-                    headers: {
-                        'Authorization': `Bearer ${_orKey}`,
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': 'https://bera-tech-ai.github.io',
-                        'X-Title': 'Bera AI'
-                    },
-                    timeout: Math.min(t, 22000)
-                })
-                const _orTxt = _orRes.data?.choices?.[0]?.message?.content
-                if (_orTxt && _orTxt.length > 2) return _sanitizeIdentity(_orTxt)
-            } catch {}
-        }
-
-        // 2. Bera AI — tertiary
-        const beraR = await callBeraAI(messages, Math.min(t, 20000))
-        if (beraR && beraR.length > 2) return _sanitizeIdentity(beraR)
-
-        // 3. Gifted Overchat / DeepSeek — quaternary
-        const oc = await callOverchatAgent(messages, Math.min(t, 25000))
-        if (oc && oc.length > 2) return _sanitizeIdentity(oc)
-
-        // 2. Groq — ultra-fast, full messages array
-        if (GROQ_API_KEY) {
-            const groq = await callGroqAI(messages, Math.min(t, 25000), 4096)
-            if (groq) return _sanitizeIdentity(groq)
-        }
-
-        // 3. DeepSeek via Pollinations — free, excellent instruction following
-        const ds = await callPollinationsModel(messages, 'deepseek', Math.min(t, 40000))
-        if (ds && ds !== 'ERROR' && ds !== 'RATELIMIT' && ds.length > 2) return _sanitizeIdentity(ds)
-
-        // 4. OpenAI via Pollinations — fallback
-        const oa = await callPollinationsModel(messages, 'openai', Math.min(t, 35000))
-        if (oa && oa !== 'ERROR' && oa !== 'RATELIMIT' && oa.length > 2) return _sanitizeIdentity(oa)
-
-        // 5. Full Pollinations rotation
-        const poll = await callPollinations(messages, Math.min(t, 35000))
-        if (poll) return _sanitizeIdentity(poll)
-
-        return null
-    }
-
-    // Normal chat mode
-      // 0. ch.at — PRIMARY (free, no key, OpenAI-compatible)
-      try {
-          const _nChatR = await axios.post('https://ch.at/v1/chat/completions',
-              { messages: messages.map(msg => ({ role: msg.role, content: String(msg.content || '').slice(0, 16000) })) },
-              { headers: { 'Content-Type': 'application/json' }, timeout: Math.min(t, 25000) }
-          )
-          const _nChatTxt = _nChatR.data?.choices?.[0]?.message?.content
-          if (_nChatTxt && _nChatTxt.length > 2) return _sanitizeIdentity(_nChatTxt)
-      } catch {}
-
-      // 1. All other providers — fallback chain
-      const r1 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
-    if (r1) return _sanitizeIdentity(r1)
-
-    await new Promise(r => setTimeout(r, 1000))
-    const r2 = await _tryAllProviders(messages, lastUser, historyMsgs, systemContent, t)
-    if (r2) return _sanitizeIdentity(r2)
-
-    return null
+    return { ram: ram.output, disk: disk.output, uptime: uptime.output, node: process.version }
 }
 
 // ── Conversation history ──────────────────────────────────────────────────────
@@ -754,60 +279,16 @@ const richServerStats = async () => {
     }
 }
 
-// ── Gifted Tech image generation ─────────────────────────────────────────────
-const giftedImage = async (prompt, size) => {
-    const IMG_ENDPOINTS = [
-        `${GIFTED}/api/ai/fluximg`,
-        `${GIFTED}/api/ai/txt2img`,
-        `${GIFTED}/api/ai/deepimg`,
-    ]
-    for (const url of IMG_ENDPOINTS) {
-        try {
-            const r = await axios.get(url, {
-                params: { apikey: GIFTED_KEY, prompt },
-                timeout: 30000,
-                responseType: 'json'
-            })
-            let imgUrl = null
-            if (r.data?.result?.url) imgUrl = r.data.result.url
-            else if (typeof r.data?.result === 'string' && r.data.result.startsWith('http')) imgUrl = r.data.result
-            else if (r.data?.url) imgUrl = r.data.url
-            if (imgUrl && imgUrl.startsWith('http')) return imgUrl
-        } catch {}
-    }
-    return null
-}
-
-// ── Gifted Tech YouTube transcript ───────────────────────────────────────────
-const giftedTranscript = async (videoUrl, timeoutMs) => {
-    try {
-        const r = await axios.get(`${GIFTED}/api/ai/transcript`, {
-            params: { apikey: GIFTED_KEY, url: videoUrl },
-            timeout: timeoutMs || 20000
-        })
-        return r.data?.result || r.data?.transcript || null
-    } catch { return null }
-}
-
-// ── Voice / audio transcription ──────────────────────────────────────────────
-const transcribeAudio = async (audioBuffer) => {
-    if (!audioBuffer || audioBuffer.length < 100) return { success: false, error: 'Empty audio buffer' }
-    try {
-        const b64 = audioBuffer.toString('base64').slice(0, 5000)
-        const res = await axios.post('https://text.pollinations.ai/', {
-            model: 'openai',
-            messages: [
-                { role: 'system', content: 'You are a voice transcription assistant. Transcribe the speech content. If you cannot process audio, say "UNABLE_TO_TRANSCRIBE".' },
-                { role: 'user', content: `Transcribe this audio (base64 starts with): ${b64}...` }
-            ]
-        }, { timeout: 15000 })
-        const text = typeof res.data === 'string' ? res.data : ''
-        if (text && !text.includes('UNABLE_TO_TRANSCRIBE') && text.length > 2) {
-            return { success: true, text: text.trim() }
-        }
-    } catch {}
-    return { success: false, error: 'Transcription service unavailable' }
-}
+// ── Media AI helpers ─────────────────────────────────────────────────────────
+// Xcasper endpoints supplied for this deployment do not expose image generation
+// or binary audio transcription. Keep these capabilities explicit rather than
+// silently calling an unrelated provider.
+const giftedImage = async () => null
+const giftedTranscript = async () => null
+const transcribeAudio = async () => ({
+    success: false,
+    error: 'Audio transcription is not available through the configured Xcasper endpoints.'
+})
 
 // ── Code validation & auto-fix ───────────────────────────────────────────────
 const { writeFileSync, unlinkSync, existsSync } = require('fs')
@@ -1724,21 +1205,14 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     if (t === 'screenshot') {
         const sUrl = tc.url || ''
         try {
-            const r = await axios2.get(`https://api.giftedtech.web.id/api/search/screenshot`, {
-                params: { url: sUrl, apikey: 'gifted' }, timeout: 30000, validateStatus: () => true
-            })
-            const img = r.data?.result?.url || r.data?.url || r.data?.result
+            const result = await xcasper.screenshot(sUrl, { device: tc.device || 'desktop', format: 'png', delay: tc.delay || 500 })
+            const img = result?.url || result?.data?.image_url
             if (img && conn && m) {
                 await conn.sendMessage(chatId, { image: { url: img }, caption: `📸 ${sUrl}` }, { quoted: m }).catch(() => {})
-                return `screenshot sent`
+                return 'screenshot sent'
             }
-        } catch {}
-        const thumbUrl = `https://image.thum.io/get/width/1200/crop/900/${encodeURIComponent(sUrl)}`
-        if (conn && m) {
-            await conn.sendMessage(chatId, { image: { url: thumbUrl }, caption: `📸 ${sUrl}` }, { quoted: m }).catch(() => {})
-            return `screenshot sent via thum.io`
-        }
-        return thumbUrl
+            return img || 'screenshot unavailable'
+        } catch (e) { return `screenshot unavailable: ${e.message}` }
     }
 
     // ── search ────────────────────────────────────────────────────────────────
@@ -1891,53 +1365,9 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         } catch (e) { return `email failed: ${e.message}` }
     }
 
-    // ── tts ────────────────────────────────────────────────────────
+    // ── tts ───────────────────────────────────────────────────────────────────
     if (t === 'tts') {
-        const rawText = (tc.text || '').slice(0, 700)
-        const lang = tc.lang || tc.voice || 'en'
-        if (!rawText) return '❌ TTS: no text provided'
-        if (!conn || !m) return `TTS: "${rawText}" (lang: ${lang})`
-
-        const tryTTS = async (url, opts = {}) => {
-            try {
-                const r = await axios2.get(url, {
-                    responseType: 'arraybuffer',
-                    timeout: 20000,
-                    headers: { 'User-Agent': 'Mozilla/5.0', ...opts.headers }
-                })
-                const buf = Buffer.from(r.data)
-                if (buf.length > 1000) return buf
-            } catch {}
-            return null
-        }
-
-        const VOICE_MAP = { en: 'en-US-AriaNeural', sw: 'sw-KE-ZuriNeural', fr: 'fr-FR-DeniseNeural', ar: 'ar-EG-SalmaNeural', hi: 'hi-IN-SwaraNeural', de: 'de-DE-KatjaNeural', es: 'es-ES-ElviraNeural', pt: 'pt-BR-FranciscaNeural', zh: 'zh-CN-XiaoxiaoNeural' }
-        const voice = tc.voice_name || VOICE_MAP[lang] || `${lang}-Default`
-        let buf = await tryTTS(`https://tts.deno.dev/?t=${encodeURIComponent(rawText)}&v=${encodeURIComponent(voice)}`)
-
-        if (!buf) buf = await tryTTS(`https://api.streamelements.com/kappa/v2/speech?voice=${tc.se_voice || 'Brian'}&text=${encodeURIComponent(rawText.slice(0,400))}`)
-
-        if (!buf) {
-            const chunks = rawText.match(/.{1,180}/g) || [rawText]
-            const parts = []
-            for (const chunk of chunks.slice(0, 3)) {
-                const p = await tryTTS(`https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=${lang}&client=tw-ob`, { headers: { Referer: 'https://translate.google.com/' } })
-                if (p) parts.push(p)
-            }
-            if (parts.length) buf = Buffer.concat(parts)
-        }
-
-        if (!buf) buf = await tryTTS(`https://api.voicerss.org/?key=11f53b18b5094a2483f26fa09a28b74c&hl=${lang}&src=${encodeURIComponent(rawText.slice(0,300))}&f=16khz_16bit_stereo&c=MP3`)
-
-        if (!buf) return `❌ TTS failed: all voice providers unavailable. Try again in a moment.`
-
-        try {
-            await conn.sendMessage(chatId,
-                { audio: buf, mimetype: 'audio/mpeg', ptt: tc.ptt !== false, waveform: [0,25,50,75,100,75,50,25,0] },
-                { quoted: m }
-            )
-            return `🔊 Voice note sent: _"${rawText.slice(0, 80)}${rawText.length > 80 ? '…' : ''}"_`
-        } catch (e) { return `❌ TTS send failed: ${e.message}` }
+        return 'TTS is disabled because no verified Xcasper speech endpoint is currently available.'
     }
 
     // ── translate_text ────────────────────────────────────────────────────────
@@ -1945,65 +1375,27 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         const text = tc.text || ''
         const to = tc.to || tc.target || 'en'
         const from = tc.from || 'auto'
-        try {
-            const r = await axios2.get(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`, { timeout: 12000 })
-            const translated = r.data?.responseData?.translatedText
-            if (translated && translated !== 'NO QUERY SPECIFIED') return `🌐 [${from} → ${to}]\n${translated}`
-        } catch {}
-        return 'translation unavailable'
+        const result = await xcasper.chat([{ role: 'user', content: `Translate this from ${from} to ${to}. Return only the translation, with no explanation or labels.\n\n${text}` }])
+        return result.success ? `🌐 [${from} → ${to}]\n${result.text}` : 'translation unavailable'
     }
 
     // ── image_gen ────────────────────────────────────────────────────────────
     if (t === 'image_gen' || t === 'imagine') {
-        const prompt = tc.prompt || tc.text || ''
-        if (!prompt) return 'ERROR: no prompt'
-        const provider = (tc.provider || 'pollinations').toLowerCase()
-        const width = tc.width || 1024
-        const height = tc.height || 1024
-
-        let imageUrl = ''
-        if (provider === 'pollinations' || provider === 'flux' || provider === 'default') {
-            const model = tc.model || 'flux'
-            imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&model=${model}&nologo=true&enhance=true&seed=${Date.now()}`
-        } else if (provider === 'anime') {
-            imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ', anime style, high quality')}?width=${width}&height=${height}&model=anime&nologo=true`
-        } else if (provider === 'sdxl' || provider === 'stable-diffusion') {
-            try {
-                const hfToken = global.db?.data?.settings?.hfToken || process.env.HF_TOKEN
-                const headers = hfToken ? { 'Authorization': `Bearer ${hfToken}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
-                const r = await axios2.post('https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
-                    { inputs: prompt, parameters: { width, height } },
-                    { headers, responseType: 'arraybuffer', timeout: 90000 }
-                )
-                if (conn && m) {
-                    await conn.sendMessage(chatId, { image: Buffer.from(r.data), caption: `🎨 ${prompt}\n_via SDXL_` }, { quoted: m }).catch(() => {})
-                    return 'image sent (SDXL)'
-                }
-                return 'image generated (no connection)'
-            } catch (e) {
-                imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true`
-            }
-        } else if (provider === 'realistic') {
-            imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ', photorealistic, 8k, detailed')}?width=${width}&height=${height}&model=flux-realism&nologo=true`
-        } else {
-            imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true`
-        }
-
-        if (imageUrl && conn && m) {
-            await conn.sendMessage(chatId, { image: { url: imageUrl }, caption: `🎨 *${prompt}*\n_via ${provider}_` }, { quoted: m }).catch(() => {})
-            return `image sent`
-        }
-        return imageUrl || 'image gen failed'
+        return 'Image generation is not available through the configured Xcasper endpoints.'
     }
 
     // ── qrgen ─────────────────────────────────────────────────────────────────
     if (t === 'qrgen') {
-        const url = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(tc.text || '')}`
-        if (conn && m) {
-            await conn.sendMessage(chatId, { image: { url }, caption: `🔲 QR: ${tc.text}` }, { quoted: m }).catch(() => {})
-            return 'QR code sent'
-        }
-        return `QR URL: ${url}`
+        try {
+            const result = await xcasper.qr(tc.text || '', { size: tc.size || 400, format: 'png' })
+            const qrUrl = xcasper.textFrom(result) || result?.url || result?.data?.url
+            if (qrUrl && conn && m) {
+                await conn.sendMessage(chatId, { image: { url: qrUrl }, caption: `🔲 QR: ${tc.text}` }, { quoted: m }).catch(() => {})
+                return 'QR code sent'
+            }
+            if (qrUrl) return `QR URL: ${qrUrl}`
+        } catch {}
+        return 'QR generation unavailable'
     }
 
     // ── barcode / qr ──────────────────────────────────────────────────────────

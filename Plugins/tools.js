@@ -1,21 +1,14 @@
 const axios = require('axios')
 const { sendButtons } = require('gifted-btns')
 const { getBtnMode } = require('../Library/actions/btnmode')
+const xcasper = require('../Library/actions/xcasper')
 
-const BASE = 'https://apiskeith.top'
-const kget = (path, params, timeout = 15000) =>
-    axios.get(BASE + path, { params, timeout, headers: { 'User-Agent': 'BeraBot/2.0' } })
+const kget = async () => { throw new Error('This utility is disabled because no verified Xcasper equivalent is available.') }
 
 // AI getter with gpt41Nano primary, gpt as fallback
 const kgetAI = async (prompt, timeout = 20000) => {
-    const AI_PATHS = ['/ai/gpt41Nano', '/ai/gpt']
-    for (const aiPath of AI_PATHS) {
-        try {
-            const res = await axios.get(BASE + aiPath, { params: { q: prompt }, timeout, headers: { 'User-Agent': 'BeraBot/2.0' } })
-            if (res.data?.result) return res
-        } catch {}
-    }
-    return { data: { result: null } }
+    const result = await xcasper.chat([{ role: 'user', content: String(prompt).slice(0, 12000) }], { timeout })
+    return { data: { result: result.success ? result.text : null } }
 }
 
 const handle = async (m, { conn, text, reply, prefix, command, sender, chat, args }) => {
@@ -607,31 +600,7 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, arg
     // ── AI Image Generation ──────────────────────────────────────────────────
     if (command === 'imagine' || command === 'aiimage' || command === 'gen') {
         if (!text) return reply(`❌ Usage: ${prefix}imagine <description>\nExample: ${prefix}imagine a cyberpunk city at night`)
-        await react('🎨')
-        try {
-            const res = await kget('/ai/text2img', { q: text, prompt: text }, 45000)
-            const data = res.data
-            const result = data?.result
-            const imgUrl = typeof result === 'string' && result.startsWith('http') ? result
-                : result?.url || result?.image || result?.link
-            if (imgUrl && imgUrl.startsWith('http')) {
-                await conn.sendMessage(chat, { image: { url: imgUrl }, caption: `🎨 *${text.slice(0, 80)}*` }, { quoted: m })
-                await react('✅')
-                return
-            }
-            throw new Error('no image url')
-        } catch {
-            // Fallback to pollinations image only (it's free image generation, not text)
-            try {
-                const encoded = encodeURIComponent(text)
-                const url = `https://image.pollinations.ai/prompt/${encoded}?nologo=true`
-                await conn.sendMessage(chat, { image: { url }, caption: `🎨 *${text.slice(0, 80)}*` }, { quoted: m })
-                await react('✅')
-            } catch {
-                await react('❌')
-                return reply('❌ Image generation failed. Try again.')
-            }
-        }
+        return reply('❌ Image generation is disabled because no verified Xcasper image-generation endpoint is currently available.')
     }
 
     // ── Roast ────────────────────────────────────────────────────────────────

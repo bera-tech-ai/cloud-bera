@@ -10,8 +10,13 @@ const path = require('path')
 
 const BERAHOST_API = 'https://kingvon-bot-hosting.replit.app/api'
 const BERAHOST_KEY = process.env.BERAHOST_API_KEY || ''
-const APISKEITH = 'https://apiskeith.top'
-const GIFTED_API = 'https://api.giftedtech.co.ke'
+const APISKEITH = ''
+const GIFTED_API = ''
+const LEGACY_DISABLED = new Set([
+    'bible', 'verse', 'tempmail', 'inbox', 'tempinbox', 'readmail', 'delmail', 'deltempmail',
+    'glowingtext', 'neontext', 'glitchtext', 'gradienttext', 'galaxytext', 'luxurytext',
+    'logomaker', 'cartoonstyle', 'advancedglow', 'livescore', 'scores', 'sportnews'
+])
 
 // ─────────────────────────────────────────────
 // Helper
@@ -37,6 +42,10 @@ const diceGames = {}
 // Main handler
 // ─────────────────────────────────────────────
 const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, chat, isGroup }) => {
+
+    if (LEGACY_DISABLED.has(command)) {
+        return reply('❌ This feature is temporarily disabled because no verified Xcasper endpoint is available for it.')
+    }
 
     // ── BIBLE ─────────────────────────────────
     if (command === 'bible' || command === 'verse') {

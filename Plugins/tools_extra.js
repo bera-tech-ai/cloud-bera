@@ -1,13 +1,4 @@
 // Plugins/tools_extra.js — Extra tools: gitget (download file/repo from GitHub)
-  const axios = require('axios')
-  const https = require('https')
-
-  const BASE = 'https://apiskeith.top'
-
-  const kget = async (endpoint, params = {}, timeout = 20000) => {
-      const res = await axios.get(BASE + endpoint, { params, timeout })
-      return res.data
-  }
 
   const handle = async (m, { conn, command, args, text, reply, isOwner, chat, prefix }) => {
       const react = (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {})
@@ -154,4 +145,3 @@
   ]
 
   module.exports = handle
-  

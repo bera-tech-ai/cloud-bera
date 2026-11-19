@@ -1,6 +1,7 @@
 const config = require('../Config')
 const { isAuthorized } = require('../Auth')
 const { getUser } = require('../Database')
+const { getAccessContext, authorizeCommand } = require('../Library/lib/permissions')
 const fs = require('fs')
 const path = require('path')
 
@@ -110,6 +111,9 @@ const smsg = (conn, m) => {
     m.fromMe = m.key?.fromMe || false
     m.isGroup = m.chat?.endsWith('@g.us') || false
     m.pushName = m.pushName || ''
+    m.mentionedJid = m.msg?.contextInfo?.mentionedJid || []
+    m.isBeraMentioned = m.mentionedJid.some(j => String(j).split(':')[0] === String(conn.user?.id || '').split(':')[0])
+    m.quotedText = m.quoted?.text || ''
 
     return m
 }
@@ -947,11 +951,15 @@ const handleMessage = async (conn, rawMsg) => {
             // Only fires when "bera" is said OR bot is @mentioned — in both
             // DMs and groups. Never fires on random messages.
             // ═══════════════════════════════════════════════════════════════
-            const _agentMentioned = (m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []).some(j => j === conn.user?.id)
+            const _agentMentioned = m.isBeraMentioned || (m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []).some(j => j === conn.user?.id)
             // Toggle: settings.beraTrigger (default ON). When false, "bera/agent <text>" without prefix is ignored.
             const _beraTriggerOn   = global.db?.data?.settings?.beraTrigger !== false
-            // Fires when message contains "bera" OR "agent" as a trigger word (no dot required)
-            const _agentBeraCall  = _beraTriggerOn && text && /\b(bera|agent)\b/i.test(text)
+            const _customTriggers = Array.isArray(global.db?.data?.settings?.beraTriggers)
+                ? global.db.data.settings.beraTriggers.filter(Boolean).map(x => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+                : []
+            const _triggerPattern = new RegExp(`^\\s*(?:bera|agent${_customTriggers.length ? '|' + _customTriggers.join('|') : ''})\\b`, 'i')
+            // Only an explicit leading trigger or a direct mention activates the AI.
+            const _agentBeraCall  = _beraTriggerOn && text && _triggerPattern.test(text)
             // _agentForceMode: set when user used .agent <task> and we intercepted it above
             const _agentAllowed   = _agentMentioned || _agentBeraCall || _agentForceMode
             if ((!m.fromMe || _agentForceMode || isOwner) && text && _agentAllowed) {
@@ -964,7 +972,8 @@ const handleMessage = async (conn, rawMsg) => {
                 text = _taskText
                 const agent  = require('../Library/actions/agent')
                 const react  = (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {})
-                const reply  = (t) => conn.sendMessage(chat, { text: String(t) }, { quoted: m })
+                const _tagReply = m.isGroup && global.db?.data?.settings?.[`tagreply_${chat}`] !== false && global.db?.data?.settings?.tagreply !== false
+                const reply  = (t) => conn.sendMessage(chat, { text: String(t), ...(_tagReply && m.sender ? { mentions: [m.sender] } : {}) }, { quoted: m })
                 const fmt    = (lines) => lines.split('\n').slice(0, 30).map(l => '┃ ' + l.slice(0, 90)).join('\n')
 
                 // ── Compute isAdmin HERE — critical for all group commands ────────
@@ -1688,12 +1697,7 @@ const handleMessage = async (conn, rawMsg) => {
                 if (intent === 'image_gen') {
                     const descM = text.match(/(?:generate|create|make|draw|paint)\s+(?:an?\s+)?(?:image|photo|picture|art|pic)?\s+(?:of\s+)?(.+)/i)
                     const desc  = descM ? descM[1].trim() : text
-                    try {
-                        await react('🎨')
-                        const seed    = Math.floor(Math.random()*99999)
-                        const imgUrl  = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(desc) + '?seed=' + seed + '&width=1024&height=1024&model=flux'
-                        await conn.sendMessage(chat, { image: { url: imgUrl }, caption: '🎨 *' + desc + '*' }, { quoted: m })
-                    } catch(e) { await reply('❌ Image gen error: ' + e.message) }
+                    await reply('❌ Image generation is currently disabled because no verified Xcasper image-generation endpoint is available.')
                     return
                 }
 
@@ -4319,10 +4323,13 @@ const handleMessage = async (conn, rawMsg) => {
         global.db.data.stats.totalCommands = (global.db.data.stats.totalCommands || 0) + 1
         debouncedDbWrite()  // batch DB writes — much faster than awaiting every time
 
-        const isGroup = m.isGroup || (chat && chat.includes('@g.us')) || false
-        const isAdmin = isGroup
-            ? ((await (async()=>{ try{ const meta = await conn.groupMetadata(chat); const me = conn.user?.id?.split(':')[0]+'@s.whatsapp.net'; return (meta.participants||[]).some(p=>p.id===me && p.admin) }catch{return false} })()))
-            : false
+        const access = await getAccessContext({ conn, chat, sender, isOwner, authorized })
+        const policy = authorizeCommand(command, access)
+        if (!policy.allowed) {
+            return conn.sendMessage(chat, { text: `⛔ ${policy.reason}` }, { quoted: m })
+        }
+        const isGroup = access.isGroup
+        const isAdmin = access.isAdmin
         const ctx = {
             conn,
             m,
@@ -4335,8 +4342,13 @@ const handleMessage = async (conn, rawMsg) => {
             isOwner,
             isGroup,
             isAdmin,
+            isBotAdmin: access.isBotAdmin,
+            isSenderAdmin: access.isSenderAdmin,
+            isSudo: access.isSudo,
+            role: access.role,
+            permission: policy.policy,
             isAuthorized: authorized,
-            reply: (txt) => conn.sendMessage(chat, { text: String(txt) }, { quoted: m }),
+            reply: (txt, extra = {}) => conn.sendMessage(chat, { text: String(txt), ...extra }, { quoted: m }),
             react: (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {}),
         }
 
@@ -4393,15 +4405,11 @@ const runCommand = async (commandName, argsString, m, conn) => {
             try { return isAuthorized(sender) } catch { return { authorized: false, isOwner: false } }
         })()
         const isOwner = !!_isOwn
-        const isGroup = !!(chat && chat.includes('@g.us'))
-        let isAdmin = false
-        if (isGroup) {
-            try {
-                const meta = await conn.groupMetadata(chat)
-                const me = (sender || '')
-                isAdmin = (meta.participants || []).some(p => p.id === me && p.admin)
-            } catch {}
-        }
+        const access = await getAccessContext({ conn, chat, sender, isOwner, authorized: _authd })
+        const policy = authorizeCommand(cmdLower, access, { agent: true })
+        if (!policy.allowed) return { success: false, error: policy.reason }
+        const isGroup = access.isGroup
+        const isAdmin = access.isAdmin
         const prefix = getPrefix()
         const captured = []
         const reply = async (txt) => {
@@ -4410,7 +4418,13 @@ const runCommand = async (commandName, argsString, m, conn) => {
         }
         const ctx = {
             conn, m, text, args, command: cmdLower, sender, chat, prefix,
-            isOwner, isGroup, isAdmin, isAuthorized: !!_authd, reply
+            isOwner, isGroup, isAdmin,
+            isBotAdmin: access.isBotAdmin,
+            isSenderAdmin: access.isSenderAdmin,
+            isSudo: access.isSudo,
+            role: access.role,
+            permission: policy.policy,
+            isAuthorized: !!_authd, reply
         }
         if (typeof handler === 'function') await handler(m, ctx)
         else if (typeof handler?.run === 'function') {

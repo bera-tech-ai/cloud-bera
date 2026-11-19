@@ -22,7 +22,7 @@ const { initDb } = require('../Database')
 const { handleMessage, handleGroupEvents, handleAntiDelete, handleAntiEdit } = require('../Handler')
 const config = require('../Config')
 
-const SESSION_DIR = path.resolve('./session')
+const SESSION_DIR = path.resolve(process.env.BERA_SESSION_DIR || config.sessionDir || './session')
 const PHONE_FILE  = path.join(SESSION_DIR, '.phone')
 const logger      = pino({ level: 'silent' })
 
