@@ -8,6 +8,7 @@ const axios  = require('axios')
 const { sendBtn, sendList } = require('../Library/actions/btns')
 const { getBtnMode } = require('../Library/actions/btnmode')
 const xcasper = require('../Library/actions/xcasper')
+const { sendAudioMessage } = require('../Library/actions/whatsapp-media')
 
 const handle = {}
 handle.command = [
@@ -207,11 +208,11 @@ handle.all = async (m, { conn, command, args, prefix, reply, sender } = {}) => {
                 if (songThumb) {
                     await conn.sendMessage(chat, { image: { url: songThumb }, caption: '🎵 ' + songTitle }).catch(() => {})
                 }
-                await conn.sendMessage(chat, {
-                    audio:    { url: dl.url || dl.audioUrl },
+                await sendAudioMessage(conn, chat, dl.url || dl.audioUrl, {
                     mimetype: 'audio/mpeg',
-                    fileName: songTitle + '.mp3'
-                }, { quoted: m })
+                    fileName: songTitle + '.mp3',
+                    quoted: m
+                })
                 await conn.sendMessage(chat, { react: { text: '✅', key: m.key } }).catch(() => {})
             } else {
                 return reply('❌ Download failed. Try:\n*' + prefix + 'tomp3 ' + songUrl + '*')

@@ -1,6 +1,7 @@
 'use strict'
 
 const xcasper = require('./xcasper')
+const { findMediaUrl } = require('../lib/media-url')
 
 const videoUrl = item => item?.url || (item?.videoId ? `https://youtube.com/watch?v=${item.videoId}` : '')
 
@@ -18,7 +19,7 @@ const downloadAudio = async (url) => {
     try {
         const data = await xcasper.youtubeAudio(url)
         const result = data?.data || data
-        const direct = result?.url || result?.download_url || result?.downloadUrl || result?.audio || result?.link
+        const direct = findMediaUrl(result)
         return direct ? { success: true, url: direct, audioUrl: direct, title: result?.title || '', thumbnail: result?.thumbnail || '' } : { success: false, error: 'Xcasper returned no audio URL.' }
     } catch (e) {
         return { success: false, error: `Xcasper YouTube audio download failed: ${e.message}` }
@@ -29,7 +30,7 @@ const downloadVideo = async (url) => {
     try {
         const data = await xcasper.youtubeVideo(url)
         const result = data?.data || data
-        const direct = result?.url || result?.download_url || result?.downloadUrl || result?.video || result?.link
+        const direct = findMediaUrl(result)
         return direct ? { success: true, url: direct, title: result?.title || '' } : { success: false, error: 'Xcasper returned no video URL.' }
     } catch (e) {
         return { success: false, error: `Xcasper YouTube video download failed: ${e.message}` }

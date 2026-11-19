@@ -6,6 +6,7 @@
 const axios = require('axios')
 const config = require('../Config')
 const { searchYoutube, downloadAudio, downloadVideo, searchAndDownloadVideo } = require('../Library/actions/music')
+const { sendAudioMessage } = require('../Library/actions/whatsapp-media')
 const xcasper = require('../Library/actions/xcasper')
 
 const APISKEITH = ''
@@ -285,7 +286,7 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
             if (thumb) {
                 await conn.sendMessage(chat, { image: { url: thumb }, caption: `🎧 *${title}*` }, { quoted: m })
             }
-            await conn.sendMessage(chat, { audio: { url: audioUrl }, mimetype: 'audio/mpeg', fileName: `${title}.mp3` }, { quoted: m })
+            await sendAudioMessage(conn, chat, audioUrl, { mimetype: 'audio/mpeg', fileName: `${title}.mp3`, quoted: m })
             await react(conn, m, '✅')
         } catch (e) {
             await react(conn, m, '❌')

@@ -1,6 +1,7 @@
 const { translate }           = require('../Library/actions/translate')
 const { generateImage }        = require('../Library/actions/imagegen')
 const { searchAndDownload }    = require('../Library/actions/music')
+const { sendAudioMessage }     = require('../Library/actions/whatsapp-media')
 const { analyzeImageFromBuffer } = require('../Library/actions/vision')
 const { webSearch }            = require('../Library/actions/search')
 
@@ -74,11 +75,10 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         }
         await reply(`🎵 *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nTitle: ${res.title || text}\nDuration: ${res.duration || 'N/A'}\nSource: ${res.source || 'auto'}\n\nDownloading audio...`)
         const hasThumbnail = res.thumbnail && typeof res.thumbnail === 'string' && res.thumbnail.startsWith('http')
-        await conn.sendMessage(chat, {
-            audio: hasAudioUrl ? { url: res.audioUrl } : res.audioBuffer,
+        await sendAudioMessage(conn, chat, hasAudioUrl ? res.audioUrl : res.audioBuffer, {
             mimetype: 'audio/mpeg',
-            ptt: false,
             fileName: `${res.title || text}.mp3`,
+            quoted: m,
             contextInfo: hasThumbnail ? {
                 externalAdReply: {
                     thumbnailUrl: res.thumbnail,
@@ -89,7 +89,7 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
                     mediaType: 1
                 }
             } : undefined
-        }, { quoted: m })
+        })
         await react(conn, m, '✅')
     }
 
