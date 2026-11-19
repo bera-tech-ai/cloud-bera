@@ -13,7 +13,9 @@ const defaultData = {
     users: {},
     groups: {},
     projects: {},
+    projectSupport: { projects: {}, cases: {}, activeByUser: {}, activeByChat: {} },
     deployments: {},
+    chatbera: { globalEnabled: false, enabled: {}, groupEnabled: false, languagePreferences: {}, voiceReplies: {} },
     audit: [],
     keys: {},
     settings: {

@@ -1,63 +1,97 @@
 'use strict'
-const { fetchTts, VOICE_MAP } = require('../Library/actions/tts')
+const { fetchTts, VOICE_MAP, normalizeLanguage } = require('../Library/actions/tts')
 
 const LANG_LABELS = {
-    en: 'English', fr: 'French',  sw: 'Swahili',    ar: 'Arabic',
-    es: 'Spanish', de: 'German',  ja: 'Japanese',   zh: 'Chinese',
-    hi: 'Hindi',   pt: 'Portuguese', ko: 'Korean',  ru: 'Russian',
-    it: 'Italian', nl: 'Dutch',
+    en: 'English', fr: 'French', sw: 'Swahili', sh: 'Sheng (spoken with the closest Swahili voice)', sheng: 'Sheng (spoken with the closest Swahili voice)', ar: 'Arabic',
+    es: 'Spanish', de: 'German', ja: 'Japanese', zh: 'Chinese', hi: 'Hindi', pt: 'Portuguese', ko: 'Korean', ru: 'Russian', it: 'Italian', nl: 'Dutch'
 }
+const normalizeJid = value => String(value || '').replace(/:\d+@/, '@').toLowerCase()
 
 module.exports = {
-    commands:    ['voice', 'gtts'],
-    description: 'Convert text to a 🎵 Now Playing audio message',
-    usage:       '.voice <text>  or  .voice <lang> <text>',
-    permission:  'public',
-    group:       true,
-    private:     true,
+    commands: ['voice', 'gtts', 'language', 'lang'],
+    description: 'Set reply language, opt into voice replies, or speak text as a WhatsApp voice note',
+    usage: '.language auto|en|sw|sheng; .voice auto on|off; .voice <text>',
+    permission: 'public',
+    group: true,
+    private: true,
 
     run: async (sock, message, args, ctx) => {
-        const { jid, reply } = ctx
+        const { jid, reply, sender, command } = ctx
+        const userKey = normalizeJid(sender || jid)
+        const chatbera = () => {
+            if (!global.db?.data) throw new Error('Database is not ready.')
+            if (!global.db.data.chatbera) global.db.data.chatbera = {}
+            if (!global.db.data.chatbera.languagePreferences) global.db.data.chatbera.languagePreferences = {}
+            if (!global.db.data.chatbera.voiceReplies) global.db.data.chatbera.voiceReplies = {}
+            return global.db.data.chatbera
+        }
+
+        if (command === 'language' || command === 'lang') {
+            const mode = String(args[0] || '').toLowerCase()
+            const state = chatbera()
+            if (!mode || mode === 'status') {
+                const current = normalizeLanguage(state.languagePreferences[userKey] || 'auto')
+                return reply(`🌐 Reply language: *${current}*\nUse: .language auto|en|sw|sheng`)
+            }
+            const normalized = normalizeLanguage(mode)
+            if (!['auto', 'en', 'sw', 'sheng'].includes(normalized)) {
+                return reply('Use `.language auto`, `.language en`, `.language sw`, or `.language sheng`. Auto mirrors the language and code-switching in the conversation.')
+            }
+            state.languagePreferences[userKey] = normalized
+            await global.db.write()
+            const labels = { auto: 'Auto (match the conversation)', en: 'English', sw: 'Swahili', sheng: 'Kenyan Sheng / English mix' }
+            return reply(`✅ Reply language set to *${labels[normalized]}*.`)
+        }
+
+        if (String(args[0] || '').toLowerCase() === 'auto') {
+            const choice = String(args[1] || 'status').toLowerCase()
+            const state = chatbera()
+            if (choice === 'status') {
+                return reply(`🔊 Automatic spoken replies are *${state.voiceReplies[userKey] ? 'ON' : 'OFF'}*.\nUse: .voice auto on|off. This only affects your private-chat AI replies; group voice replies stay off.`)
+            }
+            if (!['on', 'off'].includes(choice)) return reply('Use `.voice auto on` or `.voice auto off`.')
+            if (choice === 'on' && String(jid || '').endsWith('@g.us')) return reply('For privacy, enable automatic voice replies in a private chat with the bot.')
+            state.voiceReplies[userKey] = choice === 'on'
+            await global.db.write()
+            return reply(`🔊 Automatic spoken replies turned *${choice.toUpperCase()}*. Text replies remain enabled.`)
+        }
 
         if (!args.length) {
             return reply(
-                `❌ *Usage:* \`.voice <text>\` or \`.voice <lang> <text>\`\n\n` +
-                `*Languages:* ${Object.keys(LANG_LABELS).map(k => `\`${k}\``).join(', ')}\n\n` +
-                `*Examples:*\n• \`.voice Hello everyone!\`\n• \`.voice sw Habari yako?\`\n• \`.voice fr Bonjour le monde\``
+                `🔊 *Voice controls*\n` +
+                `• .voice auto on|off — opt in/out of spoken private-chat AI replies\n` +
+                `• .language auto|en|sw|sheng — choose reply language\n` +
+                `• .voice <text> or .voice <lang> <text> — send a voice note\n\n` +
+                `Languages: ${Object.keys(LANG_LABELS).join(', ')}`
             )
         }
 
         let lang = 'en'
         let text
-
-        const first = args[0].toLowerCase()
+        const first = String(args[0]).toLowerCase()
         if (VOICE_MAP[first] || LANG_LABELS[first]) {
             lang = first
             text = args.slice(1).join(' ')
         } else {
             text = args.join(' ')
         }
+        if (!text?.trim()) return reply('❌ Please provide text to speak.')
+        if (text.length > 1200) return reply('❌ Please keep voice messages under 1,200 characters.')
 
-        if (!text?.trim()) return reply(`❌ Please provide text to speak.`)
-
-        // React to show we're working
         try { await sock.sendMessage(jid, { react: { text: '🔊', key: message.key } }) } catch {}
-
-        const buf = await fetchTts(text, lang)
-
-        if (!buf) {
+        try {
+            const buf = await fetchTts(text, lang)
+            await sock.sendMessage(jid, {
+                audio: buf,
+                mimetype: 'audio/ogg; codecs=opus',
+                ptt: true,
+                waveform: [0, 24, 48, 76, 108, 126, 105, 76, 48, 22, 0]
+            }, { quoted: message })
+            try { await sock.sendMessage(jid, { react: { text: '✅', key: message.key } }) } catch {}
+        } catch (error) {
             try { await sock.sendMessage(jid, { react: { text: '❌', key: message.key } }) } catch {}
-            return reply(`❌ TTS failed — all voice providers unavailable. Try again shortly.`)
+            const messageText = String(error?.message || '')
+            return reply(`❌ Voice generation failed. ${messageText.includes('google-tts-api') || messageText.includes('ffmpeg') ? 'The bot host needs the configured TTS package and FFmpeg.' : 'Try again shortly.'}`)
         }
-
-        // ptt: false → renders as music player (not voice-note bubble)
-        await sock.sendMessage(jid, {
-            audio:    buf,
-            mimetype: 'audio/mpeg',
-            ptt:      false,
-            fileName: 'bera-tts.mp3',
-        }, { quoted: message })
-
-        try { await sock.sendMessage(jid, { react: { text: '✅', key: message.key } }) } catch {}
     }
 }

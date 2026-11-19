@@ -152,7 +152,7 @@ const validate = async (record, options = {}) => {
 }
 
 const checkpoint = async (record, message = 'checkpoint: Bera AI') => {
-    const result = await command(`git init && git config user.name "Bera AI" && git config user.email "bera-ai@users.noreply.github.com" && git add -A && (git diff --cached --quiet || git commit -m ${JSON.stringify(message)})`, record.dir, 120000)
+    const result = await command(`git init && git config user.name "Bera AI" && git config user.email "bera-ai@users.noreply.github.com" && git add -A -- . ':!.env' ':!.env.*' ':!**/.env' ':!**/.env.*' ':!node_modules/**' ':!**/node_modules/**' ':!.bera-preview.log' ':!.bera-revisions/**' && (git diff --cached --quiet || git commit -m ${JSON.stringify(message)})`, record.dir, 120000)
     if (result.success) { record.checkpoint = { at: now(), message }; update(record, { stage: 'checkpointed', status: 'checkpointed' }); event(record, 'checkpoint', { message }) }
     return result
 }
@@ -191,9 +191,16 @@ const screenshot = async record => {
 }
 
 const run = async options => {
+    const requestedAction = options.action || 'run'
+    if ((requestedAction === 'publish' || (requestedAction === 'run' && (options.publish || options.deploy))) && options.ownerAuthorized !== true) {
+        return { success: false, error: 'Publishing and deployment require a trusted owner-approved action.' }
+    }
     let record = options.projectId ? get(options.projectId) : null
+    if (record && record.userId !== (options.userId || 'shared') && options.ownerAuthorized !== true) {
+        return { success: false, error: 'Project not found or access denied.' }
+    }
     if (!record) { const created = await create(options); if (!created.success) return created; record = created.record }
-    const action = options.action || 'run'
+    const action = requestedAction
     if (action === 'status') return { success: true, record }
     if (action === 'create') return { success: true, record }
     if (action === 'plan') return makePlan(record, options.task || record.task)

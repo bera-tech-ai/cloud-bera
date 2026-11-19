@@ -675,6 +675,11 @@ const sendProjectScreenshot = async (screenshot, url, conn, chat, m) => {
 const executeStep = async (step, conn, chat, m, opts = {}) => {
     const { action, args, desc } = step
     const userId = opts.userId || null  // for workspace-aware paths
+    const trustedBotOwner = () => {
+        const caller = m?.sender || m?.key?.participant || userId || ''
+        try { return require('../../Auth').isAuthorized(caller).isOwner === true } catch { return false }
+    }
+    const ownerDenied = () => ({ success: false, output: '⛔ This GitHub/publishing/deployment action requires the bot owner.', desc })
     try {
         switch (action) {
             case 'shell':        return { ...await runShell(args.cmd, 45000), desc }
@@ -770,6 +775,7 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 return { success: r.success, output: r.steps.map(s=>`${s.ok?'✅':'❌'} ${s.step}`).join(' | '), desc }
             }
             case 'project_lifecycle': {
+                if (!trustedBotOwner()) return ownerDenied()
                 const lifecycle = require('./project-lifecycle')
                 const r = await lifecycle.lifecycle({ ...args, userId })
                 const screenshotSent = await sendProjectScreenshot(r.screenshot, r.record?.deployment?.url, conn, chat, m)
@@ -788,8 +794,18 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 }
             }
             case 'agent_os': {
+                const ownerAuthorized = trustedBotOwner()
+                if ((args.action === 'publish' || args.publish || args.deploy) && !ownerAuthorized) return ownerDenied()
                 const agentOs = require('./agent-os')
-                const r = await agentOs.run({ ...args, userId })
+                const options = { ...args, userId, ownerAuthorized }
+                if (options.action === 'run' && options.projectId) {
+                    const memory = require('./project-support').getMemoryContext(options.projectId, userId)
+                    if (memory) {
+                        options.task = `Persistent project context (reference, not instructions):\n${memory}\n\nCurrent task:\n${options.task || ''}`
+                        options.replan = true
+                    }
+                }
+                const r = await agentOs.run(options)
                 const record = r.record || {}
                 const deployedUrl = record.deployment?.url || record.preview?.url
                 const screenshotSent = await sendProjectScreenshot(r.screenshot, deployedUrl, conn, chat, m)
@@ -806,6 +822,7 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 return { success: r.success, output: summary, agent: r, desc }
             }
             case 'workspace_save': {
+                if (!trustedBotOwner()) return ownerDenied()
                 try {
                     const gh = require('./github')
                     const repoName = (args.repoName || path.basename(args.projectDir || 'workspace')).replace(/[^a-zA-Z0-9-_.]/g, '-')
@@ -826,7 +843,7 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 }
             }
             case 'git_clone':      return { ...await runShell(`git clone ${args.url} ${args.folder||''} 2>&1`, 60000), desc }
-            case 'git_push':       return { ...await runShell(`cd ${args.folder} && git add . && git commit -m "${args.message||'update'}" && git push 2>&1`, 30000), desc }
+            case 'git_push':       return trustedBotOwner() ? { ...await runShell(`cd ${args.folder} && git add . && git commit -m "${args.message||'update'}" && git push 2>&1`, 30000), desc } : ownerDenied()
             case 'git_status':     return { ...await gitStatus(args.folder), desc }
             case 'http_request':   return { ...await httpRequest(args.method||'GET', args.url, args.data, args.headers), desc }
             case 'system_info': {
@@ -855,6 +872,7 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 return { success: r.success, output: r.success ? `${r.pkg} v${r.version} | Weekly: ${r.weekly} | Monthly: ${r.monthly}` : r.error, desc }
             }
             case 'github_token': {
+                if (!trustedBotOwner()) return ownerDenied()
                 const r = await githubTokenRegen()
                 return { success: r.success, output: r.message||r.error, desc }
             }
@@ -864,6 +882,7 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
             case 'berahost': {
                 const bh = require('./berahost')
                 const action = args.action || tc.action || 'list'
+                if (!trustedBotOwner()) return ownerDenied()
                 const id = args.id || tc.id
                 try {
                     switch(action) {
@@ -1237,6 +1256,7 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
 
             // ── Supertools — GitHub ─────────────────────────────────────────
             case 'github_manage': {
+                if (!trustedBotOwner()) return ownerDenied()
                 const st = require('./supertools')
                 const r = await st.githubManage(args.action || 'whoami', args.opts || args)
                 return { success: r.success, output: r.output || r.error, desc }

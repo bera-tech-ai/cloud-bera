@@ -4,6 +4,7 @@ const { getUser } = require('../Database')
 const { getAccessContext, authorizeCommand } = require('../Library/lib/permissions')
 const fs = require('fs')
 const path = require('path')
+const { sendGroupReply } = require('../Library/lib/group-mentions')
 
 // Pre-warm library modules so first command has zero load delay
 try { require('../Library/actions/music') } catch {}
@@ -132,6 +133,21 @@ const checkAutoReply = async (conn, m, text) => {
         }
     }
     return false
+}
+
+const sendOptInVoiceReply = async (conn, m, text, languagePreference = 'auto') => {
+    if (!conn?.sendMessage || !m?.chat || m.isGroup || String(text || '').length > 1200) return false
+    const sender = String(m.sender || '').replace(/:\d+@/, '@').toLowerCase()
+    if (global.db?.data?.chatbera?.voiceReplies?.[sender] !== true) return false
+    try {
+        const { fetchTts, resolveSpeechLanguage } = require('../Library/actions/tts')
+        const audio = await fetchTts(text, resolveSpeechLanguage(text, languagePreference))
+        await conn.sendMessage(m.chat, { audio, mimetype: 'audio/ogg; codecs=opus', ptt: true }, { quoted: m })
+        return true
+    } catch (error) {
+        console.error('[VOICE REPLY]', error?.message || 'voice generation failed')
+        return false
+    }
 }
 
 // ── Anti-spam tracker (in-memory) ─────────────────────────────────────────
@@ -972,8 +988,7 @@ const handleMessage = async (conn, rawMsg) => {
                 text = _taskText
                 const agent  = require('../Library/actions/agent')
                 const react  = (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {})
-                const _tagReply = m.isGroup && global.db?.data?.settings?.[`tagreply_${chat}`] !== false && global.db?.data?.settings?.tagreply !== false
-                const reply  = (t) => conn.sendMessage(chat, { text: String(t), ...(_tagReply && m.sender ? { mentions: [m.sender] } : {}) }, { quoted: m })
+                const reply  = (t) => sendGroupReply(conn, m, String(t))
                 const fmt    = (lines) => lines.split('\n').slice(0, 30).map(l => '┃ ' + l.slice(0, 90)).join('\n')
                 if (['set_bio', 'set_bot_name', 'set_bot_ppic'].includes(intent)) {
                     return reply('🔒 Agent-driven changes to the bot WhatsApp profile are disabled.')
@@ -4245,13 +4260,18 @@ const handleMessage = async (conn, rawMsg) => {
                     const { generateAdvancedReply } = require('../Library/actions/beraai')
                     conn.sendPresenceUpdate('composing', chat).catch(() => {})
                     react('🤖')
+                    const normalizedSender = String(sender || '').replace(/:\d+@/, '@').toLowerCase()
+                    const { normalizeLanguage } = require('../Library/actions/tts')
+                    const languagePreference = normalizeLanguage(global.db?.data?.chatbera?.languagePreferences?.[normalizedSender] || 'auto')
                     // Strip the leading "Bera" so the AI sees the real instruction
-                    const cleaned = text.replace(/^\s*bera[,:\s]+/i, '').trim() || text
+                    const cleaned = text.replace(/^\s*bera[, :\s]+/i, '').trim() || text
                     const result = await generateAdvancedReply(cleaned, chat, conn, m, { agentMode: true, MAX_LOOPS: 12 })
                     if (result && result.success && result.reply) {
                         await reply(result.reply)
+                        await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
                     } else if (result && result.reply) {
                         await reply(result.reply)
+                        await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
                     } else {
                         await reply('🤖 (no response)')
                     }
@@ -4301,11 +4321,17 @@ const handleMessage = async (conn, rawMsg) => {
                 console.log('[CHATBERA] 🔥 Triggered for msg:', text.slice(0, 30), '| from:', sender)
                   try {
                       const { generateSimpleReply } = require('../Library/actions/beraai')
+                      const { normalizeLanguage } = require('../Library/actions/tts')
+                      const normalizedSender = String(sender || '').replace(/:\d+@/, '@').toLowerCase()
+                      const chatberaPrefs = global.db?.data?.chatbera || {}
+                      const languagePreference = normalizeLanguage(chatberaPrefs.languagePreferences?.[normalizedSender] || 'auto')
+                      const voiceRepliesEnabled = chatberaPrefs.voiceReplies?.[normalizedSender] === true && !m.isGroup
                       conn.sendPresenceUpdate('composing', chat).catch(() => {})
                       await new Promise(r => setTimeout(r, 800 + Math.random() * 1500))
-                      const result = await generateSimpleReply(text, chat)
+                      const result = await generateSimpleReply(text, chat, languagePreference)
                       if (result.success && result.reply) {
-                          await conn.sendMessage(chat, { text: result.reply }, { quoted: m })
+                          await sendGroupReply(conn, m, result.reply)
+                          if (voiceRepliesEnabled) await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
                       }
                       conn.sendPresenceUpdate('paused', chat).catch(() => {})
                 } catch (e) {
@@ -4337,6 +4363,8 @@ const handleMessage = async (conn, rawMsg) => {
         }
         const isGroup = access.isGroup
         const isAdmin = access.isAdmin
+        const beraAiCommands = new Set(['bera', 'agent', 'chatbot', 'beraclone', 'apidocs', 'scaffold', 'create', 'init', 'replit', 'rpl'])
+        const isBeraAiCommand = handler?.isBeraAI === true || beraAiCommands.has(command)
         const ctx = {
             conn,
             m,
@@ -4355,7 +4383,9 @@ const handleMessage = async (conn, rawMsg) => {
             role: access.role,
             permission: policy.policy,
             isAuthorized: authorized,
-            reply: (txt, extra = {}) => conn.sendMessage(chat, { text: String(txt), ...extra }, { quoted: m }),
+            reply: (txt, extra = {}) => isBeraAiCommand
+                ? sendGroupReply(conn, m, String(txt), extra)
+                : conn.sendMessage(chat, { text: String(txt), ...extra }, { quoted: m }),
             react: (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {}),
         }
 
@@ -4421,7 +4451,7 @@ const runCommand = async (commandName, argsString, m, conn) => {
         const captured = []
         const reply = async (txt) => {
             captured.push(String(txt))
-            try { await conn.sendMessage(chat, { text: String(txt) }, { quoted: m }) } catch {}
+            try { await sendGroupReply(conn, m, String(txt)) } catch {}
         }
         const ctx = {
             conn, m, text, args, command: cmdLower, sender, chat, prefix,

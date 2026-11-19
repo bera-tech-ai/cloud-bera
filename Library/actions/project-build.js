@@ -15,14 +15,17 @@ const projectName = text => {
 
 const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     const agentOs = require('./agent-os')
+    const { addRequesterMention } = require('../lib/group-mentions')
     const replyProgress = async content => {
         if (conn?.sendMessage && chat) {
-            try { await conn.sendMessage(chat, { text: content }, message ? { quoted: message } : {}) } catch {}
+            try {
+                await conn.sendMessage(chat, addRequesterMention(message, content), message ? { quoted: message } : {})
+            } catch {}
         }
     }
     const deployRequested = /\b(deploy|publish|launch\s+(?:it|the\s+app|the\s+site))\b/i.test(text)
     const repoRequested = deployRequested || /\b(github|repository|repo|push\s+(?:the\s+)?(?:code|project))\b/i.test(text)
-    await replyProgress('🏗️ I’ll build and validate the project in your workspace first. I’ll create/push a repository only because you requested GitHub, and deploy only if you explicitly requested deployment.')
+    await replyProgress('🏗️ I’ll build and validate the project locally first. Any GitHub push or deployment will wait for a separate owner approval tied to this exact build.')
     const result = await agentOs.run({
         action: 'run',
         userId,
@@ -30,8 +33,8 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         task: text,
         preview: true,
         screenshot: true,
-        publish: repoRequested,
-        deploy: deployRequested,
+        publish: false,
+        deploy: false,
         private: true,
         onProgress: async ({ index, total, action }) => {
             if (index === 0 || index === total - 1 || (index + 1) % 4 === 0) {
@@ -41,6 +44,18 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     })
     const record = result.record || {}
     const buildValidated = Boolean(record.checkpoint) && (record.checks || []).every(check => check.success)
+    let approvalCase = null
+    if (record.id) {
+        try {
+            const support = require('./project-support')
+            await support.registerProject(record, { userId, chat })
+            if (result.success && buildValidated && repoRequested) {
+                approvalCase = await support.createBuildApproval(record, { userId, chat, requestedPublish: repoRequested, requestedDeploy: deployRequested })
+            }
+        } catch (error) {
+            await replyProgress(`⚠️ Project memory/approval metadata could not be saved: ${error.message}`)
+        }
+    }
     const parts = [
         buildValidated ? '✅ Project built and validated locally.' : `❌ Project build failed: ${result.error || 'see validation details'}`,
         !result.success && buildValidated ? `⚠️ Publishing/deployment did not finish: ${result.error || 'unknown error'}` : null,
@@ -49,15 +64,33 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         record.checks?.length ? `Checks: ${record.checks.map(c => `${c.name} ${c.success ? 'passed' : 'failed'}`).join(', ')}` : null,
         record.github?.url ? `GitHub: ${record.github.url}` : null,
         record.deployment?.url ? `Live site: ${record.deployment.url}` : null,
-        record.deployment?.status === 'approval_required' ? 'Production deployment needs approval.' : null
+        record.deployment?.status === 'approval_required' ? 'Production deployment needs approval.' : null,
+        approvalCase ? `Owner approval required before publishing: .agent project approve ${approvalCase.id} ${deployRequested ? 'deploy' : 'github'}` : null,
+        !approvalCase && (repoRequested || deployRequested) && buildValidated ? 'No repository or deployment was created; project approval metadata was not recorded.' : null
     ].filter(Boolean)
     await replyProgress(parts.join('\n'))
+    if (approvalCase && conn?.sendMessage && chat) {
+        try {
+            const { sendButtons } = require('gifted-btns')
+            const prefix = global.prefix || '.'
+            await sendButtons(conn, chat, {
+                title: 'Owner approval required',
+                text: `Build ${record.name || record.id} is validated locally. No repository or deployment has been created.`,
+                footer: 'Buttons invoke the same owner and case-state checks as text commands.',
+                buttons: [
+                    { id: `${prefix}agent project approve ${approvalCase.id} ${deployRequested ? 'deploy' : 'github'}`, text: deployRequested ? 'Approve GitHub + Deploy' : 'Approve GitHub' },
+                    { id: `${prefix}agent project undo ${approvalCase.id}`, text: 'Cancel approval' }
+                ]
+            })
+        } catch {}
+    }
     if (result.screenshot?.buffer && conn?.sendMessage && chat) {
         try {
+            const caption = `📸 ${record.deployment?.url ? 'Deployment' : 'Preview'} screenshot${record.deployment?.url ? `\n${record.deployment.url}` : ''}`
             await conn.sendMessage(chat, {
                 image: result.screenshot.buffer,
                 mimetype: result.screenshot.mimetype || 'image/png',
-                caption: `📸 ${record.deployment?.url ? 'Deployment' : 'Preview'} screenshot${record.deployment?.url ? `\n${record.deployment.url}` : ''}`
+                ...addRequesterMention(message, caption, {}, 'caption')
             }, message ? { quoted: message } : {})
         } catch {}
     }

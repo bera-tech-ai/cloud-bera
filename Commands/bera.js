@@ -31,6 +31,7 @@ const {
     gtLiveScore, gtPredictions, gtStandings, gtImage, gtBible, gtWallpaper,
     gtClassifyIntent
 } = require('../Library/actions/giftedapi')
+const { addRequesterMention } = require('../Library/lib/group-mentions')
 
 const getUserHistory = (sender) => {
     if (!global.db.data.users[sender]) global.db.data.users[sender] = {}
@@ -74,7 +75,7 @@ const askNick = async (m, conn, reply, sender, userText, imageBuffer = null) => 
     history.push({ role: 'user', content: imageBuffer ? `[image] ${userText}` : userText })
     history.push({ role: 'assistant', content: answer })
 
-    const sent = await conn.sendMessage(m.chat, { text: answer, linkPreview: false }, { quoted: m })
+    const sent = await conn.sendMessage(m.chat, addRequesterMention(m, answer, { linkPreview: false }), { quoted: m })
     const msgId = sent?.key?.id
 
     const userData = global.db.data.users[sender]
@@ -2120,6 +2121,12 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, isOwner }
     //        .agent delete the directory my-app
     //        .agent scaffold a fullstack stopwatch in react
     if (command === 'agent') {
+        if (/^project(?:\s|$)/i.test(String(text || '').trim())) {
+            const support = require('../Library/actions/project-support')
+            return support.handleCommand(String(text).trim().replace(/^project\b/i, '').trim(), {
+                m, conn, sender, chat: m.chat, isOwner, reply, prefix
+            })
+        }
         if (!text) return reply(
             `🤖 *Bera Agent* — full autonomous mode\n\n` +
             `I can scaffold projects, write files, run shell commands, manage GitHub, and more.\n\n` +
@@ -2941,9 +2948,7 @@ handleWrapper.command = ['bera', 'agent', 'chatbot', 'beraclone', 'workspace', '
     'replit', 'rpl',
     'shell', 'term', 'terminal']
 handleWrapper.tags = ['ai']
+handleWrapper.isBeraAI = true
 
 module.exports = handleWrapper
-module.exports.handleAction = handleAction
-
-module.exports = handle
 module.exports.handleAction = handleAction

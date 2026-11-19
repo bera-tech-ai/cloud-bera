@@ -299,7 +299,22 @@ const startBot = async () => {
     await initDb()
     saveSession('whatsapp', { status: 'starting', sessionDir: SESSION_DIR, databaseProvider: global.db.provider, startedAt: Date.now() })
 
-    const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
+    const fileAuthState = await useMultiFileAuthState(SESSION_DIR)
+    let { state, saveCreds } = fileAuthState
+    let clearAuthState = null
+    if (global.db.provider === 'postgresql') {
+        const { createPostgresAuthState } = require('../Library/lib/postgres-auth-state')
+        const postgresAuthState = await createPostgresAuthState({
+            pool: global.db.pool,
+            sessionId: process.env.BERA_AUTH_SESSION_ID || 'whatsapp',
+            encryptionKey: process.env.BERA_SESSION_ENCRYPTION_KEY,
+            legacyState: fileAuthState
+        })
+        state = postgresAuthState.state
+        saveCreds = postgresAuthState.saveCreds
+        clearAuthState = postgresAuthState.clear
+        console.log(chalk.green(`[DB] Encrypted WhatsApp auth state enabled (session: ${postgresAuthState.sessionId})`))
+    }
     const { version } = await fetchLatestBaileysVersion()
 
     console.log(chalk.yellow(`[BOT] Using WA version ${version.join('.')}`))
@@ -383,6 +398,9 @@ const startBot = async () => {
 
             if (statusCode === DisconnectReason.loggedOut) {
                 beraLog.err('Logged out — clearing session and restarting in 3s...')
+                if (clearAuthState) {
+                    try { await clearAuthState() } catch (e) { beraLog.err(`Could not clear PostgreSQL auth state: ${e.message}`) }
+                }
                 fs.rmSync(SESSION_DIR, { recursive: true, force: true })
                 fs.mkdirSync(SESSION_DIR, { recursive: true })
                 scheduleReconnect(3000)

@@ -229,10 +229,11 @@ const getQuickReply = (text) => {
 getSystemPrompt = (profile) => {
     const msgs = (profile?.myMessages || PREBUILT_PROFILE.myMessages || [])
         .filter(m => m && m.length > 1 && m.length < 120)
+        .filter(m => !/(?:mongodb(?:\+srv)?:\/\/|(?:api[_ -]?key|access[_ -]?token|password|secret)\s*[:=])/i.test(m))
         .slice(0, 50)
+        .map(m => m.replace(/https?:\/\/\S+/gi, '[link]').replace(/\b(?:\+?\d[\d\s().-]{7,}\d)\b/g, '[number]'))
         .join('\n')
-    const name = profile?.myName || PREBUILT_PROFILE.myName || 'Bruce Bera'
-    return `You are ${name}, a 21-year-old Kenyan developer from Nairobi texting on WhatsApp. Phone: 254787527753. GitHub: bera-tech-ai. These are your REAL sent messages — match this style EXACTLY:
+    return `You are Bera AI, a friendly WhatsApp assistant built by Bera Tech. Use the examples only as a guide to casual Kenyan WhatsApp style; do not claim to be the person who wrote them or repeat private details from them:
 
 ${msgs}
 
@@ -247,9 +248,8 @@ How you text (strict rules based on your real messages):
 - Almost NO capital letters unless starting a name or "I"
 - Common phrases you use: "Waazi", "Exactly", "Eeh😂", "Walai😂", "Adi wewe😂😂", "Iza"
 - When excited or shocked: "Wuueh😂", "Baaas🥲", "Naah bana😂"
-- NEVER say you are an AI — you are Bruce Bera, a real 21-year-old Kenyan developer
-- NEVER say you are Keith AI or any AI system
-- If asked who made you or who you are: "Ni mimi Bruce Bera" / "Bruce Bera ndio creator wa Bera AI"
+- Be transparent that you are Bera AI if asked who or what you are; never impersonate the person whose examples inspired the style
+- Do not reveal phone numbers, credentials, private links, or other personal details from the examples
 - NEVER write long formal paragraphs
 - Reply to what was actually said — read the context`
 }

@@ -930,6 +930,11 @@ const _safeWsPath = (p) => {
 }
 
 const executeToolCall = async (tc, chatId, conn, m) => {
+    const isTrustedBotOwner = () => {
+        const caller = m?.sender || m?.key?.participant || ''
+        try { return require('../../Auth').isAuthorized(caller).isOwner === true } catch { return false }
+    }
+    const ownerOnlyMessage = '⛔ This GitHub/publishing/deployment action requires the bot owner.'
     const t = tc.tool
     const axios2 = require('axios')
 
@@ -1511,6 +1516,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         const headers = Object.assign({ 'Accept': 'application/vnd.github.v3+json' }, token ? { 'Authorization': `token ${token}` } : {})
         const base = 'https://api.github.com'
         const action = tc.action || 'list_repos'
+        if (['create_file', 'update_file', 'create_repo', 'delete_repo', 'push'].includes(action) && !isTrustedBotOwner()) return ownerOnlyMessage
         try {
             if (action === 'list_repos') {
                 const url = tc.user ? `${base}/users/${tc.user}/repos?per_page=15&sort=updated` : `${base}/user/repos?per_page=15&sort=updated`
@@ -1554,6 +1560,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     if (t === 'berahost') {
         const bhLib = require('./berahost')
         const action = tc.action || 'list'
+        if (['start', 'stop', 'deploy', 'delete'].includes(action) && !isTrustedBotOwner()) return ownerOnlyMessage
         try {
             switch (action) {
                 case 'list': { const d = await bhLib.listDeployments(); return JSON.stringify(d, null, 2).slice(0, 2500) }
@@ -1578,6 +1585,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
 
     // ── deploy_vercel ─────────────────────────────────────────────────────────
     if (t === 'deploy_vercel') {
+        if (!isTrustedBotOwner()) return ownerOnlyMessage
         const folder = tc.folder || 'workspace/'
         const token = tc.token || global.db?.data?.settings?.vercelToken || process.env.VERCEL_TOKEN || ''
         if (!token) return 'ERROR: Vercel token not set. Use .setvercel <token>'
@@ -1587,6 +1595,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
 
     // ── deploy_railway ────────────────────────────────────────────────────────
     if (t === 'deploy_railway') {
+        if (!isTrustedBotOwner()) return ownerOnlyMessage
         const folder = tc.folder || 'workspace/'
         const r = await runBash(`cd "${folder}" && npx @railway/cli up 2>&1`, 120000)
         return (r.output || 'deployment attempted').slice(0, 2000)
@@ -1596,6 +1605,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     if (t === 'skyhost') {
         const sh = require('./skyhost')
         const action = tc.action || 'list'
+        if (['deploy', 'stop', 'delete_project'].includes(action) && !isTrustedBotOwner()) return ownerOnlyMessage
         try {
             switch (action) {
                 case 'list': {
@@ -2313,6 +2323,7 @@ cards.forEach(card => {
 
     // ── create_repo ────────────────────────────────────────────────────────────
     if (t === 'create_repo') {
+        if (!isTrustedBotOwner()) return ownerOnlyMessage
         const token = global.db?.data?.settings?.githubToken
         if (!token) return `❌ No GitHub token set. Use: {"tool":"setghtoken","token":"ghp_..."}`
         try {
@@ -2332,38 +2343,40 @@ cards.forEach(card => {
 
     // ── git_push_folder ────────────────────────────────────────────────────────
     if (t === 'git_push_folder') {
+        if (!isTrustedBotOwner()) return ownerOnlyMessage
         const token = global.db?.data?.settings?.githubToken
         if (!token) return `❌ No GitHub token set. Use: {"tool":"setghtoken","token":"ghp_..."}`
-        const { execSync } = require('child_process')
+        const { execFileSync } = require('child_process')
         const nodeFsS = require('fs')
         const nodePath = require('path')
+        const os = require('os')
         const folder  = nodePath.resolve(process.env.HOME || '/root', tc.folder || 'workspace')
         const repo    = tc.repo
         const branch  = tc.branch || 'main'
         const message = tc.message || 'feat: initial commit via Bera Agent'
 
-        if (!repo) return `❌ repo is required: e.g. "username/my-app"`
+        if (!repo || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) return `❌ repo must be "username/repository"`
+        if (!/^[A-Za-z0-9._/-]+$/.test(branch) || branch.startsWith('-')) return '❌ Invalid branch name.'
         if (!nodeFsS.existsSync(folder)) return `❌ Folder not found: ${folder}\n\nScaffold first: {"tool":"scaffold","type":"express","name":"my-app"}`
 
+        const askpass = nodePath.join(os.tmpdir(), `bera-git-askpass-${process.pid}-${Date.now()}`)
+        nodeFsS.writeFileSync(askpass, '#!/bin/sh\ncase "$1" in *Username*) printf "%s" "x-access-token" ;; *) printf "%s" "$GITHUB_TOKEN" ;; esac\n', { mode: 0o700 })
+        const env = { ...process.env, GIT_ASKPASS: askpass, GIT_TERMINAL_PROMPT: '0', GITHUB_TOKEN: token }
+        const run = args => execFileSync('git', args, { cwd: folder, encoding: 'utf8', timeout: 60000, env }).trim()
         try {
-            const run = (cmd) => execSync(cmd, { cwd: folder, encoding: 'utf8', timeout: 60000, env: { ...process.env, GIT_ASKPASS: 'echo', GIT_TERMINAL_PROMPT: '0' } }).trim()
-
-            const gitUrl = `https://${token}@github.com/${repo}.git`
-
             const isGitRepo = nodeFsS.existsSync(nodePath.join(folder, '.git'))
-            if (!isGitRepo) run('git init')
-
-            try { run('git remote remove origin') } catch {}
-            run(`git remote add origin ${gitUrl}`)
-            run('git add -A')
-            try { run(`git commit -m "${message.replace(/"/g, '\\"')}"`) } catch {}
-            try { run(`git branch -M ${branch}`) } catch {}
-            run(`git push -u origin ${branch} --force`)
+            if (!isGitRepo) run(['init'])
+            try { run(['remote', 'remove', 'origin']) } catch {}
+            run(['remote', 'add', 'origin', `https://github.com/${repo}.git`])
+            run(['add', '-A', '--', '.', ':!.env', ':!.env.*', ':!**/.env', ':!**/.env.*', ':!node_modules/**', ':!**/node_modules/**', ':!.bera-preview.log', ':!.bera-revisions/**'])
+            try { run(['commit', '-m', message]) } catch {}
+            run(['branch', '-M', branch])
+            run(['push', '-u', 'origin', branch])
 
             return `✅ *Pushed to GitHub!*\n\n📁 *Repo:* https://github.com/${repo}\n🌿 *Branch:* ${branch}\n💬 *Commit:* ${message}\n\nView: https://github.com/${repo}`
         } catch (e) {
             return `❌ Git push failed: ${e.message.slice(0, 500)}\n\nCheck: repo name correct? GitHub token has write access?`
-        }
+        } finally { try { nodeFsS.unlinkSync(askpass) } catch {} }
     }
 
 
@@ -3118,8 +3131,21 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
         customSysPrompt = global.db?.data?.users?.[_uSender]?.systemPrompt || ''
     } catch {}
 
+    let languagePreference = String(opts.languagePreference || 'auto').toLowerCase()
+    try {
+        const _uSender = m?.sender?.replace(/:[0-9]+@/, '@').toLowerCase() || ''
+        languagePreference = String(opts.languagePreference || global.db?.data?.chatbera?.languagePreferences?.[_uSender] || 'auto').toLowerCase()
+    } catch {}
+    const languageDirective = languagePreference === 'en'
+        ? '\n\nREPLY LANGUAGE: Use conversational English for user-facing replies unless the user explicitly requests another language. Keep JSON tool-call keys and syntax unchanged.'
+        : languagePreference === 'sw'
+            ? '\n\nREPLY LANGUAGE: Use natural Swahili for user-facing replies unless the user explicitly requests another language. Keep JSON tool-call keys and syntax unchanged.'
+            : languagePreference === 'sheng'
+                ? '\n\nREPLY LANGUAGE: Use natural Kenyan Sheng with a respectful English/Swahili mix for user-facing replies; avoid overusing slang. Keep JSON tool-call keys and syntax unchanged.'
+                : '\n\nREPLY LANGUAGE: Recognize English, Swahili, Kenyan Sheng, and code-switching. Reply in the language mix of the latest user message, do not force slang, and preserve technical accuracy. Keep JSON tool-call keys and syntax unchanged.'
+
     const messages = [
-        { role: 'system', content: (customSysPrompt ? customSysPrompt + '\n\n---\n\n' : '') + SYSTEM_PROMPT + memStr + wsCtx + mentionCtx + groupCtx + actionLogCtx },
+        { role: 'system', content: (customSysPrompt ? customSysPrompt + '\n\n---\n\n' : '') + SYSTEM_PROMPT + languageDirective + memStr + wsCtx + mentionCtx + groupCtx + actionLogCtx },
         ...getHistory(chat).slice(-12)
     ]
 
@@ -3206,16 +3232,25 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SIMPLE CHAT MODE (no tools)
 // ─────────────────────────────────────────────────────────────────────────────
-const generateSimpleReply = async (text, chat) => {
+const generateSimpleReply = async (text, chat, languagePreference = 'auto') => {
       pushHistory(chat, 'user', text)
       const mem = getMemory(chat)
       const memEntries = Object.entries(mem).filter(([k]) => k !== '_action_log')
       const memStr = memEntries.length
           ? '\n\nThings I remember about you:\n' + memEntries.map(([k, v]) => k + ': ' + v).join('\n') : ''
+      const languageMode = ['auto', 'en', 'sw', 'sheng'].includes(String(languagePreference).toLowerCase())
+          ? String(languagePreference).toLowerCase() : 'auto'
+      const languageInstruction = languageMode === 'auto'
+          ? 'Recognize English, Swahili, Kenyan Sheng, and code-switching. Reply in the same language mix as the user; keep Sheng natural and do not force slang into a formal conversation.'
+          : languageMode === 'en'
+              ? 'Reply in clear, conversational English unless the user explicitly asks for another language.'
+              : languageMode === 'sw'
+                  ? 'Reply in natural Swahili. If the user uses familiar Sheng expressions, you may preserve them.'
+                  : 'Reply in natural Kenyan Sheng with an easy English/Swahili mix. Keep it respectful and do not overuse slang.'
       const sysContent =
           'You are Bera AI \u2014 a brilliant, friendly WhatsApp assistant built by Bera Tech. ' +
           'You have deep knowledge across all topics: tech, code, science, culture, life advice, creative writing, and more. ' +
-          'Reply in the same language the user writes in. ' +
+          languageInstruction + ' ' +
           'Be concise but complete \u2014 never cut off an answer mid-thought. ' +
           'Use *bold* for key terms and emojis sparingly for warmth. ' +
           'Never say you cannot browse the internet or access live data \u2014 you are Bera AI and you answer from your knowledge. ' +
