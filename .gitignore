@@ -1,6 +1,8 @@
 node_modules/
 session/
 Database/db.json
+Database/agent_os.json
+Database/project_lifecycle.json
 .env
 *.log
 .phone

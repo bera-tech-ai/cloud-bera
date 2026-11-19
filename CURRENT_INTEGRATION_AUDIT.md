@@ -416,3 +416,9 @@ The following are not currently complete or universally verified:
 The repository currently has a broad WhatsApp command and agent surface, a centralized Xcasper chat/media client for the verified routes, a project lifecycle engine, GitHub integration, BeraHost integration, persistent database records, trigger routing, and centralized permission checks.
 
 The active executable provider stack is now bounded to verified Xcasper routes plus direct first-party/API integrations already present in the bot. Unsupported legacy-backed features fail explicitly rather than calling hidden fallback providers.
+
+## 13. Agent OS orchestration layer
+
+The bot now includes `Library/actions/agent-os.js`, a persistent project operating layer exposed through the `agent_os` agent action. It creates or resumes isolated per-user project sessions, asks Xcasper for a structured plan, applies bounded file changes, installs dependencies, runs build and test scripts, requests bounded AI repairs after failures, creates local Git checkpoints, manages preview processes, and captures preview screenshots.
+
+Agent OS state is persisted separately from source code and is ignored by Git. `BERA_AGENT_STATE_FILE` can point it at a durable hosting volume, while `BERA_PREVIEW_BASE_URL` can expose a preview URL to the screenshot service. The implementation intentionally keeps production deployment and remote GitHub pushes as explicit follow-up actions subject to the existing permission layer.

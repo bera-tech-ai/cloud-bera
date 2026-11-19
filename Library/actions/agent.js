@@ -569,6 +569,7 @@ DOCS & TESTING:
 
 SUPERTOOLS 2 — REPLIT-LEVEL AUTONOMOUS:
 - project_lifecycle  → args: { name, type, description, projectDir, sourceDir, private, deploy, environment, approveProduction, autoDeploy, envVars }  ← workspace → build/test → GitHub → BeraHost → screenshot
+- agent_os           → args: { action("run"|"create"|"plan"|"status"|"preview_start"|"preview_stop"|"screenshot"|"checkpoint"|"publish"), projectId, name, task, projectDir, preview, screenshot, allowShell, maxRepairs, deploy, environment, approveProduction, envVars }  ← persistent project session → AI plan → safe file changes → install/build/test → automatic repair → checkpoint → preview → optional GitHub/BeraHost publish
 - smart_extract      → args: { url, hint("product"|"job"|"article"|"price") }  ← intelligently extract structured data from any page
 - data_pipeline      → args: { sources: ["url1","url2"], hint, format("json"|"csv"|"tsv"), outputPath }  ← scrape → clean → store → export
 - scaffold_project   → args: { name, stack("express-rest"|"flask"|"next"|"react"), description, port }  ← generate full multi-file project + install + start
@@ -586,6 +587,9 @@ SUPERTOOLS 2 — REPLIT-LEVEL AUTONOMOUS:
 
 AUTONOMOUS TASK PATTERNS:
 - "build me a X app" → scaffold_project + self_test_fix + project_memory(save)
+- "build me a X app and show me the preview" → agent_os(action:"run", preview:true, screenshot:true)
+- "continue/fix my project" → agent_os(action:"run", projectId:"...", task:"...")
+- "show my project preview" → agent_os(action:"preview_start"|"screenshot", projectId:"...")
 - "scrape X and save to CSV" → data_pipeline with format:"csv"
 - "extract all products/prices from URL" → smart_extract with hint:"product"
 - "convert this JSON to CSV" → format_convert
@@ -756,6 +760,15 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                     lifecycle: r.record,
                     desc
                 }
+            }
+            case 'agent_os': {
+                const agentOs = require('./agent-os')
+                const r = await agentOs.run({ ...args, userId })
+                const record = r.record || {}
+                const summary = r.success
+                    ? `✅ Agent OS ${args.action || 'run'} complete\nProject: ${record.name || args.name || 'project'}\nStage: ${record.stage || 'unknown'}\nStatus: ${record.status || 'unknown'}${record.preview?.url ? `\nPreview: ${record.preview.url}` : ''}`
+                    : `❌ Agent OS failed: ${r.error || r.validation?.checks?.filter(c => !c.success).map(c => c.output).join('\n') || 'unknown error'}`
+                return { success: r.success, output: summary, agent: r, desc }
             }
             case 'workspace_save': {
                 try {
