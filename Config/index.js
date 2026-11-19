@@ -18,7 +18,6 @@ const config = {
     pterodactylAppKey: process.env.PTERODACTYL_APP_KEY || '',
     berahostApiKey: process.env.BERAHOST_API_KEY || '',
     berahostApiUrl: process.env.BERAHOST_API_URL || '',
-    botImage: process.env.BOT_IMAGE || './assets/bera-ai-profile.png',
     version: '2.0.0',
 
     // ── Developer Identity (Bruce Bera) ─────────────────────────────────────

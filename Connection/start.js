@@ -220,36 +220,6 @@ const showPairingCode = (code) => {
     console.log(chalk.green('  └──────────────────────────────────────────┘\n'))
 }
 
-const applyBotImage = async (conn, botJid) => {
-    const src = config.botImage?.trim()
-    if (!src) return
-
-    let buffer
-    try {
-        if (src.startsWith('http')) {
-            const res = await axios.get(src, { responseType: 'arraybuffer', timeout: 15000 })
-            buffer = Buffer.from(res.data)
-        } else if (fs.existsSync(src)) {
-            buffer = fs.readFileSync(src)
-        } else {
-            console.log(chalk.yellow(`[BOT] BOT_IMAGE not found: ${src}`))
-            return
-        }
-        // @whiskeysockets/baileys uses updateProfilePicture(jid, { url }) or (jid, buffer)
-        if (typeof conn.updateProfilePicture === 'function') {
-            await conn.updateProfilePicture(botJid, buffer)
-        } else if (typeof conn.pp === 'function') {
-            await conn.pp(botJid, buffer)
-        } else {
-            console.log(chalk.yellow('[BOT] updateProfilePicture not available in this build'))
-            return
-        }
-        console.log(chalk.green('[BOT] ✅ Bot profile picture updated'))
-    } catch (e) {
-        console.log(chalk.yellow(`[BOT] Profile picture update failed: ${e.message}`))
-    }
-}
-
 const resolveBioVars = (template) => {
     const now = new Date()
     const pad = (n) => String(n).padStart(2, '0')
@@ -449,7 +419,6 @@ const startBot = async () => {
             beraLog.divider()
             startReminderLoop(conn)
             startBioLoop(conn)
-            applyBotImage(conn, botJid).catch(() => {})
             // ── Set global._conn so monitor alerts can reach WhatsApp ────────
             global._conn = conn
 
