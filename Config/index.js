@@ -8,6 +8,8 @@ const config = {
     nickApiKey: process.env.NICK_API_KEY || '',
     sessionDir: './session',
     dbPath: './Database/db.json',
+    databaseUrl: process.env.DATABASE_URL || '',
+    databaseProvider: process.env.DATABASE_URL ? 'postgresql' : 'json',
     maxHistory: 20,
     readReceipts: true,
     publicMode: false,

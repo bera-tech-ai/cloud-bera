@@ -28,7 +28,7 @@ const handle = async (m, ctx) => {
         const raw = db?.settings?.bhApiUrl || process.env.BH_API_URL || 'https://bera-host-clone--brucebera555.replit.app'
         return raw.replace(/\/api\/?$/, '').replace(/\/$/, '') + '/api'
     }
-    const getKey = () => db?.settings?.bhApiKey || process.env.BH_API_KEY || 'bh_67c17f42498edb4e507237b2b11ae840e4cb5c87ba439d6b'
+    const getKey = () => db?.settings?.bhApiKey || process.env.BH_API_KEY || ''
     const bh = async (method, path, body) => {
         const key = getKey()
         if (!key) throw new Error('No BeraHost API key set. Use: ' + prefix + 'bh setkey <key>')

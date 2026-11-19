@@ -422,3 +422,11 @@ The active executable provider stack is now bounded to verified Xcasper routes p
 The bot now includes `Library/actions/agent-os.js`, a persistent project operating layer exposed through the `agent_os` agent action. It creates or resumes isolated per-user project sessions, asks Xcasper for a structured plan, applies bounded file changes, installs dependencies, runs build and test scripts, requests bounded AI repairs after failures, creates local Git checkpoints, manages preview processes, and captures preview screenshots.
 
 Agent OS state is persisted separately from source code and is ignored by Git. `BERA_AGENT_STATE_FILE` can point it at a durable hosting volume, while `BERA_PREVIEW_BASE_URL` can expose a preview URL to the screenshot service. The implementation intentionally keeps production deployment and remote GitHub pushes as explicit follow-up actions subject to the existing permission layer.
+
+## 14. PostgreSQL persistence
+
+The database layer now supports PostgreSQL through `DATABASE_URL` with a local JSON cache and fallback. It creates the `bera_state` table automatically, loads durable application state on startup, and queues state writes to PostgreSQL while retaining the existing synchronous database API used by the bot.
+
+The persisted state includes users, groups, settings, projects, Agent OS records, deployments, audit events, reminders, and session metadata. Baileys authentication keys remain on the private `BERA_SESSION_DIR` volume; only non-secret WhatsApp session metadata is stored in the database.
+
+No database connection string or password is included in the repository. Credentials must be configured as deployment secrets.

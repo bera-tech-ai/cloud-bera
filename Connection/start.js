@@ -18,7 +18,7 @@ const chalk = require('chalk')
 const readline = require('readline')
 
 const axios = require('axios')
-const { initDb } = require('../Database')
+const { initDb, saveSession } = require('../Database')
 const { handleMessage, handleGroupEvents, handleAntiDelete, handleAntiEdit } = require('../Handler')
 const config = require('../Config')
 
@@ -327,6 +327,7 @@ const startReminderLoop = (conn) => {
 const startBot = async () => {
     if (!_bannerShown) { printBanner(); _bannerShown = true }
     await initDb()
+    saveSession('whatsapp', { status: 'starting', sessionDir: SESSION_DIR, databaseProvider: global.db.provider, startedAt: Date.now() })
 
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
     const { version } = await fetchLatestBaileysVersion()
@@ -408,6 +409,7 @@ const startBot = async () => {
         if (connection === 'close') {
             const err        = lastDisconnect?.error
             const statusCode = err instanceof Boom ? err.output.statusCode : null
+            saveSession('whatsapp', { status: 'disconnected', statusCode, sessionDir: SESSION_DIR, disconnectedAt: Date.now() })
 
             if (statusCode === DisconnectReason.loggedOut) {
                 beraLog.err('Logged out — clearing session and restarting in 3s...')
@@ -440,6 +442,7 @@ const startBot = async () => {
             if (fs.existsSync(PHONE_FILE)) fs.unlinkSync(PHONE_FILE)
             if (!global.botReadyAt) global.botReadyAt = Math.floor(Date.now() / 1000)
             const botJid = jidNormalizedUser(conn.user?.id || '')
+            saveSession('whatsapp', { status: 'connected', jid: botJid, sessionDir: SESSION_DIR, connectedAt: Date.now() })
             beraLog.divider()
             beraLog.sys(`✅  Online as ${conn.user?.name || 'Bera AI'}  (${botJid})`)
             beraLog.sys(`🤖  ${config.botName} is armed and ready`)
