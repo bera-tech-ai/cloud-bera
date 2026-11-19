@@ -62,7 +62,7 @@ const get = id => load().projects[id] || null
 const event = (record, type, data = {}) => { record.events = (record.events || []).slice(-99); record.events.push({ type, at: now(), ...data }); update(record, {}) }
 
 const makePlan = async (record, task) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only: {"summary":"...","steps":[{"action":"write_file|mkdir|install|build|test|shell","path":"relative path","content":"...","command":"...","reason":"..."}]}\nRules: paths must be relative to the project; do not use secrets; do not delete files; prefer write_file for source changes; use shell only for package-manager commands.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only: {"summary":"...","steps":[{"action":"write_file|mkdir|install|build|test|shell","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}\nRules: paths must be relative to the project; do not use secrets; do not delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for package-manager commands.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], { timeout: 45000, maxChars: 24000 })
     if (!result.success) return { success: false, error: result.error }
     const match = result.text.match(/\{[\s\S]*\}/)
@@ -70,7 +70,13 @@ const makePlan = async (record, task) => {
     try {
         const plan = JSON.parse(match[0])
         if (!Array.isArray(plan.steps) || !plan.steps.length) return { success: false, error: 'Planner returned no steps.' }
-        plan.steps = plan.steps.slice(0, 40).map(step => ({ ...step, action: String(step.action || '').toLowerCase() }))
+        plan.steps = plan.steps.slice(0, 40).map(step => ({
+            ...step,
+            action: String(step.action || '').toLowerCase(),
+            content: step.contentBase64 && !step.content
+                ? Buffer.from(String(step.contentBase64).replace(/\s+/g, ''), 'base64').toString('utf8')
+                : step.content
+        }))
         record.plan = plan
         record.task = task || record.task
         update(record, { stage: 'planned', status: 'planned' })
@@ -113,14 +119,20 @@ const executeStep = async (record, step, options = {}) => {
 const repair = async (record, failure, options) => {
     if ((record.repairs || []).length >= (options.maxRepairs ?? 2)) return { success: false, error: 'Repair limit reached.' }
     const context = `Project task: ${record.task}\nFailure output:\n${String(failure).slice(-10000)}\nProject inspection:\n${JSON.stringify(inspect(record.dir))}`
-    const result = await xcasper.chat([{ role: 'system', content: 'You are a senior repair planner. Return JSON only: {"steps":[{"action":"write_file|build|test|install","path":"relative path","content":"..."}],"reason":"..."}. Never delete files or use secrets.' }, { role: 'user', content: context }], { timeout: 45000, maxChars: 20000 })
+    const result = await xcasper.chat([{ role: 'system', content: 'You are a senior repair planner. Return JSON only: {"steps":[{"action":"write_file|build|test|install","path":"relative path","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. For source files always use contentBase64, never a literal content field. Never delete files or use secrets.' }, { role: 'user', content: context }], { timeout: 45000, maxChars: 20000 })
     if (!result.success) return { success: false, error: result.error }
     const match = result.text.match(/\{[\s\S]*\}/)
     if (!match) return { success: false, error: 'Repair planner returned invalid JSON.' }
     let plan
     try { plan = JSON.parse(match[0]) } catch (e) { return { success: false, error: e.message } }
     record.repairs.push({ at: now(), reason: plan.reason || 'automatic repair', failure: String(failure).slice(-3000) })
-    for (const step of (plan.steps || []).slice(0, 10)) {
+    for (const rawStep of (plan.steps || []).slice(0, 10)) {
+        const step = {
+            ...rawStep,
+            content: rawStep.contentBase64 && !rawStep.content
+                ? Buffer.from(String(rawStep.contentBase64).replace(/\s+/g, ''), 'base64').toString('utf8')
+                : rawStep.content
+        }
         const result = await executeStep(record, step, options)
         if (!result.success) return { success: false, error: result.output }
     }
