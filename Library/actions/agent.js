@@ -540,7 +540,8 @@ GIFTED API TOOLS (NEW):
 - gt_wattpad      → args: { query }   ← Search Wattpad stories
 
 APP BUILDER:
-- build_webapp   → args: { name, type("express"|"express-api"|"react"|"vue"|"nextjs"|"flask"|"fastapi"|"static"|"discord"|"telegram"), description, port }
+- For a complete website, app, or multi-file software project, use agent_os(action:"run") so the project is saved, validated, and resumable. Set name to a short project slug and task to the full user request.
+- build_webapp   → args: { name, type("express"|"express-api"|"react"|"vue"|"nextjs"|"flask"|"fastapi"|"static"|"discord"|"telegram"), description, port } (small scaffold requests only)
 - generate_api   → args: { description, port }
 - auto_fix       → args: { projectDir }
 
@@ -586,8 +587,9 @@ SUPERTOOLS 2 — REPLIT-LEVEL AUTONOMOUS:
 - deep_scrape        → args: { url, question }  ← fetch page, strip HTML, AI analyzes and answers your question about it
 
 AUTONOMOUS TASK PATTERNS:
-- "build me a X app" → scaffold_project + self_test_fix + project_memory(save)
+- "build me a X app" → one agent_os(action:"run", preview:true, screenshot:true) step with name and task
 - "build me a X app and show me the preview" → agent_os(action:"run", preview:true, screenshot:true)
+- "build and deploy/publish this app" → agent_os(action:"run", publish:true); deploy only when the user explicitly requests it
 - "continue/fix my project" → agent_os(action:"run", projectId:"...", task:"...")
 - "show my project preview" → agent_os(action:"preview_start"|"screenshot", projectId:"...")
 - "scrape X and save to CSV" → data_pipeline with format:"csv"
@@ -605,7 +607,8 @@ RULES:
 - "create file" or "write file" → use file_write (local) or puter_write (cloud)
 - "run bash/shell command" → use shell
 - "save to workspace" → workspace_save (GitHub)
-- "build me a <type> app" → build_webapp
+- For full app/website builds, prefer agent_os; don't use shell to generate or publish the whole project
+- Only publish to GitHub/BeraHost when the user asks to publish/deploy
 - "create an API for X" → generate_api
 - For any programming language task → run_code with the right lang
 - For SQLite → sqlite_manage
@@ -651,6 +654,21 @@ const planTask = async (task) => {
         return { success: false, error: 'Invalid plan — no steps or command recognized' }
     } catch (e) {
         return { success: false, error: 'Plan failed: ' + e.message }
+    }
+}
+
+const sendProjectScreenshot = async (screenshot, url, conn, chat, m) => {
+    if (!Buffer.isBuffer(screenshot?.buffer) || !conn?.sendMessage || !chat) return false
+    try {
+        await conn.sendMessage(chat, {
+            image: screenshot.buffer,
+            mimetype: screenshot.mimetype || 'image/png',
+            caption: `✅ Published site screenshot${url ? `\n${url}` : ''}`
+        }, m ? { quoted: m } : {})
+        return true
+    } catch (e) {
+        console.error('[agent] Could not send project screenshot:', e.message)
+        return false
     }
 }
 
@@ -754,9 +772,17 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
             case 'project_lifecycle': {
                 const lifecycle = require('./project-lifecycle')
                 const r = await lifecycle.lifecycle({ ...args, userId })
+                const screenshotSent = await sendProjectScreenshot(r.screenshot, r.record?.deployment?.url, conn, chat, m)
+                const screenshotNote = screenshotSent
+                    ? '\n📸 Deployment screenshot sent in WhatsApp.'
+                    : r.record?.preview?.captured === true
+                        ? '\n📸 Screenshot captured but could not be delivered to WhatsApp.'
+                        : r.record?.preview?.captured === false
+                            ? '\n⚠️ Deployment screenshot could not be captured.'
+                            : ''
                 return {
                     success: r.success,
-                    output: r.report || r.error || 'Project lifecycle completed.',
+                    output: `${r.report || r.error || 'Project lifecycle completed.'}${screenshotNote}`,
                     lifecycle: r.record,
                     desc
                 }
@@ -765,8 +791,17 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 const agentOs = require('./agent-os')
                 const r = await agentOs.run({ ...args, userId })
                 const record = r.record || {}
+                const deployedUrl = record.deployment?.url || record.preview?.url
+                const screenshotSent = await sendProjectScreenshot(r.screenshot, deployedUrl, conn, chat, m)
+                const screenshotNote = screenshotSent
+                    ? '\n📸 Screenshot sent in WhatsApp.'
+                    : Buffer.isBuffer(r.screenshot?.buffer)
+                        ? '\n📸 Screenshot captured but could not be delivered to WhatsApp.'
+                        : r.screenshot?.success === false || record.preview?.captured === false
+                            ? '\n⚠️ Deployment screenshot could not be captured.'
+                            : ''
                 const summary = r.success
-                    ? `✅ Agent OS ${args.action || 'run'} complete\nProject: ${record.name || args.name || 'project'}\nStage: ${record.stage || 'unknown'}\nStatus: ${record.status || 'unknown'}${record.preview?.url ? `\nPreview: ${record.preview.url}` : ''}`
+                    ? `✅ Agent OS ${args.action || 'run'} complete\nProject: ${record.name || args.name || 'project'}\nStage: ${record.stage || 'unknown'}\nStatus: ${record.status || 'unknown'}${record.github?.url ? `\nGitHub: ${record.github.url}` : ''}${deployedUrl ? `\nLive/preview: ${deployedUrl}` : ''}${screenshotNote}`
                     : `❌ Agent OS failed: ${r.error || r.validation?.checks?.filter(c => !c.success).map(c => c.output).join('\n') || 'unknown error'}`
                 return { success: r.success, output: summary, agent: r, desc }
             }

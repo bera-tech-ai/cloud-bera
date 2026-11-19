@@ -975,6 +975,21 @@ const handleMessage = async (conn, rawMsg) => {
                 const _tagReply = m.isGroup && global.db?.data?.settings?.[`tagreply_${chat}`] !== false && global.db?.data?.settings?.tagreply !== false
                 const reply  = (t) => conn.sendMessage(chat, { text: String(t), ...(_tagReply && m.sender ? { mentions: [m.sender] } : {}) }, { quoted: m })
                 const fmt    = (lines) => lines.split('\n').slice(0, 30).map(l => '┃ ' + l.slice(0, 90)).join('\n')
+                if (['set_bio', 'set_bot_name', 'set_bot_ppic'].includes(intent)) {
+                    return reply('🔒 Agent-driven changes to the bot WhatsApp profile are disabled.')
+                }
+                const projectBuild = require('../Library/actions/project-build')
+                if (projectBuild.looksLikeProjectBuild(_taskText)) {
+                    await react('🏗️')
+                    try {
+                        const result = await projectBuild.runProjectBuild(_taskText, { userId: sender, conn, chat, message: m })
+                        await react(result.success ? '✅' : '⚠️')
+                    } catch (e) {
+                        await react('❌')
+                        await reply(`❌ Project build failed: ${e.message}`)
+                    }
+                    return
+                }
 
                 // ── Compute isAdmin HERE — critical for all group commands ────────
                 // isAdmin from the command path (line 3547+) is NOT in scope here.
@@ -4305,15 +4320,7 @@ const handleMessage = async (conn, rawMsg) => {
         const handler = commandMap.get(command)
         if (!handler) return
 
-        if (!authorized) {
-            return conn.sendMessage(chat, {
-                text:
-                    `╭══〘 *🔒 PRIVATE MODE* 〙═⊷\n` +
-                    `┃❍ Bera AI is currently in private mode.\n` +
-                    `┃❍ Only the owner can use the bot right now.\n` +
-                    `╰══════════════════⊷`
-            }, { quoted: m })
-        }
+        if (!authorized) return
 
         const user = getUser(sender)
         checkLimit(user, isOwner)

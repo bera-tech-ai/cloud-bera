@@ -123,6 +123,7 @@ const lifecycle = async (options = {}) => {
         status: 'started', stage: 'workspace', createdAt: now(), updatedAt: now(),
         github: null, deployment: null, checks: [], errors: []
     }, {})
+    let deploymentScreenshot = null
     try {
         fs.mkdirSync(dir, { recursive: true })
         if (options.sourceDir && path.resolve(options.sourceDir) !== dir) copyDirectory(path.resolve(options.sourceDir), dir)
@@ -192,13 +193,17 @@ const lifecycle = async (options = {}) => {
                 }
                 if (record.deployment.url) {
                     const shot = await takeScreenshot(record.deployment.url)
-                    record.preview = shot.success ? { captured: true, mimetype: shot.mimetype, buffer: shot.buffer } : { captured: false, error: shot.error }
-                    if (record.preview.buffer) delete record.preview.buffer
+                    record.preview = shot.success
+                        ? { captured: true, mimetype: shot.mimetype || 'image/png', size: shot.buffer?.length || 0 }
+                        : { captured: false, error: shot.error }
+                    if (shot.success && Buffer.isBuffer(shot.buffer)) {
+                        deploymentScreenshot = { buffer: shot.buffer, mimetype: shot.mimetype || 'image/png' }
+                    }
                 }
                 updateRecord(record, { status: record.deployment.status || 'deployed', stage: 'complete' })
             }
         } else updateRecord(record, { status: 'ready_for_deployment', stage: 'complete' })
-        return { success: true, record, report: formatReport(record) }
+        return { success: true, record, report: formatReport(record), screenshot: deploymentScreenshot }
     } catch (e) {
         record.errors.push({ stage: record.stage, error: e.message, at: now() })
         updateRecord(record, { status: 'failed', stage: 'failed' })

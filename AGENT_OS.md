@@ -33,6 +33,8 @@ The agent tool can call:
 - `agent_os(action:"checkpoint", projectId, message)`
 - `agent_os(action:"publish", projectId, deploy, environment, approveProduction, envVars)`
 
+In WhatsApp, natural-language app and website build requests are routed through Agent OS before GitHub or hosting actions. The bot builds and validates the project in the user's workspace first; only then does it create/push a private GitHub repository if requested, and deploy only if the user explicitly asks. It sends brief progress updates and reports the workspace, checks, GitHub/live URLs, and any available screenshot. Screenshot image bytes are returned transiently and are not stored in the project state file. In private mode, unauthorized command and chat messages are silently ignored. Agent-driven requests cannot change the bot's WhatsApp display name, status, or profile picture.
+
 ## Safety boundaries
 
 - Project paths must remain inside the user workspace.
@@ -47,4 +49,4 @@ The agent tool can call:
 
 ## Current scope
 
-This is the first complete orchestration layer. It provides the project loop, while GitHub repository creation and BeraHost deployment are available through the explicit `publish` action. Production deployment still requires the existing approval and permission policies.
+This is the first complete orchestration layer. It provides the project loop, while GitHub repository creation and BeraHost deployment are available through the explicit `publish` action. Production deployment still requires the existing approval and permission policies. Screenshot delivery requires a valid deployed URL and a working screenshot provider and WhatsApp connection.

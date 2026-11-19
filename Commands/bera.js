@@ -120,6 +120,21 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
 
     const intent = detectIntent(text)
 
+    if (!imageBuffer) {
+        const projectBuild = require('../Library/actions/project-build')
+        if (projectBuild.looksLikeProjectBuild(text)) {
+            await react(conn, m, '🏗️')
+            try {
+                const result = await projectBuild.runProjectBuild(text, { userId: sender, conn, chat: m.chat, message: m })
+                await react(conn, m, result.success ? '✅' : '⚠️')
+                return result
+            } catch (e) {
+                await react(conn, m, '❌')
+                return reply(`❌ Project build failed: ${e.message}`)
+            }
+        }
+    }
+
     if (imageBuffer) {
         const wantsCreate = /\b(create|generate|make|draw|similar|like this|same style)\b/i.test(text)
         if (wantsCreate) {
@@ -2117,6 +2132,18 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, isOwner }
             `• ${prefix}agent what's 2-6\n\n` +
             `Files go to *./workspace/*. I work step by step until done.`
         )
+        const projectBuild = require('../Library/actions/project-build')
+        if (projectBuild.looksLikeProjectBuild(text)) {
+            try {
+                await react(conn, m, '🏗️')
+                const result = await projectBuild.runProjectBuild(text, { userId: sender, conn, chat: m.chat, message: m })
+                await react(conn, m, result.success ? '✅' : '⚠️')
+                return result
+            } catch (e) {
+                await react(conn, m, '❌')
+                return reply(`❌ Project build failed: ${e.message}`)
+            }
+        }
         try {
             await conn.sendMessage(m.chat, { react: { text: '🤔', key: m.key } })
             const { generateAdvancedReply } = require('../Library/actions/beraai')
