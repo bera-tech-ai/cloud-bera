@@ -4459,8 +4459,11 @@ const handleMessage = async (conn, rawMsg) => {
 
 // ── runCommand: lets the AI agent invoke ANY built-in command by name ─────────
 // Constructs the same ctx object the normal command path uses, then calls the handler.
-const _RUNCMD_BLOCKLIST = new Set(['bera', 'agent', 'beratrigger', 'beratrig', 'beralisten', 'chatbot', 'eval', 'exec', 'shell', '$', '>'])
-const runCommand = async (commandName, argsString, m, conn) => {
+const _RUNCMD_BLOCKLIST = new Set([
+    'bera', 'agent', 'beratrigger', 'beratrig', 'beralisten', 'chatbot',
+    'apidocs', 'scaffold', 'create', 'init', 'replit', 'rpl'
+])
+const runCommand = async (commandName, argsString, m, conn, options = {}) => {
     try {
         const cmdLower = String(commandName || '').toLowerCase().trim().replace(/^[./!]+/, '')
         if (_RUNCMD_BLOCKLIST.has(cmdLower)) {
@@ -4484,8 +4487,9 @@ const runCommand = async (commandName, argsString, m, conn) => {
         const isAdmin = access.isAdmin
         const prefix = getPrefix()
         const captured = []
-        const reply = async (txt) => {
+        const reply = async (txt, extra = {}) => {
             captured.push(String(txt))
+            if (options.captureOnly) return
             try { await sendGroupReply(conn, m, String(txt)) } catch {}
         }
         const ctx = {
@@ -4520,4 +4524,68 @@ const runCommand = async (commandName, argsString, m, conn) => {
     }
 }
 
-module.exports = { handleMessage, handleGroupEvents, handleReaction, handleAntiDelete, handleAntiEdit, runCommand }
+const findCommands = (query = '', limit = 20) => {
+    const needle = String(query || '').trim().toLowerCase().slice(0, 160)
+    const maxResults = Math.max(1, Math.min(30, Number(limit) || 20))
+    const records = []
+    const imported = new Map()
+    for (const [key, handler] of commandMap.entries()) {
+        const meta = handler?.importedMeta
+        if (meta) {
+            if (!imported.has(meta)) imported.set(meta, { meta, routes: new Set() })
+            imported.get(meta).routes.add(key)
+            continue
+        }
+        const description = [handler?.desc, handler?.description, handler?.help]
+            .find(value => typeof value === 'string' && value.trim()) || ''
+        records.push({ name: key, aliases: [], route: `.${key}`,
+            description: String(description).replace(/\s+/g, ' ').slice(0, 240),
+            usage: typeof handler?.usage === 'string' ? handler.usage.slice(0, 160) : '',
+            category: typeof handler?.category === 'string' ? handler.category.slice(0, 80) : '', source: 'Bera' })
+    }
+    try {
+        const bridge = require('../Library/lib/xadon-bridge')
+        for (const meta of bridge.allCommands || []) {
+            if (!imported.has(meta)) imported.set(meta, { meta, routes: new Set() })
+        }
+    } catch {}
+
+    for (const { meta, routes } of imported.values()) {
+        const registeredRoutes = [...routes].sort()
+        const aliases = Array.isArray(meta.alias) ? meta.alias.map(String) : []
+        const name = String(meta.name || registeredRoutes[0] || '')
+        const commandRoute = registeredRoutes.length ? `.${registeredRoutes[0]}` : `.beraextra ${name}`
+        const usage = typeof meta.usage === 'string'
+            ? meta.usage.replace(/^\S+/, commandRoute).slice(0, 160)
+            : commandRoute
+        records.push({ name,
+            aliases: aliases.filter(alias => !/xadon/i.test(alias)).slice(0, 20),
+            route: registeredRoutes.length ? registeredRoutes.map(name => `.${name}`).join(', ') : `.beraextra ${String(meta.name || '')}`,
+            description: String(meta.desc || meta.description || '').replace(/\s+/g, ' ').slice(0, 240),
+            usage,
+            category: typeof meta.category === 'string' ? meta.category.slice(0, 80) : '', source: 'Bera extra' })
+    }
+    const tokens = needle.split(/\s+/).filter(Boolean)
+    const score = record => {
+        if (!tokens.length) return 1
+        const names = [record.name, ...(record.aliases || []), record.route].join(' ').toLowerCase()
+        const details = [record.description, record.usage, record.category].join(' ').toLowerCase()
+        let total = 0
+        for (const token of tokens) {
+            const variants = [token]
+            if (token.length > 4 && token.endsWith('s')) variants.push(token.slice(0, -1))
+            if (token === 'movies' || token === 'films') variants.push('movie', 'film')
+            if (token === 'songs') variants.push('song', 'music')
+            if (variants.some(value => names.includes(value))) total += 10
+            else if (variants.some(value => details.includes(value))) total += 3
+        }
+        return total
+    }
+    const matches = records.map(record => ({ record, score: score(record) }))
+        .filter(item => item.score > 0)
+        .sort((a, b) => b.score - a.score || a.record.name.localeCompare(b.record.name))
+    return { success: true, query: needle, totalMatches: matches.length,
+        commands: matches.slice(0, maxResults).map(({ record }) => record) }
+}
+
+module.exports = { handleMessage, handleGroupEvents, handleReaction, handleAntiDelete, runCommand, findCommands }

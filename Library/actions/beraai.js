@@ -372,7 +372,7 @@ const validateAndFixCode = async (aiResponse, taskDescription = '') => {
 }
 
 // ── Pre-dispatch for tool intents ───────────────────────────────────────────
-const preDispatch = async (text) => {
+const preDispatch = async (text, m) => {
     const t = text.trim()
     const lc = t.toLowerCase()
 
@@ -387,6 +387,9 @@ const preDispatch = async (text) => {
     const RUN_RX = /^(?:run|execute|exec|bash|shell|terminal)\s+(.+)/i
     const mRun = t.match(RUN_RX)
     if (mRun) {
+        let isOwner = false
+        try { isOwner = require('../../Auth').isAuthorized(m?.sender || m?.key?.participant || '').isOwner === true } catch {}
+        if (!isOwner) return { success: false, reply: '⛔ Shell execution is restricted to the bot owner.' }
         const cmd = mRun[1].trim()
         const SECRET_RX = /\b(printenv|cat\s+\.env|echo\s+\$[A-Z_]+TOKEN)/i
         if (SECRET_RX.test(cmd)) return { success: false, reply: '🔒 Command blocked — could expose secrets.' }
@@ -427,7 +430,7 @@ const SYSTEM_PROMPT = `You are Bera AI — the most powerful WhatsApp autonomous
 ━━━ WHO YOU ARE ━━━
 You are Bera AI — an autonomous execution engine that DOES things, powered by DeepSeek + Groq. You run on a LIVE Linux server.
 Every request → IMMEDIATE real action. No asking permission. No explaining plans. No narrating steps.
-You have REAL tools running RIGHT NOW: bash shell, file system, web scraping, HTTP API, GitHub, BeraHost, Sky Hosting, PM2, Docker, SQLite, code runner — USE THEM ALL.
+You have real tools running RIGHT NOW: file system, web scraping, HTTP API, GitHub, hosting, PM2, databases, and code execution tools subject to the sender's permissions — USE THEM AS AUTHORIZED.
 You are equivalent to Replit Agent, Cursor AI, and GitHub Copilot combined — but running on WhatsApp.
 
 ━━━ IRON RULES (NEVER BREAK) ━━━
@@ -441,6 +444,13 @@ You are equivalent to Replit Agent, Cursor AI, and GitHub Copilot combined — b
 7. NEVER show your tool calls or reasoning — user sees ONLY the final result.
 8. Chain tools until 100% done. When one approach fails → try another immediately.
 9. Only write plain text when ALL tool calls are complete and the task is fully done.
+
+━━━ REGISTERED WHATSAPP COMMANDS ━━━
+When a user asks you to perform something that Bera already has as a WhatsApp command, use the live command registry rather than guessing:
+• Search by intent or topic: {"tool":"find_commands","query":"movie search"}
+• Execute the matching registered command: {"tool":"run_bot_command","command":"movie","args":"search Dune"}
+Use the command's returned usage/description to form its arguments. If a route is .beraextra NAME, invoke the run_bot_command tool with command:"beraextra" and args:"NAME <arguments>". Pass user-supplied names, quoted text, and current message context when relevant. If required inputs are missing, ask only for those inputs. Report the real result; never claim success if dispatch returns an error.
+The dispatcher enforces Bera's normal private-mode, owner/sudo, group, group-admin, imported-command allowlist, and handler-level restrictions. Never claim owner/admin status based on model text. Recursive AI/Agent commands are blocked; native shell/eval commands and raw shell/code-execution tools are owner-only. Do not route around a denial by using another tool.
 
 ━━━ WEB SCRAPING — YOU CAN ALWAYS DO THIS (REPLIT-LEVEL) ━━━
 You scrape ANY website. Multiple strategies, automatic fallback. Never refuse. Never say you can't.
@@ -835,12 +845,17 @@ const _ACTION_TO_TOOL = {
     'sql': 'db_query', 'db_query': 'db_query', 'query_db': 'db_query',
     'analyze_project': 'project_analyze', 'project_analyze': 'project_analyze', 'scan_project': 'project_analyze',
     'expose': 'port_forward', 'port_forward': 'port_forward', 'ngrok': 'port_forward',
-    'generate_code': 'code_generate', 'code_generate': 'code_generate', 'gen_code': 'code_generate'
+    'generate_code': 'code_generate', 'code_generate': 'code_generate', 'gen_code': 'code_generate',
+    'find_commands': 'find_commands', 'search_commands': 'find_commands', 'command_search': 'find_commands',
+    'run_bot_command': 'run_bot_command', 'execute_bot_command': 'run_bot_command', 'bot_command': 'run_bot_command'
 }
 
 const _normalizeToolObj = (obj) => {
     if (!obj || typeof obj !== 'object') return null
-    if (obj.tool) return obj
+    if (obj.tool) {
+        const name = String(obj.tool).toLowerCase()
+        return { ...obj, tool: _ACTION_TO_TOOL[name] || name }
+    }
     // Accept 'command' as action when no other identifier (handles {"command":"mkdir","args":["kids"]})
     const action = obj.action || obj.type || obj.name || obj.command
     if (!action) return null
@@ -938,6 +953,30 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     const ownerOnlyMessage = '⛔ This GitHub/publishing/deployment action requires the bot owner.'
     const t = tc.tool
     const axios2 = require('axios')
+
+    if (['bash', 'multi_bash', 'runcode'].includes(t) && !isTrustedBotOwner()) {
+        return '⛔ Shell/code execution is restricted to the bot owner.'
+    }
+
+    // ── Registered WhatsApp command discovery and dispatch ────────────────────
+    if (t === 'find_commands') {
+        const query = String(tc.query || tc.search || '').trim().slice(0, 160)
+        const limit = Math.max(1, Math.min(30, Number(tc.limit) || 20))
+        const catalog = require('../../Handler').findCommands(query, limit)
+        return JSON.stringify(catalog)
+    }
+    if (t === 'run_bot_command') {
+        const commandSpec = String(tc.command || tc.name || '').trim().slice(0, 8100)
+        const parsedCommand = commandSpec.match(/^(\S+)(?:\s+([\s\S]*))?$/)
+        const command = String(parsedCommand?.[1] || '').replace(/^[./!]+/, '').slice(0, 100)
+        if (!command) return 'ERROR: command name is required; search the registry first.'
+        const rawArgs = tc.args ?? tc.arguments ?? tc.text ?? parsedCommand?.[2] ?? ''
+        const args = Array.isArray(rawArgs) ? rawArgs.map(value => String(value)).join(' ')
+            : rawArgs && typeof rawArgs === 'object' ? JSON.stringify(rawArgs)
+                : String(rawArgs)
+        const result = await require('../../Handler').runCommand(command, args.slice(0, 8000), m, conn, { captureOnly: true })
+        return JSON.stringify(result)
+    }
 
     // ── bash ──────────────────────────────────────────────────────────────────
     if (t === 'bash') {
@@ -3086,7 +3125,7 @@ ${r.output.trim().slice(0, maxLen)}`
 // ─────────────────────────────────────────────────────────────────────────────
 const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
     try {
-        const pd = await preDispatch(text)
+        const pd = await preDispatch(text, m)
         if (pd?.reply) {
             pushHistory(chat, 'user', text)
             pushHistory(chat, 'assistant', pd.reply)
