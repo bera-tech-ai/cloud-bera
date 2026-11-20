@@ -13,6 +13,9 @@ const { takeScreenshot } = require('./browser')
 const execFileAsync = promisify(execFile)
 const STATE_FILE = process.env.BERA_AGENT_STATE_FILE || path.join(__dirname, '../../Database/agent_os.json')
 const now = () => new Date().toISOString()
+const notifyProgress = async (options, progress) => {
+    try { await options?.onProgress?.(progress) } catch {}
+}
 const safe = value => String(value || 'project').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'project'
 const load = () => { try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) } catch { return { projects: {}, events: [] } } }
 const save = state => { fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true }); fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2)) }
@@ -61,10 +64,16 @@ const create = async options => {
 const get = id => load().projects[id] || null
 const event = (record, type, data = {}) => { record.events = (record.events || []).slice(-99); record.events.push({ type, at: now(), ...data }); update(record, {}) }
 
-const makePlan = async (record, task) => {
+const makePlan = async (record, task, options = {}) => {
     const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only: {"summary":"...","steps":[{"action":"write_file|mkdir|install|build|test|shell","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}\nRules: paths must be relative to the project; do not use secrets; do not delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for package-manager commands.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
-    const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], { timeout: 45000, maxChars: 24000 })
+    await notifyProgress(options, { phase: 'planning' })
+    const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
+        timeout: 45000,
+        maxChars: 24000,
+        onProviderProgress: progress => notifyProgress(options, { phase: 'ai_provider', ...progress })
+    })
     if (!result.success) return { success: false, error: result.error }
+    await notifyProgress(options, { phase: 'planning_complete', provider: result.provider })
     const match = result.text.match(/\{[\s\S]*\}/)
     if (!match) return { success: false, error: 'Planner returned invalid JSON.' }
     try {
@@ -119,7 +128,11 @@ const executeStep = async (record, step, options = {}) => {
 const repair = async (record, failure, options) => {
     if ((record.repairs || []).length >= (options.maxRepairs ?? 2)) return { success: false, error: 'Repair limit reached.' }
     const context = `Project task: ${record.task}\nFailure output:\n${String(failure).slice(-10000)}\nProject inspection:\n${JSON.stringify(inspect(record.dir))}`
-    const result = await xcasper.chat([{ role: 'system', content: 'You are a senior repair planner. Return JSON only: {"steps":[{"action":"write_file|build|test|install","path":"relative path","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. For source files always use contentBase64, never a literal content field. Never delete files or use secrets.' }, { role: 'user', content: context }], { timeout: 45000, maxChars: 20000 })
+    const result = await xcasper.chat([{ role: 'system', content: 'You are a senior repair planner. Return JSON only: {"steps":[{"action":"write_file|build|test|install","path":"relative path","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. For source files always use contentBase64, never a literal content field. Never delete files or use secrets.' }, { role: 'user', content: context }], {
+        timeout: 45000,
+        maxChars: 20000,
+        onProviderProgress: progress => notifyProgress(options, { phase: 'repair_provider', ...progress })
+    })
     if (!result.success) return { success: false, error: result.error }
     const match = result.text.match(/\{[\s\S]*\}/)
     if (!match) return { success: false, error: 'Repair planner returned invalid JSON.' }
@@ -203,7 +216,7 @@ const run = async options => {
     const action = requestedAction
     if (action === 'status') return { success: true, record }
     if (action === 'create') return { success: true, record }
-    if (action === 'plan') return makePlan(record, options.task || record.task)
+    if (action === 'plan') return makePlan(record, options.task || record.task, options)
     if (action === 'preview_start') return previewStart(record, options)
     if (action === 'preview_stop') return previewStop(record)
     if (action === 'screenshot') return screenshot(record)
@@ -235,8 +248,11 @@ const run = async options => {
     if (action !== 'run') return { success: false, error: `Unknown agent_os action: ${action}` }
 
     update(record, { status: 'planning', stage: 'planning' })
-    const planned = record.plan && !options.replan ? { success: true, plan: record.plan } : await makePlan(record, options.task || record.task)
-    if (!planned.success) return planned
+    const planned = record.plan && !options.replan ? { success: true, plan: record.plan } : await makePlan(record, options.task || record.task, options)
+    if (!planned.success) {
+        update(record, { status: 'failed', stage: 'planning_failed' })
+        return { ...planned, record }
+    }
     for (const [index, step] of planned.plan.steps.entries()) {
         update(record, { stage: `execute:${index + 1}/${planned.plan.steps.length}`, status: 'executing' })
         if (typeof options.onProgress === 'function') {
@@ -245,21 +261,28 @@ const run = async options => {
         const result = await executeStep(record, step, options)
         event(record, 'step', { index, action: step.action, success: result.success, output: String(result.output || '').slice(-1200) })
         if (!result.success) {
+            await notifyProgress(options, { phase: 'repair', attempt: (record.repairs || []).length + 1, total: options.maxRepairs ?? 2 })
             const fixed = await repair(record, result.output || result.error, options)
             if (!fixed.success) { update(record, { status: 'failed', stage: 'failed' }); return { success: false, error: result.output || result.error, record } }
         }
     }
+    await notifyProgress(options, { phase: 'validation' })
     let validation = await validate(record, options)
     for (let attempt = 0; !validation.success && attempt < (options.maxRepairs ?? 2); attempt++) {
+        await notifyProgress(options, { phase: 'repair', attempt: attempt + 1, total: options.maxRepairs ?? 2 })
         const fixed = await repair(record, validation.checks.filter(c => !c.success).map(c => c.output).join('\n'), options)
         if (!fixed.success) break
         validation = await validate(record, options)
     }
     if (!validation.success) { update(record, { status: 'failed', stage: 'validation_failed' }); return { success: false, validation, record } }
+    await notifyProgress(options, { phase: 'checkpoint' })
     const saved = await checkpoint(record, options.message || `feat: ${record.name} generated by Bera AI`)
     if (!saved.success) return { success: false, error: saved.output, record }
     let previewScreenshot = null
-    if (options.preview) await previewStart(record, options)
+    if (options.preview) {
+        await notifyProgress(options, { phase: 'preview' })
+        await previewStart(record, options)
+    }
     if (options.screenshot && record.preview?.status === 'running') {
         const shot = await screenshot(record)
         if (shot.success && Buffer.isBuffer(shot.buffer)) previewScreenshot = shot

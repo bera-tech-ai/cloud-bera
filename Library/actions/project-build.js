@@ -36,9 +36,31 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         publish: false,
         deploy: false,
         private: true,
-        onProgress: async ({ index, total, action }) => {
-            if (index === 0 || index === total - 1 || (index + 1) % 4 === 0) {
-                await replyProgress(`⚙️ Building locally: step ${index + 1}/${total} (${action}). Repository creation and deployment remain after build validation.`)
+        onProgress: async progress => {
+            if (progress.phase === 'planning') {
+                await replyProgress('🧠 Planning the project locally and contacting the AI planner...')
+            } else if (progress.phase === 'ai_provider' && progress.stage === 'trying') {
+                const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
+                await replyProgress(`🔌 AI planner: trying ${label} (${progress.index + 1}/${progress.total})...`)
+            } else if (progress.phase === 'planning_complete') {
+                const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
+                await replyProgress(`✅ AI planner responded via ${label}; preparing the project files.`)
+            } else if (progress.phase === 'execute') {
+                const { index, total, action } = progress
+                if (index === 0 || index === total - 1 || (index + 1) % 4 === 0) {
+                    await replyProgress(`⚙️ Building locally: step ${index + 1}/${total} (${String(action || 'work').replace(/_/g, ' ')}). Repository creation and deployment remain after build validation.`)
+                }
+            } else if (progress.phase === 'validation') {
+                await replyProgress('🧪 Project files are generated; installing dependencies and running available build/tests now.')
+            } else if (progress.phase === 'repair') {
+                await replyProgress(`🛠️ A local check failed; attempting repair ${progress.attempt}/${progress.total} before retrying validation.`)
+            } else if (progress.phase === 'repair_provider' && progress.stage === 'trying') {
+                const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
+                await replyProgress(`🔌 Repair planner: trying ${label} (${progress.index + 1}/${progress.total})...`)
+            } else if (progress.phase === 'checkpoint') {
+                await replyProgress('💾 Checks passed; saving the local build checkpoint. No GitHub push or deployment is happening yet.')
+            } else if (progress.phase === 'preview') {
+                await replyProgress('🖥️ Starting a local preview and attempting a screenshot...')
             }
         }
     })

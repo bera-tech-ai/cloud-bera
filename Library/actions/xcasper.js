@@ -4,19 +4,40 @@ const axios = require('axios')
 
 const BASE_URL = (process.env.XCASPER_BASE_URL || 'https://apiz.xcasper.space').replace(/\/$/, '')
 const DEFAULT_TIMEOUT = Number(process.env.XCASPER_TIMEOUT_MS || 25000)
+const DEFAULT_PROVIDER_TIMEOUT = Number(process.env.XCASPER_PROVIDER_TIMEOUT_MS || 15000)
 
 const endpoint = (path) => `${BASE_URL}${path}`
 
-const textFrom = (data) => {
+const textFrom = (data, depth = 0) => {
+    if (depth > 6 || data == null) return ''
     if (typeof data === 'string') return data.trim()
-    if (!data || typeof data !== 'object') return ''
-    const candidates = [
-        data.result, data.response, data.answer, data.reply, data.text,
-        data.message, data.content, data.data?.result, data.data?.response,
-        data.data?.answer, data.data?.reply, data.data?.text,
-        data.data?.content
-    ]
-    return candidates.find(v => typeof v === 'string' && v.trim().length > 1)?.trim() || ''
+    if (Array.isArray(data)) {
+        for (const value of data) {
+            const text = textFrom(value, depth + 1)
+            if (text) return text
+        }
+        return ''
+    }
+    if (typeof data !== 'object') return ''
+
+    // Xcasper endpoints have used nested replies (e.g. data.reply.reply) and
+    // character-indexed objects (e.g. data: {"0":"O","1":"K"}).
+    const fields = ['reply', 'result', 'response', 'answer', 'text', 'content', 'message', 'output', 'generated_text', 'completion', 'choices', 'candidates', 'data']
+    for (const key of fields) {
+        if (!(key in data)) continue
+        const value = data[key]
+        if (typeof value === 'string' && value.trim().length > 1) return value.trim()
+        if (value && typeof value === 'object') {
+            const text = textFrom(value, depth + 1)
+            if (text) return text
+        }
+    }
+
+    const keys = Object.keys(data)
+    if (keys.length && keys.every(key => /^\d+$/.test(key) && typeof data[key] === 'string')) {
+        return keys.sort((a, b) => Number(a) - Number(b)).map(key => data[key]).join('').trim()
+    }
+    return ''
 }
 
 const requestGet = async (path, params, timeout = DEFAULT_TIMEOUT) => {
@@ -48,23 +69,32 @@ const formatMessages = (messages, maxChars = 14000) => {
 
 const chat = async (messages, opts = {}) => {
     const prompt = formatMessages(messages, opts.maxChars || 14000)
-    const timeout = opts.timeout || DEFAULT_TIMEOUT
+    const timeout = Math.min(opts.timeout || DEFAULT_TIMEOUT, opts.providerTimeout || DEFAULT_PROVIDER_TIMEOUT)
     const providers = [
-        { name: 'publicai', path: '/api/ai/publicai-chat', params: { message: prompt } },
         { name: 'deepseek', path: '/api/ai/deepseek', params: { query: prompt, model: 'v4-flash' } },
-        { name: 'claude', path: '/api/ai/claude', params: { query: prompt } },
+        { name: 'publicai', path: '/api/ai/publicai-chat', params: { message: prompt } },
         { name: 'gemini', path: '/api/ai/gemini', params: { query: prompt } },
         { name: 'keithai', path: '/api/ai/keithai', params: { prompt } }
     ]
     const errors = []
-    for (const provider of providers) {
+    for (const [index, provider] of providers.entries()) {
+        const notify = async progress => {
+            try { await opts.onProviderProgress?.({ provider: provider.name, index, total: providers.length, ...progress }) } catch {}
+        }
+        await notify({ stage: 'trying' })
         try {
             const data = await requestGet(provider.path, provider.params, timeout)
             const text = textFrom(data)
-            if (text) return { success: true, text, model: `xcasper/${provider.name}`, provider: provider.name }
+            if (text) {
+                await notify({ stage: 'success' })
+                return { success: true, text, model: `xcasper/${provider.name}`, provider: provider.name }
+            }
             errors.push(`${provider.name}: empty response`)
+            await notify({ stage: 'failed', error: 'empty response' })
         } catch (e) {
-            errors.push(`${provider.name}: ${e.response?.status || e.code || e.message}`)
+            const error = e.response?.status || e.code || e.message
+            errors.push(`${provider.name}: ${error}`)
+            await notify({ stage: 'failed', error: String(error) })
         }
     }
     return { success: false, error: `Xcasper AI unavailable (${errors.join('; ')})` }
