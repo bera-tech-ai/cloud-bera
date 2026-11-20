@@ -129,10 +129,11 @@ test('unapproved Agent OS publishing is blocked before lifecycle calls', async (
 
 test('initial-build approval is bound to a clean source head and calls publish only after owner approval', async () => {
     const baseHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: sourceDir, encoding: 'utf8' }).trim()
-    const approval = await support.createBuildApproval(record, { userId: owner, chat: group, requestedPublish: true })
+    const approval = await support.createBuildApproval(record, { userId: owner, chat: group, requestedPublish: true, repositoryVisibility: 'public' })
     assert.ok(approval)
     assert.equal(approval.baseHead, baseHead)
     assert.equal(approval.state, 'preview_ready')
+    assert.equal(approval.repositoryVisibility, 'public')
     const originalRun = agentOs.run
     const publishCalls = []
     agentOs.run = async options => {
@@ -148,6 +149,7 @@ test('initial-build approval is bound to a clean source head and calls publish o
         assert.equal(publishCalls[0].action, 'publish')
         assert.equal(publishCalls[0].ownerAuthorized, true)
         assert.equal(publishCalls[0].deploy, false)
+        assert.equal(publishCalls[0].private, false)
         let staleReply = ''
         await support.handleCommand(`approve ${approval.id} github`, {
             m: { chat: group, sender: owner }, sender: owner, chat: group, isOwner: false,
@@ -164,6 +166,7 @@ test('numbered replies resolve only for the exact pending prompt and preserve ow
     const approval = await support.createBuildApproval(record, {
         userId: owner, chat: group, requestedPublish: true, requestedDeploy: true
     })
+    assert.equal(approval.repositoryVisibility, 'private')
     const prompt = `Bera project approval request\nCase ID: ${approval.id}\nProject: test-project\nAction: GitHub publication and deployment`
 
     assert.equal(support.resolveApprovalReply({ text: '1', quotedText: prompt, quotedId: 'prompt-1', chat: group }), null,

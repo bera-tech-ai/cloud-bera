@@ -3,7 +3,7 @@
 const { test, afterEach } = require('node:test')
 const assert = require('node:assert/strict')
 const github = require('../Library/actions/github')
-const { getOrCreateRepository } = require('../Library/actions/project-lifecycle')
+const { getOrCreateRepository, extractDeploymentUrl } = require('../Library/actions/project-lifecycle')
 
 const originalGetRepo = github.getRepo
 const originalCreateRepo = github.createRepo
@@ -23,6 +23,14 @@ test('normalizes GitHub descriptions to 350 Unicode code points', () => {
     const longEmoji = github.normalizeRepositoryDescription('🧋'.repeat(400))
     assert.equal(Array.from(longEmoji).length, 350)
     assert.ok(longEmoji.endsWith('🧋'))
+})
+
+test('extracts deployment URLs from direct, aliased, and nested BeraHost response fields', () => {
+    assert.equal(extractDeploymentUrl({ url: 'https://site.example' }), 'https://site.example')
+    assert.equal(extractDeploymentUrl({ live_url: 'https://live.example' }), 'https://live.example')
+    assert.equal(extractDeploymentUrl({ data: { deployment: { publicUrl: 'https://public.example' } } }), 'https://public.example')
+    assert.equal(extractDeploymentUrl({ domain: 'site.example' }), 'https://site.example')
+    assert.equal(extractDeploymentUrl({ status: 'running' }), null)
 })
 
 afterEach(() => {

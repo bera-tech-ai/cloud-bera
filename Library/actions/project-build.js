@@ -13,6 +13,16 @@ const projectName = text => {
     return `${(hint || 'bera').toLowerCase()}-app`
 }
 
+const repositoryVisibilityFromRequest = text => {
+    const value = String(text || '').toLowerCase()
+    const visibility = value.match(/\b(public|private)\s+(?:github\s+)?(?:repo|repository)\b|\b(?:github\s+)?(?:repo|repository)\s+(?:be\s+)?(public|private)\b/)
+    const explicitChoice = value.match(/\b(?:make|set|keep)\s+(?:it|the\s+(?:github\s+)?(?:repo|repository))\s+(public|private)\b/)
+    if (!visibility && !explicitChoice) return 'private'
+    const requested = visibility?.[1] || visibility?.[2] || explicitChoice?.[1]
+    if (requested === 'public' && /\b(?:don't|do not|dont|never)\b[\s\S]{0,40}\bpublic\b/.test(value)) return 'private'
+    return requested
+}
+
 const validationFailureDetails = (result = {}, record = {}) => {
     const checks = Array.isArray(result.validation?.checks) ? result.validation.checks : Array.isArray(record.checks) ? record.checks : []
     return checks.filter(check => !check.success).map(check => {
@@ -38,6 +48,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     }
     const deployRequested = /\b(deploy|publish|launch\s+(?:it|the\s+app|the\s+site))\b/i.test(text)
     const repoRequested = deployRequested || /\b(github|repository|repo|push\s+(?:the\s+)?(?:code|project))\b/i.test(text)
+    const repositoryVisibility = repositoryVisibilityFromRequest(text)
     await replyProgress('🏗️ I’ll build and validate the project locally first. Any GitHub push or deployment will wait for a separate owner approval tied to this exact build.')
     const result = await agentOs.run({
         action: 'run',
@@ -48,7 +59,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         screenshot: true,
         publish: false,
         deploy: false,
-        private: true,
+        private: repositoryVisibility !== 'public',
         skipUnapprovedShell: true,
         onProgress: async progress => {
             if (progress.phase === 'planning') {
@@ -110,7 +121,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
             const support = require('./project-support')
             await support.registerProject(record, { userId, chat })
             if (result.success && buildValidated && repoRequested) {
-                approvalCase = await support.createBuildApproval(record, { userId, chat, requestedPublish: repoRequested, requestedDeploy: deployRequested })
+                approvalCase = await support.createBuildApproval(record, { userId, chat, requestedPublish: repoRequested, requestedDeploy: deployRequested, repositoryVisibility })
             }
         } catch (error) {
             await replyProgress(`⚠️ Project memory/approval metadata could not be saved: ${error.message}`)
@@ -138,7 +149,9 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
                 `Project: ${record.name || record.id}`,
                 `Action: ${mode}`,
                 'The project was validated locally. No repository push or deployment happens unless an authorized project owner approves.',
-                'Repository visibility stays private by default. Bera will not make the source public automatically; BeraHost must already have authorized access to clone a private repository.',
+                repositoryVisibility === 'public'
+                    ? 'The requested repository visibility is public. Confirm that source code is safe to expose before approving.'
+                    : 'Repository visibility stays private by default. Bera will not make the source public automatically; BeraHost must already have authorized access to clone a private repository.',
                 'Reply directly to this message with 1 to approve or 2 to decline.'
             ].join('\n')
             const sent = await conn.sendMessage(chat, { text: prompt }, message ? { quoted: message } : {})
@@ -162,4 +175,4 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     return result
 }
 
-module.exports = { looksLikeProjectBuild, runProjectBuild, validationFailureDetails }
+module.exports = { looksLikeProjectBuild, runProjectBuild, validationFailureDetails, repositoryVisibilityFromRequest }

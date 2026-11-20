@@ -2,7 +2,15 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { validationFailureDetails } = require('../Library/actions/project-build')
+const { validationFailureDetails, repositoryVisibilityFromRequest } = require('../Library/actions/project-build')
+
+test('project-build honors explicit public/private repository visibility and defaults to private', () => {
+    assert.equal(repositoryVisibilityFromRequest('Create a public GitHub repo called demo'), 'public')
+    assert.equal(repositoryVisibilityFromRequest('Create a repo and make it public'), 'public')
+    assert.equal(repositoryVisibilityFromRequest('Create a private repository called demo'), 'private')
+    assert.equal(repositoryVisibilityFromRequest('Create a GitHub repo called demo'), 'private')
+    assert.equal(repositoryVisibilityFromRequest('Do not make the repo public'), 'private')
+})
 
 test('project-build failure formatter includes failed validation details', () => {
     const details = validationFailureDetails({

@@ -165,7 +165,7 @@ const createCase = async ({ project, sender, chat, description, evidence }) => {
     return entry
 }
 
-const createBuildApproval = async (record, { userId, chat, requestedPublish = false, requestedDeploy = false } = {}) => {
+const createBuildApproval = async (record, { userId, chat, requestedPublish = false, requestedDeploy = false, repositoryVisibility = 'private' } = {}) => {
     if (!requestedPublish && !requestedDeploy) return null
     const project = await registerProject(record, { userId, chat })
     const sourceDir = path.resolve(record.dir)
@@ -181,6 +181,7 @@ const createBuildApproval = async (record, { userId, chat, requestedPublish = fa
         previewProjectId: record.id, previewDir: record.dir, previewUrl: previewLocalOnly ? null : returnedUrl, previewLocalOnly,
         previewChecks: (record.checks || []).map(c => ({ name: c.name, success: Boolean(c.success), output: cleanText(c.output).slice(-1500) })),
         requestedPublish: Boolean(requestedPublish || requestedDeploy), requestedDeploy: Boolean(requestedDeploy),
+        repositoryVisibility: repositoryVisibility === 'public' ? 'public' : 'private',
         createdAt: Date.now(), updatedAt: Date.now()
     }
     state.cases[id] = entry
@@ -288,7 +289,7 @@ const previewCase = async (entry, project, ctx) => {
 }
 
 const publishApprovedCase = async (entry, project, source, publishMode) => {
-    const deployed = await agentOs.run({ action: 'publish', projectId: project.id, userId: source.userId, private: true, deploy: publishMode === 'deploy', approveProduction: true, ownerAuthorized: true })
+    const deployed = await agentOs.run({ action: 'publish', projectId: project.id, userId: source.userId, private: entry.repositoryVisibility !== 'public', deploy: publishMode === 'deploy', approveProduction: true, ownerAuthorized: true })
     entry.publishResult = { success: Boolean(deployed.success), error: deployed.error || null, url: deployed.record?.deployment?.url || null }
     entry.state = deployed.success ? 'published' : 'approved_publish_failed'
     entry.updatedAt = Date.now()
@@ -460,7 +461,16 @@ const handleCommand = async (raw, ctx = {}) => {
             const suffixes = parts.slice(1).map(x => x.toLowerCase())
             const publishMode = suffixes.includes('deploy') ? 'deploy' : suffixes.some(x => ['github', 'repo', 'publish'].includes(x)) ? 'github' : entry.sameProject ? 'approve' : null
             const result = await applyCase(entry, project, ctx, publishMode)
-            return reply(`Revision ${result.state === 'published' ? 'approved and deployed' : 'approved and applied locally'} for *${project.name}*.${result.publishResult?.url ? `\nLive: ${result.publishResult.url}` : ''}`)
+            const actionLabel = result.state === 'published'
+                ? publishMode === 'deploy' ? 'approved, pushed, and deployed' : 'approved and pushed to GitHub'
+                : 'approved and applied locally'
+            const liveUrl = result.publishResult?.url
+            const urlNote = liveUrl
+                ? `\nLive: ${liveUrl}`
+                : result.state === 'published' && publishMode === 'deploy'
+                    ? '\nBeraHost reported deployment success but returned no recognized live URL.'
+                    : ''
+            return reply(`Revision ${actionLabel} for *${project.name}*.${urlNote}`)
         }
         if (action === 'undo') {
             const result = await undoCase(entry, project, ctx)

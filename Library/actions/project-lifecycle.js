@@ -45,6 +45,26 @@ const run = async (command, cwd, timeout = 120000) => {
     }
 }
 
+const extractDeploymentUrl = (value, depth = 0) => {
+    if (depth > 4 || value == null) return null
+    if (typeof value === 'string') {
+        const candidate = value.trim()
+        if (/^https?:\/\//i.test(candidate)) return candidate
+        if (/^(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:\/[^\s]*)?$/i.test(candidate)) return `https://${candidate}`
+        return null
+    }
+    if (typeof value !== 'object' || Array.isArray(value)) return null
+    for (const key of ['url', 'liveUrl', 'live_url', 'deploymentUrl', 'deployment_url', 'publicUrl', 'public_url', 'websiteUrl', 'website_url', 'domain']) {
+        const url = extractDeploymentUrl(value[key], depth + 1)
+        if (url) return url
+    }
+    for (const key of ['deployment', 'data', 'result', 'site', 'web']) {
+        const url = extractDeploymentUrl(value[key], depth + 1)
+        if (url) return url
+    }
+    return null
+}
+
 const copyDirectory = (source, target) => {
     fs.mkdirSync(target, { recursive: true })
     for (const item of fs.readdirSync(source)) {
@@ -234,12 +254,12 @@ const lifecycle = async (options = {}) => {
                         : ''
                     throw new Error(`BeraHost deployment failed: ${deploymentError}${privateCloneHint}`)
                 }
-                record.deployment = { id: deployment.id, status: deployment.status, url: deployment.url || null, production }
+                record.deployment = { id: deployment.id, status: deployment.status, url: extractDeploymentUrl(deployment.data) || extractDeploymentUrl(deployment) || null, production }
                 updateRecord(record, { stage: 'deployment_poll' })
                 const final = await berahost.pollWebDeployment(deployment.id, options.deployTimeout || 120000, 5000)
                 if (final.success) {
                     const d = final.deployment || {}
-                    record.deployment = { ...record.deployment, ...d, id: deployment.id, url: d.url || d.liveUrl || record.deployment.url }
+                    record.deployment = { ...record.deployment, ...d, id: deployment.id, url: extractDeploymentUrl(d) || record.deployment.url }
                 }
                 if (record.deployment.url) {
                     const shot = await takeScreenshot(record.deployment.url)
@@ -274,4 +294,4 @@ const formatReport = record => [
 const getProject = id => loadState().projects[id] || null
 const listProjects = userId => Object.values(loadState().projects).filter(p => !userId || p.userId === userId)
 
-module.exports = { lifecycle, getProject, listProjects, inspectProject, formatReport, getOrCreateRepository }
+module.exports = { lifecycle, getProject, listProjects, inspectProject, formatReport, getOrCreateRepository, extractDeploymentUrl }
