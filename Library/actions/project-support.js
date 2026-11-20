@@ -246,7 +246,7 @@ const previewCase = async (entry, project, ctx) => {
         ...revisions
     ].filter(Boolean).join('\n\n').slice(0, 11500)
     const previewPort = 20000 + (Number.parseInt(entry.id.slice(0, 4), 16) % 10000)
-    const result = await agentOs.run({ action: 'run', projectId: entry.previewProjectId, userId: source.userId, task, replan: true, preview: true, screenshot: true, port: previewPort, publish: false, deploy: false, allowShell: false, maxRepairs: 1 })
+    const result = await agentOs.run({ action: 'run', projectId: entry.previewProjectId, userId: source.userId, task, replan: true, preview: true, screenshot: true, port: previewPort, publish: false, deploy: false, allowShell: false, skipUnapprovedShell: true, maxRepairs: 1 })
     entry.previewStatus = result.success ? 'ready' : 'failed'
     const returnedUrl = result.record?.preview?.url || null
     entry.previewLocalOnly = Boolean(returnedUrl && /^https?:\/\/(?:127\.0\.0\.1|localhost|0\.0\.0\.0)(?::\d+)?(?:\/|$)/i.test(returnedUrl))

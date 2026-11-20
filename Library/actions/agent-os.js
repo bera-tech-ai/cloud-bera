@@ -209,6 +209,10 @@ const executeStep = async (record, step, options = {}) => {
             return { success: true, output: `${packageCommand.script} script not defined; skipped.` }
         }
         if (packageCommand) return runSafePackageManagerCommand(packageCommand, root, options.timeout || 120000)
+        if (!options.allowShell && options.skipUnapprovedShell) {
+            await notifyProgress(options, { phase: 'shell_skipped' })
+            return { success: true, output: 'Skipped an unapproved planner shell command; managed install/build/test checks will run during validation.' }
+        }
         if (!options.allowShell) return { success: false, output: 'Shell execution requires allowShell=true; only allowlisted package-manager commands run without it.' }
         if (!/^(npm|pnpm|yarn|node|python3|pytest|git)\b/.test(raw)) return { success: false, output: 'Only approved development commands are allowed.' }
         return command(raw, root, options.timeout || 120000)

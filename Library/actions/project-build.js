@@ -36,6 +36,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         publish: false,
         deploy: false,
         private: true,
+        skipUnapprovedShell: true,
         onProgress: async progress => {
             if (progress.phase === 'planning') {
                 await replyProgress('🧠 Planning the project locally and contacting the AI planner...')
@@ -52,6 +53,8 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
                 }
             } else if (progress.phase === 'validation') {
                 await replyProgress('🧪 Project files are generated; installing dependencies and running available build/tests now.')
+            } else if (progress.phase === 'shell_skipped') {
+                await replyProgress('⏭️ Skipped a planner shell command that is not allowlisted. General shell access stays disabled; Bera will rely on managed install/build/test validation.')
             } else if (progress.phase === 'repair') {
                 await replyProgress(`🛠️ A local check failed; attempting repair ${progress.attempt}/${progress.total} before retrying validation.`)
             } else if (progress.phase === 'repair_provider' && progress.stage === 'trying') {

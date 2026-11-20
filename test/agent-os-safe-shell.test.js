@@ -42,6 +42,16 @@ test('Agent OS safely runs allowlisted package-manager plan steps without genera
             assert.match(rejected.output, /requires allowShell=true/)
             assert.equal(fs.readFileSync(argsFile, 'utf8'), 'install\\n--save-dev\\nvite\\n', 'rejected chained command must not run')
 
+            const progress = []
+            const skipped = await agentOs.executeStep(record, { action: 'shell', command: 'npm install vite && git push' }, {
+                skipUnapprovedShell: true,
+                onProgress: event => progress.push(event)
+            })
+            assert.equal(skipped.success, true)
+            assert.match(skipped.output, /Skipped an unapproved planner shell command/)
+            assert.equal(progress[0].phase, 'shell_skipped')
+            assert.equal(fs.readFileSync(argsFile, 'utf8'), 'install\\n--save-dev\\nvite\\n', 'skipped chained command must not run')
+
             assert.equal(agentOs.safePackageManagerCommand('git push'), null)
             assert.equal(agentOs.safePackageManagerCommand('node -e process.exit(1)'), null)
             console.log('AGENT_OS_SAFE_SHELL_OK')
