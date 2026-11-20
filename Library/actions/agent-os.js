@@ -98,7 +98,7 @@ const parsePlannerJson = raw => {
 }
 
 const makePlan = async (record, task, options = {}) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only: {"summary":"...","steps":[{"action":"write_file|mkdir|install|build|test|shell","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}\nRules: paths must be relative to the project; do not use secrets; do not delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for package-manager commands.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only: {"summary":"...","steps":[{"action":"write_file|mkdir|install|build|test|shell","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}\nRules: paths must be relative to the project; do not use secrets; do not delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for package-manager commands. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
         timeout: 45000,
@@ -126,7 +126,7 @@ const makePlan = async (record, task, options = {}) => {
     await notifyProgress(options, { phase: 'planning_complete', provider: result.provider })
     plan.steps = plan.steps.slice(0, 40).map(step => ({
         ...step,
-        action: String(step.action || '').toLowerCase(),
+        action: String(step.action || '').trim().toLowerCase() === 'git init' ? 'git_init' : String(step.action || '').trim().toLowerCase(),
         content: step.contentBase64 && !step.content
             ? Buffer.from(String(step.contentBase64).replace(/\s+/g, ''), 'base64').toString('utf8')
             : step.content
@@ -166,6 +166,7 @@ const executeStep = async (record, step, options = {}) => {
         if (!/^(npm|pnpm|yarn|node|python3|pytest|git)\b/.test(raw)) return { success: false, output: 'Only approved development commands are allowed.' }
         return command(raw, root, options.timeout || 120000)
     }
+    if (action === 'git_init') return { success: true, output: 'Deferred git init to Bera’s local checkpoint after validation.' }
     return { success: false, output: `Unknown plan action: ${action}` }
 }
 
@@ -340,4 +341,4 @@ const run = async options => {
     return { success: true, record, validation, screenshot: previewScreenshot }
 }
 
-module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, validate, checkpoint, previewStart, previewStop, screenshot }
+module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, validate, checkpoint, previewStart, previewStop, screenshot }
