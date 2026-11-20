@@ -18,6 +18,7 @@ const resolveAgentPath = (argPath, userId) => {
 
 // ── Xcasper AI provider chain ────────────────────────────────────────────────
 const xcasper = require('./xcasper')
+const { webSearch } = require('./web-search')
 
 const callAI = async (systemPrompt, userMsg, timeoutMs) => {
     const messages = []
@@ -618,7 +619,7 @@ RULES:
 - For SQLite → sqlite_manage
 - For GitHub management → github_manage
 - For an existing Bera WhatsApp feature, use find_commands then run_bot_command; do not substitute a generic web-search tool.
-- For movie/film/TV-title lookup phrased with “search”, discover the movie command and pass only the title as its args (example: “search for the movie Dune” → command:"movie", args:"Dune"). Never pass the verb “search” as part of the title.
+- For movie/film/TV-title lookup phrased with “search”, use the registered movie/show search route tvshow and pass only the title as its args (example: “search for the movie Dune” → command:"tvshow", args:"Dune"). Never pass the verb “search” as part of the title.
 - If asked whether GitHub is connected, authorized, or accessible, call github_manage(action:"whoami") first. Tool availability is not proof of an authenticated account. Claim a connected account only when whoami succeeds; do not claim full access or infer token scopes. If no token is configured, say so plainly and direct the owner to .setghkey in a private chat.
 - urls arg in bulk_scrape must be an array
 
@@ -976,9 +977,11 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 } catch(e) { return { success: false, output: `BeraHost error: ${e.message}`, desc } }
             }
             case 'search': {
-                const r = await axios.get(`https://ddg-api.rasa.gg/search?q=${encodeURIComponent(args.query)}&max_results=3`, { timeout: 15000 })
-                const results = r.data?.results || r.data || []
-                return { success: true, output: Array.isArray(results) ? results.slice(0,3).map(x=>`• ${x.title}: ${x.body||x.snippet||''}`).join('\n') : String(results).slice(0,500), desc }
+                const result = await webSearch(args.query || args.q || '')
+                const output = result.success
+                    ? result.results.map(x => `• ${x.title}: ${x.snippet}${x.url ? `\n  ${x.url}` : ''}`).join('\n')
+                    : result.error || 'No search results found.'
+                return { success: result.success, output, desc }
             }
 
             // ── Code execution (any language via Piston) ────────────────────

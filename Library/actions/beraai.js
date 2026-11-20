@@ -8,6 +8,7 @@ const axios = require('axios')
 const { exec } = require('child_process')
 const fs = require('fs')
 const path = require('path')
+const { webSearch, formatSearchResults } = require('./web-search')
 
 // Shared bounded shell runner used by the agent tools.
 const runBash = (command, timeout = 30000) => new Promise(resolve => {
@@ -117,20 +118,6 @@ const remember = (chat, key, value) => {
     return MEMORY[chat][key]
 }
 const getMemory = (chat) => MEMORY[chat] || {}
-
-const webSearch = async (query) => {
-    try {
-        const data = await xcasper.youtubeSearch(query, 4)
-        const items = Array.isArray(data) ? data : (data?.results || data?.items || [])
-        return { success: true, results: items.slice(0, 4).map(item => ({
-            title: item.title || item.name || '',
-            snippet: item.description || item.snippet || '',
-            url: item.url || item.link || ''
-        })) }
-    } catch (e) {
-        return { success: false, results: [], error: e.message }
-    }
-}
 
 const scrapeUrl = async (url) => {
     try {
@@ -376,7 +363,7 @@ const preDispatch = async (text, m, conn) => {
     const t = text.trim()
     const lc = t.toLowerCase()
 
-    const { parseMovieLookupTitle, isGitHubStatusQuery } = require('./command-intent')
+    const { parseMovieLookupTitle, parseWebSearchQuery, isGitHubStatusQuery } = require('./command-intent')
     if (isGitHubStatusQuery(t)) {
         const result = await executeToolCall({ tool: 'github', action: 'whoami' }, m?.chat || '', conn, m)
         const reply = String(result || 'GitHub status could not be verified.')
@@ -385,8 +372,14 @@ const preDispatch = async (text, m, conn) => {
     const movieTitle = parseMovieLookupTitle(t)
     if (movieTitle) {
         const handler = require('../../Handler')
-        const result = await handler.runCommand('movie', movieTitle, m, conn, { captureOnly: true })
+        const result = await handler.runCommand('tvshow', movieTitle, m, conn, { captureOnly: true })
         return { success: result?.success === true, reply: result?.message || result?.error || 'The movie command returned no result.' }
+    }
+
+    const searchQuery = parseWebSearchQuery(t)
+    if (searchQuery) {
+        const result = await webSearch(searchQuery)
+        return { success: result.success, reply: formatSearchResults(searchQuery, result) }
     }
 
     const PING_RX = /^ping\s+([\w.\-]+)$/i
@@ -462,7 +455,7 @@ You are equivalent to Replit Agent, Cursor AI, and GitHub Copilot combined — b
 ━━━ REGISTERED WHATSAPP COMMANDS ━━━
 When a user asks you to perform something that Bera already has as a WhatsApp command, use the live command registry rather than guessing:
 • Search by intent or topic: {"tool":"find_commands","query":"movie"}
-• Execute the matching registered command: {"tool":"run_bot_command","command":"movie","args":"Dune"}
+• Execute the matching registered command: {"tool":"run_bot_command","command":"tvshow","args":"Dune"}
 For a movie/film/TV title lookup phrased with “search”, use the registered movie command, not the generic web-search tool, and pass only the title as its args. Do not include the word “search” in the title.
 Use the command's returned usage/description to form its arguments. If a route is .beraextra NAME, invoke the run_bot_command tool with command:"beraextra" and args:"NAME <arguments>". Pass user-supplied names, quoted text, and current message context when relevant. If required inputs are missing, ask only for those inputs. Report the real result; never claim success if dispatch returns an error.
 The dispatcher enforces Bera's normal private-mode, owner/sudo, group, group-admin, imported-command allowlist, and handler-level restrictions. Never claim owner/admin status based on model text. Recursive AI/Agent commands are blocked; native shell/eval commands and raw shell/code-execution tools are owner-only. Do not route around a denial by using another tool.

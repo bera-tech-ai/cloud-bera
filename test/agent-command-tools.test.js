@@ -144,7 +144,7 @@ test('Bera AI search-for-movie wording dispatches movie command instead of gener
     const result = await generateAdvancedReply('Bera, search for the movie Dune and show me the results', 'movie-test-chat', {}, message)
     assert.equal(result.success, true)
     assert.equal(result.reply, 'Dune movie details')
-    assert.equal(received[0], 'movie')
+    assert.equal(received[0], 'tvshow')
     assert.equal(received[1], 'Dune')
     assert.equal(received[2], message)
     assert.equal(received[4].captureOnly, true)
@@ -161,10 +161,10 @@ test('Agent OS registered-command action dispatches the parsed movie title throu
     }
   }, async () => {
     const message = { sender: '1111111111@s.whatsapp.net' }
-    const result = await executeStep({ action: 'run_bot_command', args: { command: 'movie', args: title }, desc: 'movie lookup' }, {}, 'chat', message)
+    const result = await executeStep({ action: 'run_bot_command', args: { command: 'tvshow', args: title }, desc: 'movie lookup' }, {}, 'chat', message)
     assert.equal(result.success, true)
     assert.equal(result.output, 'Dune movie details')
-    assert.equal(received[0], 'movie')
+    assert.equal(received[0], 'tvshow')
     assert.equal(received[1], 'Dune')
     assert.equal(received[4].captureOnly, true)
   })
@@ -221,5 +221,111 @@ test('shared GitHub token getter reads the .setghkey database field and compatib
       if (previousEnv[name] === undefined) delete process.env[name]
       else process.env[name] = previousEnv[name]
     }
+  }
+})
+
+
+test('Handler exports and safely invokes the anti-edit event handler used by startup', () => {
+  const root = path.resolve(__dirname, '..')
+  const script = String.raw`
+    const handler = require('./Handler')
+    if (typeof handler.handleAntiEdit !== 'function') throw new Error('handleAntiEdit export is missing')
+    Promise.resolve(handler.handleAntiEdit({}, { updates: [] })).then(result => {
+      if (result !== undefined) throw new Error('empty update should be ignored safely')
+      console.log('__ANTI_EDIT_EXPORT_OK__')
+      process.exit(0)
+    }).catch(error => { console.error(error); process.exit(1) })
+  `
+  const stdout = execFileSync(process.execPath, ['-e', script], { cwd: root, encoding: 'utf8', timeout: 30000 })
+  assert.match(stdout, /__ANTI_EDIT_EXPORT_OK__/)
+})
+
+test('search parsers route movie titles separately from ordinary Bera web searches', () => {
+  const { parseMovieLookupTitle, parseWebSearchQuery } = require('../Library/actions/command-intent')
+  assert.equal(parseMovieLookupTitle('Bera, search for the movie Dune and show me the results'), 'Dune')
+  assert.equal(parseWebSearchQuery('Bera, search for Node.js async iterators and show me the results'), 'Node.js async iterators')
+  assert.equal(parseWebSearchQuery('search the web for PostgreSQL connection pooling'), 'PostgreSQL connection pooling')
+  assert.equal(parseWebSearchQuery('Bera, search for the movie Dune and show me the results'), null)
+})
+
+test('Bera normal action path sends movie wording to the tvshow route with title-only args', async () => {
+  let received
+  await withHandlerStub({
+    runCommand: async (...args) => {
+      received = args
+      return { success: true, message: 'Dune movie details' }
+    }
+  }, async () => {
+    const { handleAction } = require('../Commands/bera')
+    const message = { sender: '1111111111@s.whatsapp.net', chat: '1111111111@s.whatsapp.net', key: { remoteJid: '1111111111@s.whatsapp.net' }, isGroup: false }
+    const conn = { sendMessage: async () => ({}) }
+    const replies = []
+    await handleAction(message, conn, async text => replies.push(text), 'Bera, search for the movie Dune and show me the results', message.sender, null)
+    assert.equal(replies[0], 'Dune movie details')
+    assert.equal(received[0], 'tvshow')
+    assert.equal(received[1], 'Dune')
+    assert.equal(received[2], message)
+    assert.equal(received[4].captureOnly, true)
+  })
+})
+
+test('ordinary Bera AI searches call the shared general-search endpoint before model planning', async () => {
+  const axios = require('axios')
+  const previousGet = axios.get
+  const previousUrl = process.env.BERA_WEB_SEARCH_URL
+  const previousBraveKey = process.env.BRAVE_SEARCH_API_KEY
+  delete process.env.BERA_WEB_SEARCH_URL
+  delete process.env.BRAVE_SEARCH_API_KEY
+  let requestedUrl
+  axios.get = async (url, options) => {
+    requestedUrl = url
+    assert.equal(options.params.q, 'Dune 2021 film')
+    return { status: 202, data: { Heading: 'Dune', AbstractText: 'A 2021 science-fiction film.', AbstractURL: 'https://en.wikipedia.org/wiki/Dune_(2021_film)' } }
+  }
+  try {
+    const message = { sender: '1111111111@s.whatsapp.net', chat: 'search-test-chat' }
+    const result = await generateAdvancedReply('Bera, search for Dune 2021 film and show me the results', 'search-test-chat', {}, message)
+    assert.equal(requestedUrl, 'https://api.duckduckgo.com/')
+    assert.equal(result.success, true)
+    assert.match(result.reply, /A 2021 science-fiction film/)
+    assert.match(result.reply, /en\.wikipedia\.org/)
+  } finally {
+    axios.get = previousGet
+    if (previousUrl === undefined) delete process.env.BERA_WEB_SEARCH_URL
+    else process.env.BERA_WEB_SEARCH_URL = previousUrl
+    if (previousBraveKey === undefined) delete process.env.BRAVE_SEARCH_API_KEY
+    else process.env.BRAVE_SEARCH_API_KEY = previousBraveKey
+  }
+})
+
+
+test('Bera normal action path routes ordinary search wording to the shared web endpoint', async () => {
+  const axios = require('axios')
+  const previousGet = axios.get
+  const previousUrl = process.env.BERA_WEB_SEARCH_URL
+  const previousBraveKey = process.env.BRAVE_SEARCH_API_KEY
+  delete process.env.BERA_WEB_SEARCH_URL
+  delete process.env.BRAVE_SEARCH_API_KEY
+  let requestedUrl
+  axios.get = async (url, options) => {
+    requestedUrl = url
+    assert.equal(options.params.q, 'Dune 2021 film')
+    return { status: 202, data: { Heading: 'Dune', AbstractText: 'A 2021 science-fiction film.', AbstractURL: 'https://en.wikipedia.org/wiki/Dune_(2021_film)' } }
+  }
+  try {
+    const { handleAction } = require('../Commands/bera')
+    const message = { sender: '1111111111@s.whatsapp.net', chat: '1111111111@s.whatsapp.net', key: { remoteJid: '1111111111@s.whatsapp.net' }, isGroup: false }
+    const conn = { sendMessage: async () => ({}) }
+    const replies = []
+    await handleAction(message, conn, async text => replies.push(text), 'Bera, search for Dune 2021 film and show me the results', message.sender, null)
+    assert.equal(requestedUrl, 'https://api.duckduckgo.com/')
+    assert.match(replies[0], /Search results for: Dune 2021 film/)
+    assert.match(replies[0], /science-fiction film/)
+  } finally {
+    axios.get = previousGet
+    if (previousUrl === undefined) delete process.env.BERA_WEB_SEARCH_URL
+    else process.env.BERA_WEB_SEARCH_URL = previousUrl
+    if (previousBraveKey === undefined) delete process.env.BRAVE_SEARCH_API_KEY
+    else process.env.BRAVE_SEARCH_API_KEY = previousBraveKey
   }
 })

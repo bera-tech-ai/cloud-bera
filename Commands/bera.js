@@ -100,6 +100,26 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
         }
     } catch {}
 
+    if (!imageBuffer && text) {
+        const { parseMovieLookupTitle, parseWebSearchQuery } = require('../Library/actions/command-intent')
+        const movieTitle = parseMovieLookupTitle(text)
+        if (movieTitle) {
+            await react(conn, m, '🎬')
+            const result = await require('../Handler').runCommand('tvshow', movieTitle, m, conn, { captureOnly: true })
+            await react(conn, m, result?.success ? '✅' : '❌')
+            return reply(result?.message || result?.error || `No movie results found for ${movieTitle}.`)
+        }
+
+        const searchQuery = parseWebSearchQuery(text)
+        if (searchQuery) {
+            const { webSearch, formatSearchResults } = require('../Library/actions/web-search')
+            await react(conn, m, '🔎')
+            const result = await webSearch(searchQuery)
+            await react(conn, m, result.success ? '✅' : '❌')
+            return reply(formatSearchResults(searchQuery, result))
+        }
+    }
+
     // ── Plugin matching — check before intent routing ─────────────────────────
     if (!imageBuffer && text) {
         const matchedPlugin = pluginLoader.matchPlugin(text)
@@ -1200,7 +1220,7 @@ Start immediately with the code — no lengthy intro.`
         }
         const movieTitle = parseMovieLookupTitle(task)
         if (movieTitle) {
-            const result = await executeStep({ action: 'run_bot_command', args: { command: 'movie', args: movieTitle }, desc: `Look up movie: ${movieTitle}` }, conn, m.chat, m, { userId: sender })
+            const result = await executeStep({ action: 'run_bot_command', args: { command: 'tvshow', args: movieTitle }, desc: `Look up movie: ${movieTitle}` }, conn, m.chat, m, { userId: sender })
             await react(conn, m, result.success ? '✅' : '❌')
             return reply(result.output || 'The movie command returned no result.')
         }

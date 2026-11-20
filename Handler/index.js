@@ -4469,7 +4469,9 @@ const runCommand = async (commandName, argsString, m, conn, options = {}) => {
         if (_RUNCMD_BLOCKLIST.has(cmdLower)) {
             return { success: false, error: `Command '${cmdLower}' is blocked from AI invocation to prevent recursion or abuse.` }
         }
-        const handler = commandMap.get(cmdLower)
+        // The imported movie search is registered as `tvshow` because `movie` is already a native info command.
+        const commandRoute = cmdLower === 'movie' && commandMap.has('tvshow') ? 'tvshow' : cmdLower
+        const handler = commandMap.get(commandRoute)
         if (!handler) return { success: false, error: `Unknown command: ${commandName}` }
 
         const text = String(argsString || '').trim()
@@ -4481,7 +4483,7 @@ const runCommand = async (commandName, argsString, m, conn, options = {}) => {
         })()
         const isOwner = !!_isOwn
         const access = await getAccessContext({ conn, chat, sender, isOwner, authorized: _authd })
-        const policy = authorizeCommand(cmdLower, access, { agent: true })
+        const policy = authorizeCommand(commandRoute, access, { agent: true })
         if (!policy.allowed) return { success: false, error: policy.reason }
         const isGroup = access.isGroup
         const isAdmin = access.isAdmin
@@ -4493,7 +4495,7 @@ const runCommand = async (commandName, argsString, m, conn, options = {}) => {
             try { await sendGroupReply(conn, m, String(txt)) } catch {}
         }
         const ctx = {
-            conn, m, text, args, command: cmdLower, sender, chat, prefix,
+            conn, m, text, args, command: commandRoute, sender, chat, prefix,
             isOwner, isGroup, isAdmin,
             isBotAdmin: access.isBotAdmin,
             isSenderAdmin: access.isSenderAdmin,
@@ -4588,4 +4590,4 @@ const findCommands = (query = '', limit = 20) => {
         commands: matches.slice(0, maxResults).map(({ record }) => record) }
 }
 
-module.exports = { handleMessage, handleGroupEvents, handleReaction, handleAntiDelete, runCommand, findCommands }
+module.exports = { handleMessage, handleGroupEvents, handleReaction, handleAntiDelete, handleAntiEdit, runCommand, findCommands }
