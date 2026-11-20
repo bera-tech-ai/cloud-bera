@@ -314,7 +314,7 @@ const executeStep = async (record, step, options = {}) => {
 const repair = async (record, failure, options) => {
     if ((record.repairs || []).length >= (options.maxRepairs ?? 2)) return { success: false, error: 'Repair limit reached.' }
     const context = `Project task: ${record.task}\nFailure output:\n${String(failure).slice(-10000)}\nProject inspection:\n${JSON.stringify(inspect(record.dir))}`
-    const repairPrompt = 'You are a senior software repair planner. Return one valid JSON object only: {"steps":[{"action":"write_file","path":"relative path from the project root","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. Every step action MUST be exactly one of "write_file", "mkdir", "build", "test", or "install"; choose one value and never put alternatives, pipes, or lists in action. Use mkdir only for a needed directory with a relative path. When validation says there is no runnable application entrypoint, the repair MUST write a complete root-level index.html with <!doctype html>, <html>, <body>, and a meaningful <main> section, or a root package.json with a working start/build script and its root application entrypoint. Do not write only src/index.html, a bare doctype, or placeholder content. Do not create an extra project/project_root wrapper directory. Use contentBase64 for source files, never a literal content field. Never delete files or use secrets.'
+    const repairPrompt = 'You are a senior software repair planner. Return one valid JSON object only: {"steps":[{"action":"write_file","path":"relative path from the project root","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. Every step action MUST be exactly one of "write_file", "mkdir", "build", "test", or "install"; choose one value and never put alternatives, pipes, or lists in action. The repair phase is local-only: never return deploy, publish, push, git, repository creation, or other external side-effect actions. Use mkdir only for a needed directory with a relative path. When validation says there is no runnable application entrypoint, the repair MUST write a complete root-level index.html with <!doctype html>, <html>, <body>, and a meaningful <main> section, or a root package.json with a working start/build script and its root application entrypoint. Do not write only src/index.html, a bare doctype, or placeholder content. Do not create an extra project/project_root wrapper directory. Use contentBase64 for source files, never a literal content field. Never delete files or use secrets.'
     const result = await xcasper.chat([{ role: 'system', content: repairPrompt }, { role: 'user', content: context }], {
         timeout: 45000,
         maxChars: 20000,
@@ -363,6 +363,7 @@ const repair = async (record, failure, options) => {
     const plan = parsed.value
     if (!Array.isArray(plan.steps) || !plan.steps.length) return { success: false, error: 'Repair planner returned no actionable steps.' }
     const normalizedSteps = []
+    const externalActions = new Set(['deploy', 'publish', 'push', 'git', 'git_init', 'git_push', 'create_repo', 'create_repository', 'create_github_repo', 'github_push', 'deploy_to_berahost'])
     for (const [index, rawStep] of plan.steps.slice(0, 10).entries()) {
         const rawAction = String(rawStep.action || '').trim().toLowerCase()
         const normalizeAction = value => {
@@ -373,7 +374,13 @@ const repair = async (record, failure, options) => {
             if (['npm_test', 'run_test', 'run_tests'].includes(normalized)) return 'test'
             return normalized
         }
-        const actionOptions = [...new Set(rawAction.split(/[|,]/).map(normalizeAction).filter(Boolean))]
+        const allActionOptions = [...new Set(rawAction.split(/[|,]/).map(normalizeAction).filter(Boolean))]
+        const blockedActions = allActionOptions.filter(action => externalActions.has(action))
+        if (blockedActions.length) {
+            await notifyProgress(options, { phase: 'repair_external_action_skipped', action: blockedActions.join(','), index: index + 1 })
+        }
+        const actionOptions = allActionOptions.filter(action => !externalActions.has(action))
+        if (!actionOptions.length && blockedActions.length) continue
         const hasContent = Boolean(rawStep.contentBase64 || (typeof rawStep.content === 'string' && rawStep.content.length))
         const action = actionOptions.length === 1
             ? actionOptions[0]
@@ -400,6 +407,7 @@ const repair = async (record, failure, options) => {
         }
         normalizedSteps.push(step)
     }
+    if (!normalizedSteps.length) return { success: false, error: 'Repair plan contained no safe local actions; external deployment/publishing actions are never executed during repair.' }
     record.repairs.push({ at: now(), reason: plan.reason || 'automatic repair', failure: String(failure).slice(-3000) })
     update(record, { stage: 'repairing', status: 'repairing' })
     for (const step of normalizedSteps) {

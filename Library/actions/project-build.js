@@ -91,6 +91,8 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
             } else if (['repair_json_recovery_provider', 'repair_json_regeneration_provider'].includes(progress.phase) && progress.stage === 'trying') {
                 const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
                 await replyProgress(`🔌 Repair recovery: trying ${label} (${progress.index + 1}/${progress.total})...`)
+            } else if (progress.phase === 'repair_external_action_skipped') {
+                await replyProgress(`⏭️ Ignored the repair planner’s ${progress.action} step; repairs stay local and cannot deploy or publish.`)
             } else if (progress.phase === 'checkpoint') {
                 await replyProgress('💾 Checks passed; saving the local build checkpoint. No GitHub push or deployment is happening yet.')
             } else if (progress.phase === 'preview') {

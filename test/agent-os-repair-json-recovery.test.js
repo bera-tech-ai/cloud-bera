@@ -39,7 +39,13 @@ test('Agent OS recovers repair plans with missing JSON and retries boundedly', (
                 { action: 'npm install' },
                 { action: 'mkdir', path: 'assets' },
                 ...rootRepair.steps
-            ], reason: 'Create root entrypoint and its asset directory' } }
+            ], reason: 'Create root entrypoint and its asset directory' } },
+            { json: noEntrypointPlan },
+            { json: { steps: [
+                ...Array.from({ length: 6 }, () => ({ action: 'test' })),
+                { action: 'deploy' },
+                ...rootRepair.steps
+            ], reason: 'Ignore external deploy request and finish local root entrypoint repair' } }
         ]
         let calls = 0
         xcasper.chat = async () => {
@@ -81,7 +87,12 @@ test('Agent OS recovers repair plans with missing JSON and retries boundedly', (
             const actionNormalized = await runSample('repair-mkdir-supported', actionPhases)
             assert.equal(actionNormalized.record.repairs.length, 1)
             assert.ok(fs.statSync(path.join(root, 'workspace', 'repair-json-user', 'projects', 'repair-mkdir-supported', 'assets')).isDirectory())
-            assert.equal(calls, 14)
+            const deployPhases = []
+            const deployIgnored = await runSample('repair-deploy-ignored', deployPhases)
+            assert.ok(deployPhases.includes('repair_external_action_skipped'))
+            assert.equal(deployIgnored.record.github, null)
+            assert.equal(deployIgnored.record.deployment, undefined)
+            assert.equal(calls, 16)
             console.log('REPAIR_JSON_RECOVERY_OK')
         })().catch(error => { console.error(error); process.exitCode = 1 })
     `
