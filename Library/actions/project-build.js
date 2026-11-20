@@ -93,9 +93,9 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     await replyProgress(parts.join('\n'))
     if (approvalCase && conn?.sendMessage && chat) {
         try {
-            const { sendButtons } = require('gifted-btns')
+            const { sendBtn } = require('./btns')
             const prefix = global.prefix || '.'
-            await sendButtons(conn, chat, {
+            await sendBtn(conn, chat, {
                 title: 'Owner approval required',
                 text: `Build ${record.name || record.id} is validated locally. No repository or deployment has been created.`,
                 footer: 'Buttons invoke the same owner and case-state checks as text commands.',

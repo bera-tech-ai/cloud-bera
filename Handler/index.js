@@ -5,6 +5,7 @@ const { getAccessContext, authorizeCommand } = require('../Library/lib/permissio
 const fs = require('fs')
 const path = require('path')
 const { sendGroupReply } = require('../Library/lib/group-mentions')
+const { getInteractiveReply } = require('../Library/lib/interactive-replies')
 
 // Pre-warm library modules so first command has zero load delay
 try { require('../Library/actions/music') } catch {}
@@ -83,7 +84,7 @@ const smsg = (conn, m) => {
     m.mtype = Object.keys(M).find(k => k !== 'messageContextInfo') || ''
     m.msg = M[m.mtype] || {}
 
-    m.text = m.msg?.text || m.msg?.caption || m.msg?.conversation ||
+    m.text = getInteractiveReply(m.msg) || m.msg?.text || m.msg?.caption || m.msg?.conversation ||
         (m.mtype === 'conversation' ? M.conversation : '') || ''
     m.mimetype = m.msg?.mimetype || ''
     m.body = m.text
