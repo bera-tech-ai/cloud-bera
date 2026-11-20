@@ -135,6 +135,36 @@ const checkProjectEntrypoint = (dir, info) => {
     }
 }
 
+const escapeHtml = value => String(value || '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character])
+const fallbackStaticSite = record => {
+    const displayName = String(record.name || 'Bera Project').replace(/[-_]+/g, ' ').replace(/\b[a-z]/g, letter => letter.toUpperCase())
+    const task = String(record.task || '')
+    const safeName = escapeHtml(displayName)
+    if (/portfolio/i.test(`${record.name || ''} ${task}`)) {
+        const owner = escapeHtml(displayName.replace(/\s+portfolio$/i, '').replace(/\s+s$/i, '').trim() || 'Your Name')
+        return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Personal portfolio for ${owner}"><title>${safeName}</title>
+  <style>
+    :root{color-scheme:light;--ink:#18231f;--muted:#62716a;--green:#176b52;--paper:#f5f7f2;--line:#dce5de}*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,sans-serif;color:var(--ink);background:var(--paper)}header,main,footer{width:min(1040px,calc(100% - 40px));margin:auto}header{display:flex;justify-content:space-between;align-items:center;padding:24px 0}header strong{font-size:1.1rem}nav{display:flex;gap:20px}a{color:var(--green);text-decoration:none}.hero{padding:90px 0 76px}.eyebrow{color:var(--green);font-weight:700;letter-spacing:.1em;text-transform:uppercase}.hero h1{max-width:760px;font-size:clamp(2.6rem,8vw,5.5rem);line-height:1.02;letter-spacing:-.05em;margin:14px 0}.hero p,.about p{max-width:650px;color:var(--muted);font-size:1.1rem}.button{display:inline-block;margin-top:16px;padding:12px 20px;border-radius:999px;background:var(--green);color:white}.section{padding:44px 0;border-top:1px solid var(--line)}.section h2{font-size:2rem;margin:0 0 18px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{padding:22px;border:1px solid var(--line);border-radius:18px;background:white}.card h3{margin-top:0}.contact{padding-bottom:80px}@media(max-width:650px){header{align-items:flex-start;gap:12px;flex-direction:column}nav{gap:14px;flex-wrap:wrap}.hero{padding:58px 0}.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header><strong>${safeName}</strong><nav aria-label="Main navigation"><a href="#about">About</a><a href="#projects">Projects</a><a href="#contact">Contact</a></nav></header>
+  <main>
+    <section class="hero"><div class="eyebrow">Portfolio</div><h1>Hi, I’m ${owner}. I make thoughtful things for the web.</h1><p>A little about me, a few projects I’m proud of, and an easy way to get in touch.</p><a class="button" href="#projects">Explore my work</a></section>
+    <section class="section about" id="about"><h2>About Me</h2><p>I’m ${owner}, a curious and creative builder who enjoys turning ideas into useful, welcoming experiences. This portfolio is a starting point—replace this text with your own story, skills, and interests.</p></section>
+    <section class="section" id="projects"><h2>Selected Projects</h2><div class="grid"><article class="card"><h3>Project One</h3><p>A short description of a project, what it does, and the tools used to build it.</p></article><article class="card"><h3>Project Two</h3><p>A second example highlighting a problem solved or an idea brought to life.</p></article><article class="card"><h3>Project Three</h3><p>A third project. Add a screenshot, a link, or a few details about your contribution.</p></article></div></section>
+    <section class="section contact" id="contact"><h2>Let’s connect</h2><p>Have a project or opportunity in mind? I’d be happy to hear from you.</p><a class="button" href="mailto:hello@example.com">hello@example.com</a></section>
+  </main><footer><p>© ${new Date().getFullYear()} ${owner}. Built with care.</p></footer>
+</body>
+</html>`
+    }
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${safeName}</title><style>body{margin:0;font:16px/1.6 system-ui,sans-serif;background:#f5f7f2;color:#18231f}main{max-width:900px;margin:12vh auto;padding:32px}h1{font-size:clamp(2.5rem,8vw,5rem);line-height:1.05}p{max-width:650px;color:#52615a;font-size:1.15rem}section{padding:24px 0;border-top:1px solid #dce5de}</style></head><body><main><section><p>Welcome</p><h1>${safeName}</h1><p>A starting point for your project. Add your own details and content to make it yours.</p></section><section><h2>About</h2><p>${escapeHtml(task.slice(0, 500))}</p></section><section><h2>Contact</h2><p>Replace this with your preferred contact details.</p></section></main></body></html>`
+}
+
 const create = async options => {
     const userId = options.userId || 'shared'
     const name = safe(options.name || 'bera-project')
@@ -415,13 +445,12 @@ const repair = async (record, failure, options) => {
         if (!result.success) return { success: false, error: result.output }
     }
     if (/No runnable application entrypoint found at the project root/i.test(String(failure))) {
-        const rootEntrypoints = new Set(['index.html', 'package.json', 'index.js', 'server.js', 'app.js', 'main.py', 'app.py'])
-        const writesRootEntrypoint = normalizedSteps.some(step => {
-            if (step.action !== 'write_file') return false
-            const relative = path.relative(record.dir, path.resolve(record.dir, step.path))
-            return rootEntrypoints.has(relative)
-        })
-        if (!writesRootEntrypoint) return { success: false, error: 'Repair plan did not include a root-level runnable entrypoint.' }
+        const entrypoint = checkProjectEntrypoint(record.dir, inspect(record.dir))
+        if (!entrypoint.success) {
+            fs.writeFileSync(path.join(record.dir, 'index.html'), fallbackStaticSite(record))
+            await notifyProgress(options, { phase: 'repair_root_entrypoint_fallback', path: 'index.html' })
+            event(record, 'repair_root_entrypoint_fallback', { path: 'index.html', reason: 'Repair planner did not create a runnable project-root entrypoint.' })
+        }
     }
     update(record, { stage: 'repairing', status: 'repairing' })
     return { success: true }

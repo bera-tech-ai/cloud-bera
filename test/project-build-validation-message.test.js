@@ -2,7 +2,12 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { validationFailureDetails, repositoryVisibilityFromRequest } = require('../Library/actions/project-build')
+const { validationFailureDetails, repositoryVisibilityFromRequest, projectName } = require('../Library/actions/project-build')
+
+test('project-build extracts the named project without trailing deployment instructions', () => {
+    const request = 'Build a personal portfolio called “Zakayo’s Portfolio.” Include projects and contact details, then deploy it.'
+    assert.equal(projectName(request), 'zakayo-s-portfolio')
+})
 
 test('project-build honors explicit public/private repository visibility and defaults to private', () => {
     assert.equal(repositoryVisibilityFromRequest('Create a public GitHub repo called demo'), 'public')

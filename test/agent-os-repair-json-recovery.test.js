@@ -45,7 +45,9 @@ test('Agent OS recovers repair plans with missing JSON and retries boundedly', (
                 ...Array.from({ length: 6 }, () => ({ action: 'test' })),
                 { action: 'deploy' },
                 ...rootRepair.steps
-            ], reason: 'Ignore external deploy request and finish local root entrypoint repair' } }
+            ], reason: 'Ignore external deploy request and finish local root entrypoint repair' } },
+            { json: noEntrypointPlan },
+            { json: { steps: [{ action: 'mkdir', path: 'project/src' }], reason: 'Repair the nested structure' } }
         ]
         let calls = 0
         xcasper.chat = async () => {
@@ -54,17 +56,17 @@ test('Agent OS recovers repair plans with missing JSON and retries boundedly', (
             if (!next) throw new Error('Unexpected repair planner request')
             return { success: true, text: next.text || JSON.stringify(next.json) }
         }
-        const runSample = async (projectId, phaseList) => {
+        const runSample = async (projectId, phaseList, config = {}) => {
             const userId = 'repair-json-user'
             const projectDir = path.join(root, 'workspace', userId, 'projects', projectId)
             const result = await agentOs.run({
                 action: 'run', userId, projectId, name: projectId, projectDir,
-                task: 'Create a small Kijani Coffee static website', maxRepairs: 2,
+                task: config.task || 'Create a small Kijani Coffee static website', maxRepairs: 2,
                 onProgress: progress => phaseList.push(progress.phase)
             })
             assert.equal(result.success, true, result.error || JSON.stringify(result.validation?.checks))
             assert.equal(result.validation.success, true)
-            assert.equal(fs.readFileSync(path.join(projectDir, 'index.html'), 'utf8'), html)
+            if (config.expectOriginalHtml !== false) assert.equal(fs.readFileSync(path.join(projectDir, 'index.html'), 'utf8'), html)
             return result
         }
         ;(async () => {
@@ -92,7 +94,19 @@ test('Agent OS recovers repair plans with missing JSON and retries boundedly', (
             assert.ok(deployPhases.includes('repair_external_action_skipped'))
             assert.equal(deployIgnored.record.github, null)
             assert.equal(deployIgnored.record.deployment, undefined)
-            assert.equal(calls, 16)
+            const fallbackPhases = []
+            const fallbackTask = 'Build a personal portfolio called Zakayo’s Portfolio. Include a welcome section, About Me, three sample projects, and Contact details.'
+            const fallback = await runSample('zakayo-s-portfolio', fallbackPhases, { expectOriginalHtml: false, task: fallbackTask })
+            assert.ok(fallbackPhases.includes('repair_root_entrypoint_fallback'))
+            assert.equal(fallback.record.repairs.length, 1)
+            const fallbackHtml = fs.readFileSync(path.join(root, 'workspace', 'repair-json-user', 'projects', 'zakayo-s-portfolio', 'index.html'), 'utf8')
+            assert.match(fallbackHtml, /<!doctype html>/i)
+            assert.match(fallbackHtml, /<main/i)
+            assert.match(fallbackHtml, /Hi, I’m Zakayo/i)
+            assert.match(fallbackHtml, /About Me/i)
+            assert.match(fallbackHtml, /Project Three/i)
+            assert.match(fallbackHtml, /Contact/i)
+            assert.equal(calls, 18)
             console.log('REPAIR_JSON_RECOVERY_OK')
         })().catch(error => { console.error(error); process.exitCode = 1 })
     `

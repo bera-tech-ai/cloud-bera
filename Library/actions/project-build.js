@@ -7,8 +7,11 @@ const looksLikeProjectBuild = text => {
 }
 
 const projectName = text => {
-    const explicit = String(text || '').match(/\b(?:called|named)\s+["']?([a-z0-9][a-z0-9 _-]{1,40})/i)
-    if (explicit) return explicit[1].trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+    const value = String(text || '')
+    const quoted = value.match(/\b(?:called|named)\s+(?:“([^”\n]{2,60})”|‘([^’\n]{2,60})’|"([^"\n]{2,60})"|'([^'\n]{2,60})')/i)
+    const unquoted = value.match(/\b(?:called|named)\s+([a-z0-9][a-z0-9 _'-]{1,50}?)(?=\s+(?:and\s+(?:deploy|publish|push|launch|create|make|ask|validate|test)\b|with\b|including\b)|[.!?]\s|$)/i)
+    const explicit = quoted?.slice(1).find(Boolean) || unquoted?.[1]
+    if (explicit) return explicit.trim().replace(/[.!?,;:]+$/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
     const hint = String(text || '').match(/\b(todo|task|expense|weather|portfolio|recipe|chat|blog|shop|tracker|dashboard|calculator|notes?)\b/i)?.[1]
     return `${(hint || 'bera').toLowerCase()}-app`
 }
@@ -104,6 +107,8 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
                 await replyProgress(`🔌 Repair recovery: trying ${label} (${progress.index + 1}/${progress.total})...`)
             } else if (progress.phase === 'repair_external_action_skipped') {
                 await replyProgress(`⏭️ Ignored the repair planner’s ${progress.action} step; repairs stay local and cannot deploy or publish.`)
+            } else if (progress.phase === 'repair_root_entrypoint_fallback') {
+                await replyProgress('🧩 The repair plan still lacked a runnable root app; created a safe local index.html fallback and will validate it before any approval request.')
             } else if (progress.phase === 'checkpoint') {
                 await replyProgress('💾 Checks passed; saving the local build checkpoint. No GitHub push or deployment is happening yet.')
             } else if (progress.phase === 'preview') {
@@ -175,4 +180,4 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     return result
 }
 
-module.exports = { looksLikeProjectBuild, runProjectBuild, validationFailureDetails, repositoryVisibilityFromRequest }
+module.exports = { looksLikeProjectBuild, runProjectBuild, validationFailureDetails, repositoryVisibilityFromRequest, projectName }
