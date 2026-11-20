@@ -140,7 +140,7 @@ const getGroup = jid => {
     if (!jid) return null
     const state = _db.getState()
     if (!state.groups[jid]) {
-        state.groups[jid] = { jid, enabled: true, beraTrigger: true, autoReply: false, tagReply: true, language: 'auto', createdAt: Date.now(), updatedAt: Date.now() }
+        state.groups[jid] = { jid, enabled: true, beraTrigger: true, autoReply: false, tagReply: true, language: 'en', createdAt: Date.now(), updatedAt: Date.now() }
         writeState()
     }
     return state.groups[jid]

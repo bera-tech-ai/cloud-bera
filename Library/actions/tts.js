@@ -17,13 +17,14 @@ const VOICE_MAP = {
 const TTS_LANG_MAP = { en: 'en', sw: 'sw', sh: 'sw', sheng: 'sw', fr: 'fr', de: 'de', es: 'es', pt: 'pt', ar: 'ar', hi: 'hi', zh: 'zh-CN', ja: 'ja', ko: 'ko', ru: 'ru', it: 'it', nl: 'nl' }
 
 const normalizeLanguage = value => {
-    const lang = String(value || 'auto').trim().toLowerCase()
+    const lang = String(value || 'en').trim().toLowerCase()
+    if (lang === 'auto') return 'auto'
     if (['sh', 'sheng'].includes(lang)) return 'sheng'
     if (Object.hasOwn(TTS_LANG_MAP, lang)) return lang
-    return 'auto'
+    return 'en'
 }
 
-const resolveSpeechLanguage = (text, preference = 'auto') => {
+const resolveSpeechLanguage = (text, preference = 'en') => {
     const preferred = normalizeLanguage(preference)
     if (preferred === 'en' || preferred === 'sw') return preferred
     if (preferred === 'sheng' || preferred === 'sh') return 'sw'

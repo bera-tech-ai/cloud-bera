@@ -59,6 +59,13 @@ const buildCommandMap = () => {
 }
 
 let commandMap = buildCommandMap()
+try {
+    const importedCommandBridge = require('../Library/lib/xadon-bridge')
+    const imported = importedCommandBridge.register(commandMap)
+    console.log(`[Bera extra commands] Loaded ${imported.total} commands; added ${imported.direct} direct commands; ${imported.privileged} privileged commands are gated`)
+} catch (error) {
+    console.error('[Bera extra commands] Import disabled:', error.message)
+}
 
 const getPrefix = () => {
     try {
@@ -135,7 +142,7 @@ const checkAutoReply = async (conn, m, text) => {
     return false
 }
 
-const sendOptInVoiceReply = async (conn, m, text, languagePreference = 'auto') => {
+const sendOptInVoiceReply = async (conn, m, text, languagePreference = 'en') => {
     if (!conn?.sendMessage || !m?.chat || m.isGroup || String(text || '').length > 1200) return false
     const sender = String(m.sender || '').replace(/:\d+@/, '@').toLowerCase()
     if (global.db?.data?.chatbera?.voiceReplies?.[sender] !== true) return false
@@ -1731,11 +1738,38 @@ const handleMessage = async (conn, rawMsg) => {
                     return
                 }
 
+                if (intent === 'set_language') {
+                    const { parseLanguageChange, saveLanguagePreference } = require('../Library/actions/language-routing')
+                    const request = parseLanguageChange(text)
+                    if (!request) {
+                        await reply('I can set English, Swahili, Sheng, or Auto. Try: “change my reply language to English”.')
+                        return
+                    }
+                    if (!global.db?.data) {
+                        await reply('❌ I could not save that preference because the database is not ready.')
+                        return
+                    }
+                    try {
+                        await saveLanguagePreference(global.db, sender, request.language)
+                        const labels = { en: 'English', sw: 'Swahili', sheng: 'Sheng', auto: 'Auto' }
+                        await reply(`✅ Reply language saved as *${labels[request.language]}*.`)
+                    } catch (error) {
+                        console.error('[LANGUAGE] Preference save failed:', error.message)
+                        await reply('❌ I could not save your language preference. Please try again.')
+                    }
+                    return
+                }
+
                 if (intent === 'translate') {
-                    const langM = text.match(/translate\s+(?:to\s+)?([a-z]{2,20})\s*[:\-]?\s*(.+)/i) ||
-                                  text.match(/translate\s+(.+)\s+(?:to|in)\s+([a-z]{2,20})/i)
-                    const toLang = langM ? (langM[2]||langM[1]).trim() : 'en'
-                    const toTrans = langM ? (langM[2] ? langM[2] : text) : text
+                    const { parseTranslationRequest } = require('../Library/actions/language-routing')
+                    const parsed = parseTranslationRequest(text)
+                    const targetCodes = { english: 'en', en: 'en', swahili: 'sw', kiswahili: 'sw', sw: 'sw', french: 'fr', fr: 'fr', spanish: 'es', es: 'es', german: 'de', de: 'de', arabic: 'ar', ar: 'ar', italian: 'it', it: 'it', portuguese: 'pt', pt: 'pt', chinese: 'zh', zh: 'zh', japanese: 'ja', ja: 'ja', hindi: 'hi', hi: 'hi' }
+                    if (!parsed?.text || !targetCodes[parsed.target]) {
+                        await reply('❓ Usage: “translate hello to French” or “translate to English: hello”.')
+                        return
+                    }
+                    const toLang = targetCodes[parsed.target]
+                    const toTrans = parsed.text
                     try {
                         await react('🌍')
                         const r = await require('../Library/actions/agent').httpRequest({ method:'GET', url:'https://api.mymemory.translated.net/get?q='+encodeURIComponent(toTrans)+'&langpair=auto|'+toLang })
@@ -4262,10 +4296,10 @@ const handleMessage = async (conn, rawMsg) => {
                     react('🤖')
                     const normalizedSender = String(sender || '').replace(/:\d+@/, '@').toLowerCase()
                     const { normalizeLanguage } = require('../Library/actions/tts')
-                    const languagePreference = normalizeLanguage(global.db?.data?.chatbera?.languagePreferences?.[normalizedSender] || 'auto')
+                    const languagePreference = normalizeLanguage(global.db?.data?.chatbera?.languagePreferences?.[normalizedSender] || 'en')
                     // Strip the leading "Bera" so the AI sees the real instruction
                     const cleaned = text.replace(/^\s*bera[, :\s]+/i, '').trim() || text
-                    const result = await generateAdvancedReply(cleaned, chat, conn, m, { agentMode: true, MAX_LOOPS: 12 })
+                    const result = await generateAdvancedReply(cleaned, chat, conn, m, { agentMode: true, MAX_LOOPS: 12, languagePreference })
                     if (result && result.success && result.reply) {
                         await reply(result.reply)
                         await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
@@ -4324,7 +4358,7 @@ const handleMessage = async (conn, rawMsg) => {
                       const { normalizeLanguage } = require('../Library/actions/tts')
                       const normalizedSender = String(sender || '').replace(/:\d+@/, '@').toLowerCase()
                       const chatberaPrefs = global.db?.data?.chatbera || {}
-                      const languagePreference = normalizeLanguage(chatberaPrefs.languagePreferences?.[normalizedSender] || 'auto')
+                      const languagePreference = normalizeLanguage(chatberaPrefs.languagePreferences?.[normalizedSender] || 'en')
                       const voiceRepliesEnabled = chatberaPrefs.voiceReplies?.[normalizedSender] === true && !m.isGroup
                       conn.sendPresenceUpdate('composing', chat).catch(() => {})
                       await new Promise(r => setTimeout(r, 800 + Math.random() * 1500))
@@ -4380,6 +4414,7 @@ const handleMessage = async (conn, rawMsg) => {
             isBotAdmin: access.isBotAdmin,
             isSenderAdmin: access.isSenderAdmin,
             isSudo: access.isSudo,
+            metadata: access.metadata,
             role: access.role,
             permission: policy.policy,
             isAuthorized: authorized,

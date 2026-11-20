@@ -452,7 +452,7 @@ Generate at: https://github.com/settings/tokens`)
 
 
     // ── SHELL COMMAND EXECUTION (.$ or .bash) ───────────────────────────
-    if (['$', 'bash', 'shell', 'exec', 'run', 'terminal', 'cmd'].includes(command)) {
+    if (['$', 'bash', 'shell', 'sh', 'exec', 'run', 'terminal', 'cmd'].includes(command)) {
         if (!isOwner) return reply(`⛔ Owner only.`)
         if (!text) return reply(`❌ Usage: ${prefix}$ <command>\nExample: ${prefix}$ ls -la`)
         const { exec } = require('child_process')
@@ -472,7 +472,7 @@ Generate at: https://github.com/settings/tokens`)
     }
 
     // ── JS EVAL (.> or .eval) ────────────────────────────────────────────
-    if (['>', 'eval', 'js', 'jseval', 'evaljs'].includes(command)) {
+    if (['>', '#', 'eval', 'js', 'jseval', 'evaljs'].includes(command)) {
         if (!isOwner) return reply(`⛔ Owner only.`)
         if (!text) return reply(`❌ Usage: ${prefix}> <javascript expression>\nExample: ${prefix}> 2+2\nExample: ${prefix}> Object.keys(global.db.data).join(', ')`)
         await react('💻')
@@ -994,8 +994,8 @@ handle.command = ['update','reload','hotreload','selfupdate','up','broadcast', '
     'skyhealth',
     'vercel', 'vdeploy', 'deployvercl', 'setvercel', 'verceltoken', 'vercellist', 'vprojects',
     // Shell/eval commands
-    'bash', 'shell', 'exec', 'run', 'terminal', 'cmd',
-    'eval', 'js', 'jseval', 'evaljs',
+    'bash', 'shell', 'sh', 'exec', 'run', 'terminal', 'cmd',
+    'eval', 'js', 'jseval', 'evaljs', '#',
     // User mgmt
     'getpp', 'profilepic', 'pfp', 'getpfp',
     'block', 'unblock', 'blocklist', 'listblocked', 'blocked',

@@ -431,6 +431,7 @@ You have REAL tools running RIGHT NOW: bash shell, file system, web scraping, HT
 You are equivalent to Replit Agent, Cursor AI, and GitHub Copilot combined — but running on WhatsApp.
 
 ━━━ IRON RULES (NEVER BREAK) ━━━
+0. NEVER claim an API key, token, password, or other secret was saved unless a real credential-setting command returned success. For GitHub use the owner-only setghkey command (alias setghtoken); for BeraHost use owner-only setbhkey. Ask the owner to run these in a private chat. Do not repeat, quote, log, or expose the secret in a reply; if you cannot invoke the command, say plainly that you did not save it.
 1. User asks → CALL A TOOL immediately. NEVER write plain text before acting. JSON tool call FIRST, always.
 2. NEVER say "I'll do X" — just DO X with a JSON tool call.
 3. NEVER say "I can't scrape websites" — you have 4-strategy scraping: Jina.ai + Chrome curl + Google Cache + Wayback Machine. Use web_scrape IMMEDIATELY.
@@ -3131,10 +3132,10 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
         customSysPrompt = global.db?.data?.users?.[_uSender]?.systemPrompt || ''
     } catch {}
 
-    let languagePreference = String(opts.languagePreference || 'auto').toLowerCase()
+    let languagePreference = String(opts.languagePreference || 'en').toLowerCase()
     try {
         const _uSender = m?.sender?.replace(/:[0-9]+@/, '@').toLowerCase() || ''
-        languagePreference = String(opts.languagePreference || global.db?.data?.chatbera?.languagePreferences?.[_uSender] || 'auto').toLowerCase()
+        languagePreference = String(opts.languagePreference || global.db?.data?.chatbera?.languagePreferences?.[_uSender] || 'en').toLowerCase()
     } catch {}
     const languageDirective = languagePreference === 'en'
         ? '\n\nREPLY LANGUAGE: Use conversational English for user-facing replies unless the user explicitly requests another language. Keep JSON tool-call keys and syntax unchanged.'
@@ -3232,14 +3233,14 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SIMPLE CHAT MODE (no tools)
 // ─────────────────────────────────────────────────────────────────────────────
-const generateSimpleReply = async (text, chat, languagePreference = 'auto') => {
+const generateSimpleReply = async (text, chat, languagePreference = 'en') => {
       pushHistory(chat, 'user', text)
       const mem = getMemory(chat)
       const memEntries = Object.entries(mem).filter(([k]) => k !== '_action_log')
       const memStr = memEntries.length
           ? '\n\nThings I remember about you:\n' + memEntries.map(([k, v]) => k + ': ' + v).join('\n') : ''
       const languageMode = ['auto', 'en', 'sw', 'sheng'].includes(String(languagePreference).toLowerCase())
-          ? String(languagePreference).toLowerCase() : 'auto'
+          ? String(languagePreference).toLowerCase() : 'en'
       const languageInstruction = languageMode === 'auto'
           ? 'Recognize English, Swahili, Kenyan Sheng, and code-switching. Reply in the same language mix as the user; keep Sheng natural and do not force slang into a formal conversation.'
           : languageMode === 'en'

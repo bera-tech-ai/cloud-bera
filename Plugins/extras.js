@@ -9,7 +9,7 @@ const fs = require('fs')
 const path = require('path')
 
 const BERAHOST_API = 'https://kingvon-bot-hosting.replit.app/api'
-const BERAHOST_KEY = process.env.BERAHOST_API_KEY || ''
+const getBeraHostKey = () => global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY || process.env.BERAHOST_API_KEY || ''
 const APISKEITH = ''
 const GIFTED_API = ''
 const LEGACY_DISABLED = new Set([
@@ -370,7 +370,8 @@ const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, 
     // ── BERAHOST DEPLOY ───────────────────────
     if (command === 'berahost' || command === 'deploy' || command === 'bhdeploy') {
         if (!isOwner) return reply('⛔ Owner only.')
-        if (!BERAHOST_KEY) return reply('❌ BERAHOST_API_KEY not set. Add it to your environment secrets.')
+        const BERAHOST_KEY = getBeraHostKey()
+        if (!BERAHOST_KEY) return reply('❌ BeraHost API key not set. Use `.setbhkey <key>` or configure BERAHOST_API_KEY.')
 
         // Subcommands
         const args = (text || '').trim().split(/\s+/)

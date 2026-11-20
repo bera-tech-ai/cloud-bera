@@ -27,17 +27,34 @@ const handle = async (m, { conn, command, args, text, reply, isOwner, chat, pref
     const react = (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {})
 
     // ── .setghtoken <token> ───────────────────────────────────────────────────
-    if (command === 'setghtoken' || command === 'setgithubtoken') {
+    if (['setghtoken', 'setgithubtoken', 'setghkey'].includes(command)) {
         if (!isOwner) return reply('❌ Owner only.')
+        if (m.isGroup || String(chat || '').endsWith('@g.us')) return reply('🔒 For safety, set the GitHub token in a private chat with the bot.')
         const token = args[0]?.trim()
-        if (!token) return reply('❌ Usage: *' + prefix + 'setghtoken ghp_yourTokenHere*\n\nGet one at: github.com/settings/tokens')
+        if (!token) return reply('❌ Usage: *' + prefix + 'setghkey ghp_yourTokenHere*\n\nGet one at: github.com/settings/tokens')
         try {
             await react('🔍')
-            const res = await gh('/user', 'GET', null, token)
+            let res
+            try {
+                res = await gh('/user', 'GET', null, token)
+            } catch (e) {
+                await react('❌')
+                return reply('❌ GitHub could not validate that token. Check the token permissions or network and try again.')
+            }
             const user = res.data
+            if (!global.db?.data) return reply('❌ Database is not ready; the GitHub token was not saved.')
             if (!global.db.data.settings) global.db.data.settings = {}
+            const oldToken = global.db.data.settings.githubToken
             global.db.data.settings.githubToken = token
-            await global.db.write()
+            try {
+                await global.db.write()
+            } catch (error) {
+                if (oldToken === undefined) delete global.db.data.settings.githubToken
+                else global.db.data.settings.githubToken = oldToken
+                console.error('[GITHUB] Token persistence failed:', error.message)
+                await react('❌')
+                return reply('❌ GitHub validated the token, but I could not persist it. Check database connectivity and try again.')
+            }
             await react('✅')
             return reply(
                 '✅ *GitHub Token Saved!*\n\n' +
@@ -54,13 +71,13 @@ const handle = async (m, { conn, command, args, text, reply, isOwner, chat, pref
             )
         } catch (e) {
             await react('❌')
-            return reply('❌ Invalid token or network error: ' + (e.response?.data?.message || e.message))
+            return reply('❌ GitHub token setup failed. Check connectivity and try again.')
         }
     }
 
     // All other commands require a saved token
-    if (!['setghtoken','setgithubtoken','ghuser','ghsearch'].includes(command) && !getToken()) {
-        return reply('❌ No GitHub token set.\nUse: *' + prefix + 'setghtoken <your_token>*')
+    if (!['setghtoken','setgithubtoken','setghkey','ghuser','ghsearch'].includes(command) && !getToken()) {
+        return reply('❌ No GitHub token set.\nUse: *' + prefix + 'setghkey <your_token>*')
     }
 
     // ── .ghuser <username> ────────────────────────────────────────────────────
@@ -269,7 +286,7 @@ const handle = async (m, { conn, command, args, text, reply, isOwner, chat, pref
 }
 
 handle.command = [
-    'setghtoken', 'setgithubtoken',
+    'setghtoken', 'setgithubtoken', 'setghkey',
     'ghrepo', 'ghrepository',
     'ghuser',
     'ghsearch', 'searchgithub',
@@ -278,7 +295,7 @@ handle.command = [
 ]
 handle.tags = ['owner', 'tools', 'github']
 handle.help = [
-    'setghtoken <token>        — Save your GitHub token',
+    'setghkey <token>          — Save your GitHub token (alias: setghtoken)',
     'ghrepo list               — List your repos',
     'ghrepo create <name>      — Create a new repo',
     'ghrepo info <name>        — Repo details',

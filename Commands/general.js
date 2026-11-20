@@ -43,7 +43,7 @@ const config = require('../Config')
               const sys = await richServerStats()
               const users = Object.keys(global.db?.data?.users||{}).length
               const prems = Object.values(global.db?.data?.users||{}).filter(u=>u.premium).length
-              const bhKey = global.db?.data?.settings?.bhApiKey||process.env.BH_API_KEY
+              const bhKey = global.db?.data?.settings?.bhApiKey||process.env.BH_API_KEY||process.env.BERAHOST_API_KEY
               const gitKey = global.db?.data?.settings?.gitToken||process.env.GIT_TOKEN
               return reply('\u256d\u2550\u2550\u3008 \ud83e\udd16 *BERA AI STATUS* \u3009\u2550\u22b7\n\u2503 \u23f1\ufe0f '+sys.uptime+' | \ud83e\udde0 '+sys.memory.used+'/'+sys.memory.total+'\n\u2503 \ud83d\udcbe '+sys.disk.used+'/'+sys.disk.total+' | \ud83d\udcc8 '+sys.load+'\n\u2503 \ud83d\udc65 Users: '+users+' | \ud83d\udc8e Premium: '+prems+'\n\u2503 \ud83d\udd12 Mode: '+(global.db?.data?.settings?.mode==='private'?'Private':'Public')+' | Prefix: '+p+'\n\u2503 \ud83d\udd11 BH: '+(bhKey?'\u2705':'\u274c')+' | GH: '+(gitKey?'\u2705':'\u274c')+'\n\u2570\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u22b7')
           } catch(e){ return reply('\u274c '+e.message) }
@@ -87,6 +87,19 @@ const config = require('../Config')
               `❯ ${p}sticker          — Make Sticker
 
 ` +
+              `*⟨ EXTRA COMMANDS ⟩*
+` +
+              `❯ ${p}gpt <msg>        — Extra AI chat
+` +
+              `❯ ${p}tvshow <title>  — Movie / TV search
+` +
+              `❯ ${p}ytplay <song>    — Find and play music
+` +
+              `❯ ${p}gold / ${p}pixel — Edit a replied-to image
+` +
+              `❯ ${p}extra [page]     — Browse all extra commands
+
+` +
               `*⟨ CATEGORIES — SHORT CODES ⟩*
 ` +
               `⬡ ${p}ai      🧠 AI & Agent  (140+ tools)
@@ -105,10 +118,12 @@ const config = require('../Config')
 ` +
               `⬡ ${p}cfg     ⚙️  Settings & Privacy
 ` +
+              `⬡ ${p}extra   🧩 Extra Commands
+` +
               (isOwner ? `⬡ ${p}owner   👑 Owner Panel
 ` : '') +
               `
-> ${p}list — all 300+ commands | ${p}btnmode on — enable buttons`
+> ${p}list — Bera commands | ${p}extra — imported commands | ${p}btnmode on — enable buttons`
 
           const botPic = config.botImage || './assets/bera-ai-profile.png'
           try {
@@ -142,12 +157,68 @@ const config = require('../Config')
                           { id: p + 'cfg',     text: '⚙️ Settings' },
                           { id: p + 'ghost',   text: '👻 Ghost Mode' },
                           { id: p + 'privacy', text: '🔐 Privacy' },
+                          { id: p + 'extra',   text: '🧩 Extra Commands' },
                           { id: p + 'list',    text: '📋 All Commands' },
                       ]
                   })
               } catch {}
           }
           return
+      }
+
+      if (command === 'extra') {
+          try {
+              const bridge = require('../Library/lib/xadon-bridge')
+              const commandFiles = ['general', 'bera', 'group', 'admin', 'media', 'berahost', 'gifted', 'key', 'pterodactyl', 'tools']
+              const commandMap = new Map()
+              for (const file of commandFiles) {
+                  const handler = require('../Commands/' + file)
+                  const names = Array.isArray(handler.commands) ? handler.commands
+                      : Array.isArray(handler.command) ? handler.command : [handler.command].filter(Boolean)
+                  for (const name of names) commandMap.set(String(name).toLowerCase(), handler)
+              }
+              const fs = require('fs')
+              const path = require('path')
+              const pluginDir = path.resolve('./Plugins')
+              if (fs.existsSync(pluginDir)) {
+                  for (const file of fs.readdirSync(pluginDir).filter(name => name.endsWith('.js') && name !== 'example.js')) {
+                      try {
+                          const plugin = require(path.join(pluginDir, file))
+                          const names = Array.isArray(plugin?.commands) ? plugin.commands
+                              : Array.isArray(plugin?.command) ? plugin.command : [plugin?.command].filter(Boolean)
+                          for (const name of names) commandMap.set(String(name).toLowerCase(), plugin)
+                      } catch {}
+                  }
+              }
+              bridge.register(commandMap)
+              const directRoutes = new Map()
+              for (const [name, handler] of commandMap) {
+                  const source = handler?.importedMeta?.sourceFile
+                  if (source) {
+                      if (!directRoutes.has(source)) directRoutes.set(source, [])
+                      directRoutes.get(source).push(name)
+                  }
+              }
+              const imported = bridge.allCommands || []
+              const pageSize = 35
+              const pageCount = Math.max(1, Math.ceil(imported.length / pageSize))
+              const page = Math.min(pageCount, Math.max(1, Number(args?.[0]) || 1))
+              const entries = imported.slice((page - 1) * pageSize, page * pageSize)
+              const lines = entries.map(cmd => {
+                  const source = cmd.sourceFile || cmd.sourceId || cmd.name
+                  const routes = directRoutes.get(source) || []
+                  const invocation = routes.length ? routes.map(name => p + name).join(' / ')
+                      : p + 'beraextra ' + source
+                  const description = String(cmd.desc || cmd.description || cmd.category || 'Imported command')
+                      .replace(/\bXADON(?:\s+AI)?\b/gi, 'Bera AI').replace(/\s+/g, ' ').trim().slice(0, 100)
+                  return '• ' + invocation + (description ? ' — ' + description : '')
+              })
+              return reply('🧩 *EXTRA COMMANDS*  |  Page ' + page + '/' + pageCount + '  |  ' + imported.length + ' entries\n\n' +
+                  lines.join('\n') + '\n\nUse ' + p + 'extra ' + Math.min(page + 1, pageCount) + ' for the next page. ' +
+                  'Some commands need media, credentials, or owner/admin access.')
+          } catch (error) {
+              return reply('Could not load extra commands: ' + error.message)
+          }
       }
 
       if (['list','listmenu','listmen','cmds','allcmds'].includes(command)) {
@@ -234,6 +305,6 @@ const config = require('../Config')
       }
   }
 
-  handle.commands=['ping','uptime','up','status','dashboard','botstat','info','menu','help','start','commands','men','menus','mainmenu','list','listmenu','listmen','cmds','allcmds','aimenu','dlmenu','searchmenu','groupmenu','toolsmenu','gamesmenu','convertmenu','musicmenu','sportsmenu','deploymenu','devmenu','ptmenu','keymenu','funmenu','notesmenu','religionmenu','tempmailmenu','settingsmenu','ownermenu','sticker','s','st','take','ai','dl','search','gc','dev','bhost','fun','cfg','owner','ghostmenu','privacymenu']
+  handle.commands=['ping','uptime','up','status','dashboard','botstat','info','menu','help','start','commands','men','menus','mainmenu','list','listmenu','listmen','cmds','allcmds','extra','aimenu','dlmenu','searchmenu','groupmenu','toolsmenu','gamesmenu','convertmenu','musicmenu','sportsmenu','deploymenu','devmenu','ptmenu','keymenu','funmenu','notesmenu','religionmenu','tempmailmenu','settingsmenu','ownermenu','sticker','s','st','take','ai','dl','search','gc','dev','bhost','fun','cfg','owner','ghostmenu','privacymenu']
   module.exports = handle
-  
+

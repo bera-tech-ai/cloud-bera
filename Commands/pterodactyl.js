@@ -120,6 +120,27 @@ async function dispatchCreds(m, conn, chat, waJid, credMsg, displayNum) {
 async function handle(m, { conn, args, command, text, prefix, isOwner, chat, reply }) {
     if (!isOwner) return reply(`⛔ Owner only.`)
 
+    // BeraHost credentials are independent of the Pterodactyl panel settings.
+    if (['setbhkey', 'bhkey', 'setberakey', 'bhsetkey'].includes(command)) {
+        if (m.isGroup || String(chat || '').endsWith('@g.us')) return reply('🔒 For safety, set the BeraHost key in a private chat with the bot.')
+        const newKey = text?.trim()
+        if (!newKey?.startsWith('bh_')) return reply(`❓ Usage: ${prefix}setbhkey bh_yourKeyHere\n\nGet from: https://berahost.com → API Access`)
+        if (!global.db?.data) return reply('❌ Database is not ready; the BeraHost key was not saved.')
+        if (!global.db.data.settings) global.db.data.settings = {}
+        const oldKey = global.db.data.settings.bhApiKey
+        global.db.data.settings.bhApiKey = newKey
+        try {
+            await global.db.write()
+        } catch (error) {
+            if (oldKey === undefined) delete global.db.data.settings.bhApiKey
+            else global.db.data.settings.bhApiKey = oldKey
+            console.error('[BERAHOST] Key persistence failed:', error.message)
+            return reply('❌ I could not persist the BeraHost API key. Check database connectivity and try again.')
+        }
+        await conn.sendMessage(chat, { react: { text: '✅', key: m.key } })
+        return reply(`✅ BeraHost API key saved!\n\n🧪 Test with: ${prefix}coins`)
+    }
+
     const ptUrl    = Config.pterodactylUrl    || process.env.PTERODACTYL_URL    || ''
     const clientK  = Config.pterodactylKey    || process.env.PTERODACTYL_KEY    || ''
     const appK     = Config.pterodactylAppKey || process.env.PTERODACTYL_APP_KEY || ''
@@ -844,7 +865,7 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
     const bh = require('../Library/actions/berahost')
 
     // ── BeraHost API key guard ────────────────────────────────────────────
-    const _bhKeySet = global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY
+    const _bhKeySet = global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY || process.env.BERAHOST_API_KEY
     const _bhFunctionalCmds = ['deploy','bhd','botdeploy','newdeploy','deployments','mybots','listdeploy','bhdlist','mydeployments','startbot','bhstart','depstart','stopbot','bhstop','depstop','deletedeploy','deldeploy','bhdel','removedeploy','botlogs','bhlogs','deplogs','logbot','botmetrics','botstats','bhmetrics','depmetrics','depstats','depinfo','bhinfo','deployinfo','botinfo','updateenv','setenv','bhenv','depenv','coins','bhcoins','mycoins','balance','claimcoins','dailycoins','claim','bhclaim','redeem','voucher','bhredeem','mpesa','pay','bhpay','bhmoney','stk','paystatus','checkpay','paycheck','payhistory','payments','bhpayments','mypayments','transactions','coinhistory','bhhistory','cointx']
     if (_bhFunctionalCmds.includes(command) && !_bhKeySet) {
         return reply(
@@ -1159,18 +1180,6 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
         if (!txs.length) return reply('No transactions yet.')
         const rows = txs.map(t => `┃ ${t.type || '?'} ${t.amount > 0 ? '+' : ''}${t.amount} — ${t.description || t.reason || '?'}`).join('\n')
         return reply(`╭══〘 *📋 COIN HISTORY* 〙═⊷\n${rows}\n╰══════════════════⊷`)
-    }
-
-    // ── .setbhkey <key> — update BeraHost API key ─────────────────────────────
-    if (['setbhkey', 'bhkey', 'setberakey', 'bhsetkey'].includes(command)) {
-        if (!isOwner) return reply('⛔ Owner only.')
-        const newKey = text?.trim()
-        if (!newKey?.startsWith('bh_')) return reply(`❓ Usage: ${prefix}setbhkey bh_yourKeyHere\n\nGet from: https://berahost.com → API Access`)
-        if (!global.db.data.settings) global.db.data.settings = {}
-        global.db.data.settings.bhApiKey = newKey
-        await global.db.write()
-        await conn.sendMessage(chat, { react: { text: '✅', key: m.key } })
-        return reply(`✅ BeraHost API key saved!\n\n🧪 Test with: ${prefix}coins`)
     }
 
     // ── .bhhelp ───────────────────────────────────────────────────────────────

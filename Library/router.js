@@ -1052,6 +1052,13 @@ const detectIntent = (text) => {
           /\b(what\s+are\s+(my|the|current)|current\s+bot)\s+settings?\b/i.test(t) ||
           /\b(settings?\s+(panel|overview|status|list|info|summary)|bot\s+config)/i.test(t)) return 'show_settings'
 
+      // ── Explicit language preference and translation requests ────────────────
+    if (!/\btranslate\b/i.test(t) && (
+        /\b(?:change|switch|set|make)\b.{0,45}\b(?:my\s+)?(?:reply|response|chat|preferred)?\s*language\s+(?:to|as)\s+[a-z-]+\b/i.test(t) ||
+        /\b(?:reply|speak|talk|respond)\s+(?:to\s+me\s+)?(?:in|using)\s+(?:english|swahili|kiswahili|sheng|sh|auto)\b/i.test(t)
+    )) return 'set_language'
+    if (/^\s*(?:please\s+)?translate\b/i.test(t)) return 'translate'
+
       // ── Semantic fallback — catch natural-language intent the regex missed ──────
     try {
         const { semanticRoute } = require('./lib/semanticRouter')

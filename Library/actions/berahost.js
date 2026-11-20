@@ -16,7 +16,7 @@ const getBhBaseUrl = () => {
     return (fromDb || fromEnv || BH_FALLBACK_URLS[0]).replace(/\/$/, '')
 }
 const BH_API  = () => getBhBaseUrl() + '/api'
-const getKey  = () => global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY || null
+const getKey  = () => global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY || process.env.BERAHOST_API_KEY || null
 
 const bh = () => {
     const k = getKey()

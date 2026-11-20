@@ -30,7 +30,7 @@ module.exports = {
             const mode = String(args[0] || '').toLowerCase()
             const state = chatbera()
             if (!mode || mode === 'status') {
-                const current = normalizeLanguage(state.languagePreferences[userKey] || 'auto')
+                const current = normalizeLanguage(state.languagePreferences[userKey] || 'en')
                 return reply(`🌐 Reply language: *${current}*\nUse: .language auto|en|sw|sheng`)
             }
             const normalized = normalizeLanguage(mode)
@@ -60,7 +60,7 @@ module.exports = {
             return reply(
                 `🔊 *Voice controls*\n` +
                 `• .voice auto on|off — opt in/out of spoken private-chat AI replies\n` +
-                `• .language auto|en|sw|sheng — choose reply language\n` +
+                `• .language en|sw|sheng|auto — choose reply language (default: English)\n` +
                 `• .voice <text> or .voice <lang> <text> — send a voice note\n\n` +
                 `Languages: ${Object.keys(LANG_LABELS).join(', ')}`
             )
