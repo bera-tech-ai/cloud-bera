@@ -4,7 +4,7 @@ const axios = require('axios')
 
 const BASE_URL = (process.env.XCASPER_BASE_URL || 'https://apiz.xcasper.space').replace(/\/$/, '')
 const DEFAULT_TIMEOUT = Number(process.env.XCASPER_TIMEOUT_MS || 25000)
-const DEFAULT_PROVIDER_TIMEOUT = Number(process.env.XCASPER_PROVIDER_TIMEOUT_MS || 15000)
+const DEFAULT_PROVIDER_TIMEOUT = Number(process.env.XCASPER_PROVIDER_TIMEOUT_MS || 30000)
 
 const endpoint = (path) => `${BASE_URL}${path}`
 
