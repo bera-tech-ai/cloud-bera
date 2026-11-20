@@ -314,14 +314,52 @@ const executeStep = async (record, step, options = {}) => {
 const repair = async (record, failure, options) => {
     if ((record.repairs || []).length >= (options.maxRepairs ?? 2)) return { success: false, error: 'Repair limit reached.' }
     const context = `Project task: ${record.task}\nFailure output:\n${String(failure).slice(-10000)}\nProject inspection:\n${JSON.stringify(inspect(record.dir))}`
-    const result = await xcasper.chat([{ role: 'system', content: 'You are a senior software repair planner. Return one valid JSON object only: {"steps":[{"action":"write_file","path":"relative path from the project root","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. Every step action MUST be exactly one of "write_file", "build", "test", or "install"; choose one value and never put alternatives, pipes, or lists in action. When validation says there is no runnable application entrypoint, write complete, non-placeholder app files at the project root, such as index.html or package.json plus its entrypoint. Do not create an extra project/project_root wrapper directory. Use contentBase64 for source files, never a literal content field. Never delete files or use secrets.' }, { role: 'user', content: context }], {
+    const repairPrompt = 'You are a senior software repair planner. Return one valid JSON object only: {"steps":[{"action":"write_file","path":"relative path from the project root","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. Every step action MUST be exactly one of "write_file", "build", "test", or "install"; choose one value and never put alternatives, pipes, or lists in action. When validation says there is no runnable application entrypoint, the repair MUST write a complete root-level index.html with <!doctype html>, <html>, <body>, and a meaningful <main> section, or a root package.json with a working start/build script and its root application entrypoint. Do not write only src/index.html, a bare doctype, or placeholder content. Do not create an extra project/project_root wrapper directory. Use contentBase64 for source files, never a literal content field. Never delete files or use secrets.'
+    const result = await xcasper.chat([{ role: 'system', content: repairPrompt }, { role: 'user', content: context }], {
         timeout: 45000,
         maxChars: 20000,
         onProviderProgress: progress => notifyProgress(options, { phase: 'repair_provider', ...progress })
     })
     if (!result.success) return { success: false, error: result.error }
-    const parsed = parsePlannerJson(result.text)
-    if (!parsed.success) return { success: false, error: `Repair planner returned invalid JSON: ${parsed.error.message}` }
+    let parsed = parsePlannerJson(result.text)
+    if (!parsed.success) {
+        await notifyProgress(options, { phase: 'repair_json_recovery' })
+        const recovery = await xcasper.chat([
+            { role: 'system', content: 'Convert the malformed repair-planner response into exactly one valid JSON object with a non-empty steps array. Preserve the proposed repair steps and values. Each steps[].action must be exactly one of write_file, build, test, or install. Do not invent additional work, add explanations, or use Markdown fences. Return JSON only.' },
+            { role: 'user', content: `Repair context:\n${context}\nMalformed repair response:\n${String(result.text || '').slice(-18000)}` }
+        ], {
+            timeout: 45000,
+            maxChars: 20000,
+            onProviderProgress: progress => notifyProgress(options, { phase: 'repair_json_recovery_provider', ...progress })
+        })
+        if (recovery.success) {
+            parsed = parsePlannerJson(recovery.text)
+            if (!parsed.success) {
+                await notifyProgress(options, { phase: 'repair_json_local_repair' })
+                parsed = parsePlannerJson(recovery.text, true)
+            }
+        } else {
+            parsed = parsePlannerJson(result.text, true)
+        }
+    }
+    if (!parsed.success) {
+        await notifyProgress(options, { phase: 'repair_json_regeneration' })
+        const regeneration = await xcasper.chat([
+            { role: 'system', content: `${repairPrompt}\nThe previous repair response could not be parsed. Discard it and generate a fresh repair plan from the current failure and project inspection. Return one compact valid JSON object only.` },
+            { role: 'user', content: `${context}\nPrevious repair JSON error: ${parsed.error.message}` }
+        ], {
+            timeout: 45000,
+            maxChars: 20000,
+            onProviderProgress: progress => notifyProgress(options, { phase: 'repair_json_regeneration_provider', ...progress })
+        })
+        if (regeneration.success) {
+            parsed = parsePlannerJson(regeneration.text)
+            if (!parsed.success) parsed = parsePlannerJson(regeneration.text, true)
+        } else {
+            return { success: false, error: `Repair planner returned invalid JSON and fresh repair generation failed: ${regeneration.error}` }
+        }
+    }
+    if (!parsed.success) return { success: false, error: `Repair planner returned invalid JSON after recovery: ${parsed.error.message}` }
     const plan = parsed.value
     if (!Array.isArray(plan.steps) || !plan.steps.length) return { success: false, error: 'Repair planner returned no actionable steps.' }
     const normalizedSteps = []
@@ -355,6 +393,15 @@ const repair = async (record, failure, options) => {
     for (const step of normalizedSteps) {
         const result = await executeStep(record, step, options)
         if (!result.success) return { success: false, error: result.output }
+    }
+    if (/No runnable application entrypoint found at the project root/i.test(String(failure))) {
+        const rootEntrypoints = new Set(['index.html', 'package.json', 'index.js', 'server.js', 'app.js', 'main.py', 'app.py'])
+        const writesRootEntrypoint = normalizedSteps.some(step => {
+            if (step.action !== 'write_file') return false
+            const relative = path.relative(record.dir, path.resolve(record.dir, step.path))
+            return rootEntrypoints.has(relative)
+        })
+        if (!writesRootEntrypoint) return { success: false, error: 'Repair plan did not include a root-level runnable entrypoint.' }
     }
     update(record, { stage: 'repairing', status: 'repairing' })
     return { success: true }
@@ -485,8 +532,9 @@ const run = async options => {
     for (let attempt = 0; !validation.success && attempt < (options.maxRepairs ?? 2); attempt++) {
         await notifyProgress(options, { phase: 'repair', attempt: attempt + 1, total: options.maxRepairs ?? 2 })
         const fixed = await repair(record, validation.checks.filter(c => !c.success).map(c => c.output).join('\n'), options)
-        if (!fixed.success) { repairError = fixed.error || 'Automatic repair failed.'; break }
+        if (!fixed.success) { repairError = fixed.error || 'Automatic repair failed.'; continue }
         validation = await validate(record, options)
+        repairError = validation.success ? null : `Repair steps ran but validation still fails: ${validation.checks.filter(check => !check.success).map(check => check.output).join('\n')}`
     }
     if (!validation.success) {
         update(record, { status: 'failed', stage: 'validation_failed' })

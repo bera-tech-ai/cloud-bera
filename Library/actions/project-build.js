@@ -59,8 +59,15 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
             } else if (progress.phase === 'planning_complete') {
                 const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
                 await replyProgress(`✅ AI planner responded via ${label}; preparing the project files.`)
+            } else if (progress.phase === 'planner_json_recovery') {
+                await replyProgress('🔧 Planner output was not valid JSON; asking the planner to correct its format before rebuilding the plan.')
             } else if (progress.phase === 'planner_json_local_repair') {
                 await replyProgress('🔧 Planner JSON needed formatting; repairing the response locally before continuing.')
+            } else if (progress.phase === 'planner_json_regeneration') {
+                await replyProgress('🔄 The planner response could not be repaired; generating a fresh plan from your original request.')
+            } else if (progress.phase === 'planner_json_regeneration_provider' && progress.stage === 'trying') {
+                const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
+                await replyProgress(`🔌 Fresh-plan recovery: trying ${label} (${progress.index + 1}/${progress.total})...`)
             } else if (progress.phase === 'execute') {
                 const { index, total, action } = progress
                 if (index === 0 || index === total - 1 || (index + 1) % 4 === 0) {
@@ -75,6 +82,15 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
             } else if (progress.phase === 'repair_provider' && progress.stage === 'trying') {
                 const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
                 await replyProgress(`🔌 Repair planner: trying ${label} (${progress.index + 1}/${progress.total})...`)
+            } else if (progress.phase === 'repair_json_recovery') {
+                await replyProgress('🧩 Repair response was not valid JSON; requesting a corrected repair plan.')
+            } else if (progress.phase === 'repair_json_local_repair') {
+                await replyProgress('🔧 Repair plan formatting is still invalid; attempting local JSON repair.')
+            } else if (progress.phase === 'repair_json_regeneration') {
+                await replyProgress('🔄 Repair plan could not be recovered; generating a fresh repair plan from the failed check.')
+            } else if (['repair_json_recovery_provider', 'repair_json_regeneration_provider'].includes(progress.phase) && progress.stage === 'trying') {
+                const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
+                await replyProgress(`🔌 Repair recovery: trying ${label} (${progress.index + 1}/${progress.total})...`)
             } else if (progress.phase === 'checkpoint') {
                 await replyProgress('💾 Checks passed; saving the local build checkpoint. No GitHub push or deployment is happening yet.')
             } else if (progress.phase === 'preview') {
