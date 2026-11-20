@@ -35,7 +35,8 @@ test('Agent OS safely runs allowlisted package-manager plan steps without genera
             assert.deepEqual(invocation.args, ['install', '--save-dev', 'vite', '--registry=https://registry.npmjs.org/'])
             assert.equal(invocation.registry, 'https://registry.npmjs.org/')
 
-            fs.writeFileSync(path.join(projectDir, 'package.json'), JSON.stringify({ name: 'registry-test', scripts: {} }))
+            fs.writeFileSync(path.join(projectDir, 'package.json'), JSON.stringify({ name: 'registry-test', scripts: { start: 'node index.js' } }))
+            fs.writeFileSync(path.join(projectDir, 'index.js'), 'console.log("ok")\\n')
             const validation = await agentOs.validate(record)
             assert.equal(validation.success, true)
             invocation = JSON.parse(fs.readFileSync(argsFile, 'utf8'))

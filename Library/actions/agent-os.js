@@ -108,6 +108,33 @@ const inspect = dir => {
     }
 }
 
+const checkProjectEntrypoint = (dir, info) => {
+    let staticSite = false
+    try {
+        const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8')
+        const body = html.match(/<body\b[^>]*>([\s\S]*?)<\/body\s*>/i)?.[1] || ''
+        staticSite = /<html\b[\s\S]*<\/html\s*>/i.test(html) &&
+            /<(?:main|header|nav|section|article|form|button|h[1-6]|p|div|canvas|script)\b/i.test(body)
+    } catch {}
+    const rootScript = ['index.js', 'server.js', 'app.js'].find(file => {
+        try { const stat = fs.statSync(path.join(dir, file)); return stat.isFile() && stat.size > 0 } catch { return false }
+    })
+    const pythonEntrypoint = ['main.py', 'app.py'].find(file => {
+        try { const stat = fs.statSync(path.join(dir, file)); return stat.isFile() && stat.size > 0 } catch { return false }
+    })
+    const packageApp = Boolean(info.manager && (info.startCommand || info.buildCommand))
+    const success = staticSite || packageApp || Boolean(rootScript) || Boolean(pythonEntrypoint)
+    return {
+        name: 'project-entrypoint',
+        success,
+        output: success
+            ? 'Found a non-empty application entrypoint at the project root.'
+            : 'No runnable application entrypoint found at the project root. Add a real root index.html, a package.json with a start/build script, or a root index.js/server.js/app.js/main.py/app.py file; do not hide the application inside an extra project/ or project_root/ folder.',
+        rootScript: rootScript || null,
+        pythonEntrypoint: pythonEntrypoint || null
+    }
+}
+
 const create = async options => {
     const userId = options.userId || 'shared'
     const name = safe(options.name || 'bera-project')
@@ -174,7 +201,7 @@ const parsePlannerJson = (raw, repairMalformed = false) => {
 }
 
 const makePlan = async (record, task, options = {}) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"mkdir","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. Do not use secrets or delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"mkdir","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Do not use secrets or delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
         timeout: 45000,
@@ -300,13 +327,19 @@ const repair = async (record, failure, options) => {
 
 const validate = async (record, options = {}) => {
     const info = inspect(record.dir)
-    const checks = []
-    if (info.manager) checks.push({ name: 'install', ...(await installProjectDependencies(info.manager, record.dir, options.installTimeout || 180000)) })
-    if (info.buildCommand) checks.push({ name: 'build', ...(await command(info.buildCommand, record.dir, options.buildTimeout || 180000)) })
-    if (info.testCommand) checks.push({ name: 'test', ...(await command(info.testCommand, record.dir, options.testTimeout || 120000)) })
+    const entrypoint = checkProjectEntrypoint(record.dir, info)
+    const checks = [entrypoint]
+    if (entrypoint.success) {
+        if (entrypoint.rootScript) checks.push({ name: 'javascript-syntax', ...(await command(`node --check ${JSON.stringify(entrypoint.rootScript)}`, record.dir, options.syntaxTimeout || 30000)) })
+        if (entrypoint.pythonEntrypoint) checks.push({ name: 'python-syntax', ...(await command(`python3 -m py_compile ${JSON.stringify(entrypoint.pythonEntrypoint)}`, record.dir, options.syntaxTimeout || 30000)) })
+        if (info.manager) checks.push({ name: 'install', ...(await installProjectDependencies(info.manager, record.dir, options.installTimeout || 180000)) })
+        if (info.buildCommand) checks.push({ name: 'build', ...(await command(info.buildCommand, record.dir, options.buildTimeout || 180000)) })
+        if (info.testCommand) checks.push({ name: 'test', ...(await command(info.testCommand, record.dir, options.testTimeout || 120000)) })
+    }
     record.checks = checks
-    update(record, { stage: 'validated', status: checks.every(c => c.success) ? 'validated' : 'validation_failed' })
-    return { success: checks.every(c => c.success), checks }
+    const success = checks.length > 0 && checks.every(c => c.success)
+    update(record, { stage: success ? 'validated' : 'validation_failed', status: success ? 'validated' : 'validation_failed' })
+    return { success, checks }
 }
 
 const checkpoint = async (record, message = 'checkpoint: Bera AI') => {

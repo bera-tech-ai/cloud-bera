@@ -226,7 +226,14 @@ const lifecycle = async (options = {}) => {
                     envVars: options.envVars || {},
                     autoDeploy: Boolean(options.autoDeploy && production)
                 })
-                if (!deployment.success) throw new Error(`BeraHost deployment failed: ${deployment.error}`)
+                if (!deployment.success) {
+                    const deploymentError = String(deployment.error || 'unknown error')
+                    const repoIsPrivate = typeof repo.private === 'boolean' ? repo.private : options.private !== false
+                    const privateCloneHint = repoIsPrivate && /404|not found|download failed/i.test(deploymentError)
+                        ? ' The GitHub repository is private, and Bera’s BeraHost request does not configure a dedicated GitHub clone credential. This 404 is consistent with BeraHost lacking access. Bera kept the repository private; configure BeraHost’s supported private-repository access or explicitly approve making the source public.'
+                        : ''
+                    throw new Error(`BeraHost deployment failed: ${deploymentError}${privateCloneHint}`)
+                }
                 record.deployment = { id: deployment.id, status: deployment.status, url: deployment.url || null, production }
                 updateRecord(record, { stage: 'deployment_poll' })
                 const final = await berahost.pollWebDeployment(deployment.id, options.deployTimeout || 120000, 5000)

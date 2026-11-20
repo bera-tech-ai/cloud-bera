@@ -70,7 +70,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         }
     })
     const record = result.record || {}
-    const buildValidated = Boolean(record.checkpoint) && (record.checks || []).every(check => check.success)
+    const buildValidated = Boolean(record.checkpoint) && (record.checks || []).length > 0 && (record.checks || []).every(check => check.success)
     let approvalCase = null
     if (record.id) {
         try {
@@ -105,6 +105,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
                 `Project: ${record.name || record.id}`,
                 `Action: ${mode}`,
                 'The project was validated locally. No repository push or deployment happens unless an authorized project owner approves.',
+                'Repository visibility stays private by default. Bera will not make the source public automatically; BeraHost must already have authorized access to clone a private repository.',
                 'Reply directly to this message with 1 to approve or 2 to decline.'
             ].join('\n')
             const sent = await conn.sendMessage(chat, { text: prompt }, message ? { quoted: message } : {})
