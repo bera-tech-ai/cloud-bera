@@ -33,7 +33,13 @@ test('Agent OS recovers repair plans with missing JSON and retries boundedly', (
             { text: 'No JSON in this response.' },
             { text: 'No JSON in this formatter response.' },
             { text: 'No JSON in this regenerated repair response.' },
-            { json: rootRepair }
+            { json: rootRepair },
+            { json: noEntrypointPlan },
+            { json: { steps: [
+                { action: 'npm install' },
+                { action: 'mkdir', path: 'assets' },
+                ...rootRepair.steps
+            ], reason: 'Create root entrypoint and its asset directory' } }
         ]
         let calls = 0
         xcasper.chat = async () => {
@@ -70,7 +76,12 @@ test('Agent OS recovers repair plans with missing JSON and retries boundedly', (
             const retried = await runSample('repair-bounded-retry', retryPhases)
             assert.ok(retryPhases.filter(phase => phase === 'repair').length >= 2)
             assert.equal(retried.record.repairs.length, 1)
-            assert.equal(calls, 12)
+
+            const actionPhases = []
+            const actionNormalized = await runSample('repair-mkdir-supported', actionPhases)
+            assert.equal(actionNormalized.record.repairs.length, 1)
+            assert.ok(fs.statSync(path.join(root, 'workspace', 'repair-json-user', 'projects', 'repair-mkdir-supported', 'assets')).isDirectory())
+            assert.equal(calls, 14)
             console.log('REPAIR_JSON_RECOVERY_OK')
         })().catch(error => { console.error(error); process.exitCode = 1 })
     `

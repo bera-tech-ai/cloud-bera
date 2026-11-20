@@ -314,7 +314,7 @@ const executeStep = async (record, step, options = {}) => {
 const repair = async (record, failure, options) => {
     if ((record.repairs || []).length >= (options.maxRepairs ?? 2)) return { success: false, error: 'Repair limit reached.' }
     const context = `Project task: ${record.task}\nFailure output:\n${String(failure).slice(-10000)}\nProject inspection:\n${JSON.stringify(inspect(record.dir))}`
-    const repairPrompt = 'You are a senior software repair planner. Return one valid JSON object only: {"steps":[{"action":"write_file","path":"relative path from the project root","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. Every step action MUST be exactly one of "write_file", "build", "test", or "install"; choose one value and never put alternatives, pipes, or lists in action. When validation says there is no runnable application entrypoint, the repair MUST write a complete root-level index.html with <!doctype html>, <html>, <body>, and a meaningful <main> section, or a root package.json with a working start/build script and its root application entrypoint. Do not write only src/index.html, a bare doctype, or placeholder content. Do not create an extra project/project_root wrapper directory. Use contentBase64 for source files, never a literal content field. Never delete files or use secrets.'
+    const repairPrompt = 'You are a senior software repair planner. Return one valid JSON object only: {"steps":[{"action":"write_file","path":"relative path from the project root","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. Every step action MUST be exactly one of "write_file", "mkdir", "build", "test", or "install"; choose one value and never put alternatives, pipes, or lists in action. Use mkdir only for a needed directory with a relative path. When validation says there is no runnable application entrypoint, the repair MUST write a complete root-level index.html with <!doctype html>, <html>, <body>, and a meaningful <main> section, or a root package.json with a working start/build script and its root application entrypoint. Do not write only src/index.html, a bare doctype, or placeholder content. Do not create an extra project/project_root wrapper directory. Use contentBase64 for source files, never a literal content field. Never delete files or use secrets.'
     const result = await xcasper.chat([{ role: 'system', content: repairPrompt }, { role: 'user', content: context }], {
         timeout: 45000,
         maxChars: 20000,
@@ -325,7 +325,7 @@ const repair = async (record, failure, options) => {
     if (!parsed.success) {
         await notifyProgress(options, { phase: 'repair_json_recovery' })
         const recovery = await xcasper.chat([
-            { role: 'system', content: 'Convert the malformed repair-planner response into exactly one valid JSON object with a non-empty steps array. Preserve the proposed repair steps and values. Each steps[].action must be exactly one of write_file, build, test, or install. Do not invent additional work, add explanations, or use Markdown fences. Return JSON only.' },
+            { role: 'system', content: 'Convert the malformed repair-planner response into exactly one valid JSON object with a non-empty steps array. Preserve the proposed repair steps and values. Each steps[].action must be exactly one of write_file, mkdir, build, test, or install. Do not invent additional work, add explanations, or use Markdown fences. Return JSON only.' },
             { role: 'user', content: `Repair context:\n${context}\nMalformed repair response:\n${String(result.text || '').slice(-18000)}` }
         ], {
             timeout: 45000,
@@ -365,13 +365,22 @@ const repair = async (record, failure, options) => {
     const normalizedSteps = []
     for (const [index, rawStep] of plan.steps.slice(0, 10).entries()) {
         const rawAction = String(rawStep.action || '').trim().toLowerCase()
-        const actionOptions = rawAction.split('|').map(value => value.trim())
+        const normalizeAction = value => {
+            const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_')
+            if (['create_file', 'write', 'save_file'].includes(normalized)) return 'write_file'
+            if (['npm_install', 'npm_i', 'install_dependencies'].includes(normalized)) return 'install'
+            if (['npm_run_build', 'build_project', 'run_build'].includes(normalized)) return 'build'
+            if (['npm_test', 'run_test', 'run_tests'].includes(normalized)) return 'test'
+            return normalized
+        }
+        const actionOptions = [...new Set(rawAction.split(/[|,]/).map(normalizeAction).filter(Boolean))]
         const hasContent = Boolean(rawStep.contentBase64 || (typeof rawStep.content === 'string' && rawStep.content.length))
         const action = actionOptions.length === 1
             ? actionOptions[0]
-            : hasContent && actionOptions.includes('write_file') ? 'write_file' : ''
-        if (!['write_file', 'build', 'test', 'install'].includes(action)) {
-            return { success: false, error: `Repair planner returned an unsupported or ambiguous action at step ${index + 1}.` }
+            : hasContent && actionOptions.includes('write_file') ? 'write_file'
+                : !hasContent && actionOptions.includes('mkdir') && actionOptions.includes('write_file') ? 'mkdir' : ''
+        if (!['write_file', 'mkdir', 'build', 'test', 'install'].includes(action)) {
+            return { success: false, error: `Repair planner returned an unsupported or ambiguous action at step ${index + 1} (${JSON.stringify(rawAction.slice(0, 100))}).` }
         }
         const step = {
             ...rawStep,
@@ -383,7 +392,10 @@ const repair = async (record, failure, options) => {
         if (action === 'write_file' && (!String(step.path || '').trim() || typeof step.content !== 'string' || !step.content.length)) {
             return { success: false, error: `Repair planner returned an incomplete write_file step at step ${index + 1}.` }
         }
-        if (action === 'write_file' && !inside(record.dir, path.resolve(record.dir, step.path))) {
+        if (action === 'mkdir' && !String(step.path || '').trim()) {
+            return { success: false, error: `Repair planner returned an incomplete mkdir step at step ${index + 1}.` }
+        }
+        if (['write_file', 'mkdir'].includes(action) && !inside(record.dir, path.resolve(record.dir, step.path))) {
             return { success: false, error: `Repair planner requested a path outside the project workspace at step ${index + 1}.` }
         }
         normalizedSteps.push(step)
