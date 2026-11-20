@@ -207,7 +207,8 @@ const resolveApprovalReply = ({ text, quotedText, quotedId, chat } = {}) => {
     const match = String(quotedText || '').match(/^Bera project approval request\r?\nCase ID:\s*([a-f0-9]{12})(?:\r?\n|$)/im)
     if (!match) return null
     const entry = supportState().cases[match[1]]
-    if (!entry || entry.state !== 'preview_ready' || !entry.sameProject) return null
+    const retryingFailedPublish = entry?.state === 'approved_publish_failed' && choice === '1' && Boolean(entry.requestedPublish)
+    if (!entry || (!retryingFailedPublish && (entry.state !== 'preview_ready' || !entry.sameProject))) return null
     if (String(entry.chat || '') !== String(chat || '') || entry.approvalPromptMessageId !== String(quotedId)) return null
     return {
         caseId: entry.id,
@@ -286,10 +287,28 @@ const previewCase = async (entry, project, ctx) => {
     return entry
 }
 
+const publishApprovedCase = async (entry, project, source, publishMode) => {
+    const deployed = await agentOs.run({ action: 'publish', projectId: project.id, userId: source.userId, private: true, deploy: publishMode === 'deploy', approveProduction: true, ownerAuthorized: true })
+    entry.publishResult = { success: Boolean(deployed.success), error: deployed.error || null, url: deployed.record?.deployment?.url || null }
+    entry.state = deployed.success ? 'published' : 'approved_publish_failed'
+    entry.updatedAt = Date.now()
+    await persist()
+    if (!deployed.success) throw new Error(`Project approval is recorded, but publishing did not complete: ${deployed.error || 'unknown error'}`)
+    return entry
+}
+
 const applyCase = async (entry, project, ctx, publishMode) => {
     if (!canControl(ctx, project)) throw new Error('Only the project owner can approve a revision.')
-    if (entry.state !== 'preview_ready') throw new Error('This case has no passing preview to approve. Generate one with `.agent project preview <case-id>`.')
+    const retryingPublish = entry.state === 'approved_publish_failed' && Boolean(publishMode)
+    if (entry.state !== 'preview_ready' && !retryingPublish) throw new Error('This case has no passing preview to approve. Generate one with `.agent project preview <case-id>`.')
     if (entry.sameProject && publishMode === 'approve') throw new Error('This build requested publication. Specify `github` or `deploy` to approve that external action explicitly.')
+    if (retryingPublish) {
+        if (!entry.approvedHead) throw new Error('The previously approved project revision has no saved source checkpoint; retry stopped safely.')
+        const source = agentOs.get(project.id)
+        if (!source?.dir || await getHead(source.dir) !== entry.approvedHead) throw new Error('Project changed after the failed publish. Retry stopped; review the current project before publishing again.')
+        if (await meaningfulGitStatus(source.dir)) throw new Error('Project has uncommitted changes after the failed publish. Retry stopped to protect unreviewed work.')
+        return publishApprovedCase(entry, project, source, publishMode)
+    }
     const source = agentOs.get(project.id)
     const sourceDir = path.resolve(source?.dir || '')
     const previewDir = path.resolve(entry.previewDir || '')
@@ -317,14 +336,7 @@ const applyCase = async (entry, project, ctx, publishMode) => {
     entry.approvedBy = normalizeJid(ctx.sender)
     entry.state = 'approved'
     await persist()
-    if (publishMode) {
-        const deployed = await agentOs.run({ action: 'publish', projectId: project.id, userId: source.userId, private: true, deploy: publishMode === 'deploy', approveProduction: true, ownerAuthorized: true })
-        entry.publishResult = { success: Boolean(deployed.success), error: deployed.error || null, url: deployed.record?.deployment?.url || null }
-        entry.state = deployed.success ? 'published' : 'approved_publish_failed'
-        entry.updatedAt = Date.now()
-        await persist()
-        if (!deployed.success) throw new Error(`Revision was approved and applied locally, but publishing did not complete: ${deployed.error || 'unknown error'}`)
-    }
+    if (publishMode) return publishApprovedCase(entry, project, source, publishMode)
     return entry
 }
 

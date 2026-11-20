@@ -20,7 +20,15 @@ const gh = (endpoint, method = 'GET', data = null) => {
         },
         data,
         timeout: 25000
-    }).then(r => r.data).catch(e => ({ error: e.response?.data?.message || e.message }))
+    }).then(r => r.data).catch(e => {
+        const response = e.response
+        return {
+            error: response?.data?.message || e.message,
+            ...(response?.status ? { status: response.status } : {}),
+            ...(response?.data?.errors ? { details: response.data.errors } : {}),
+            ...(response?.data?.documentation_url ? { documentationUrl: response.data.documentation_url } : {})
+        }
+    })
 }
 
 const getUser        = ()                         => gh('/user')

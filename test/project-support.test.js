@@ -183,6 +183,14 @@ test('numbered replies resolve only for the exact pending prompt and preserve ow
         'an unquoted number cannot be interpreted as an approval')
     assert.equal(support.resolveApprovalReply({ text: '1. yes', quotedText: prompt, quotedId: 'prompt-1', chat: group }), null)
 
+    approval.state = 'approved_publish_failed'
+    assert.deepEqual(support.resolveApprovalReply({ text: '1', quotedText: prompt, quotedId: 'prompt-1', chat: group }), {
+        caseId: approval.id, action: 'approve', mode: 'deploy'
+    }, 'the owner can retry the failed publish by replying 1 again')
+    assert.equal(support.resolveApprovalReply({ text: '2', quotedText: prompt, quotedId: 'prompt-1', chat: group }), null,
+        'decline is available only while approval is still pending')
+    approval.state = 'preview_ready'
+
     let unauthorizedReply = ''
     await support.handleCommand(`approve ${approval.id} deploy`, {
         m: { chat: group, sender: '15550000002@s.whatsapp.net' },
@@ -191,4 +199,45 @@ test('numbered replies resolve only for the exact pending prompt and preserve ow
     })
     assert.match(unauthorizedReply, /Only the project owner/i)
     assert.equal(approval.state, 'preview_ready', 'an unauthorized numeric approval must not alter the case')
+})
+
+test('owner can retry a failed publish only while the approved source head remains unchanged', async () => {
+    const approval = await support.createBuildApproval(record, {
+        userId: owner, chat: group, requestedPublish: true, requestedDeploy: true
+    })
+    approval.state = 'approved_publish_failed'
+    approval.approvedHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: sourceDir, encoding: 'utf8' }).trim()
+    const originalRun = agentOs.run
+    const publishCalls = []
+    agentOs.run = async options => {
+        publishCalls.push(options)
+        return { success: true, record: { deployment: { url: 'https://example.test' } } }
+    }
+    try {
+        await assert.rejects(
+            () => support.applyCase(approval, project, { sender: '15550000002@s.whatsapp.net', isOwner: false }, 'deploy'),
+            /Only the project owner/i
+        )
+        assert.equal(publishCalls.length, 0)
+
+        const retried = await support.applyCase(approval, project, { sender: owner, isOwner: false }, 'deploy')
+        assert.equal(retried.state, 'published')
+        assert.equal(retried.publishResult.url, 'https://example.test')
+        assert.equal(publishCalls.length, 1)
+        assert.equal(publishCalls[0].action, 'publish')
+        assert.equal(publishCalls[0].ownerAuthorized, true)
+    } finally {
+        agentOs.run = originalRun
+    }
+
+    const stale = await support.createBuildApproval(record, {
+        userId: owner, chat: group, requestedPublish: true, requestedDeploy: true
+    })
+    stale.state = 'approved_publish_failed'
+    stale.approvedHead = 'not-the-current-head'
+    await assert.rejects(
+        () => support.applyCase(stale, project, { sender: owner, isOwner: false }, 'deploy'),
+        /Project changed after the failed publish/i
+    )
+    assert.equal(publishCalls.length, 1, 'stale project content must never be republished')
 })

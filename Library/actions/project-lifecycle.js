@@ -112,6 +112,46 @@ const pushToGitHub = async (dir, owner, repo, branch = 'main', message = 'feat: 
     } finally { try { fs.unlinkSync(askpass) } catch {} }
 }
 
+const describeGitHubError = (operation, result) => {
+    const status = result?.status ? ` (HTTP ${result.status})` : ''
+    const rawDetails = result?.details
+    const details = Array.isArray(rawDetails)
+        ? rawDetails.map(item => typeof item === 'string' ? item : [item?.resource, item?.field, item?.code, item?.message].filter(Boolean).join(' ')).filter(Boolean).join('; ')
+        : typeof rawDetails === 'string' ? rawDetails : ''
+    return `${operation}${status}: ${result?.error || result?.message || 'unknown error'}${details ? ` — ${details}` : ''}`
+}
+
+const validateExistingRepository = (repo, owner, repoName, isPrivate) => {
+    if (!repo || repo.error || !repo.html_url) throw new Error(describeGitHubError('GitHub repository lookup failed', repo))
+    const actualOwner = String(repo.owner?.login || '')
+    if (!actualOwner || actualOwner.toLowerCase() !== String(owner || '').toLowerCase()) {
+        throw new Error(`Repository ${repoName} could not be verified as belonging to the authenticated GitHub owner.`)
+    }
+    if (typeof repo.private === 'boolean' && repo.private !== Boolean(isPrivate)) {
+        throw new Error(`Repository ${owner}/${repoName} already exists with different visibility. Bera did not change its visibility; choose another name or update the repository settings explicitly.`)
+    }
+    return repo
+}
+
+const getOrCreateRepository = async (owner, repoName, { isPrivate = true, description = '' } = {}) => {
+    const existing = await github.getRepo(owner, repoName)
+    if (!existing?.error) return validateExistingRepository(existing, owner, repoName, isPrivate)
+    if (existing.status !== 404) throw new Error(describeGitHubError('GitHub repository lookup failed', existing))
+
+    const created = await github.createRepo(repoName, isPrivate, description, { autoInit: false })
+    if (!created?.error && created?.html_url) return validateExistingRepository(created, owner, repoName, isPrivate)
+
+    // A prior approval attempt may have created the repository before a later push step failed.
+    // Re-check after a conflict so retries can safely continue against that exact owner's repo.
+    if (created?.status === 422) {
+        const afterConflict = await github.getRepo(owner, repoName)
+        if (!afterConflict?.error && afterConflict?.html_url) {
+            return validateExistingRepository(afterConflict, owner, repoName, isPrivate)
+        }
+    }
+    throw new Error(describeGitHubError('GitHub repository creation failed', created))
+}
+
 const lifecycle = async (options = {}) => {
     const userId = options.userId || 'shared'
     const requestedName = options.name || options.projectName || 'bera-project'
@@ -161,8 +201,10 @@ const lifecycle = async (options = {}) => {
         const repoName = safeId(options.repoName || name)
         let repo = options.repoUrl ? { html_url: options.repoUrl, clone_url: options.repoUrl } : null
         if (!repo) {
-            repo = await github.createRepo(repoName, options.private !== false, options.description || `Project ${name} created by Bera AI`, { autoInit: false })
-            if (repo.error || !repo.html_url) throw new Error(`GitHub repository creation failed: ${repo.error || repo.message || 'unknown error'}`)
+            repo = await getOrCreateRepository(owner, repoName, {
+                isPrivate: options.private !== false,
+                description: options.description || `Project ${name} created by Bera AI`
+            })
         }
         const pushed = await pushToGitHub(dir, owner, repo.name || repoName, options.branch || 'main', options.commitMessage)
         if (!pushed.success) throw new Error(`GitHub push failed: ${pushed.error}`)
@@ -225,4 +267,4 @@ const formatReport = record => [
 const getProject = id => loadState().projects[id] || null
 const listProjects = userId => Object.values(loadState().projects).filter(p => !userId || p.userId === userId)
 
-module.exports = { lifecycle, getProject, listProjects, inspectProject, formatReport }
+module.exports = { lifecycle, getProject, listProjects, inspectProject, formatReport, getOrCreateRepository }
