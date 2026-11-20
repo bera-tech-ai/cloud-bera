@@ -810,6 +810,31 @@ const handleMessage = async (conn, rawMsg) => {
             return
         }
 
+        // A number is an approval only when it quotes the exact, still-pending prompt.
+        // Rewrite it into the ordinary project command so authorization and case-state
+        // checks remain in the existing project-support handler.
+        const approvalText = m.text?.trim() || ''
+        if (approvalText === '1' || approvalText === '2') {
+            try {
+                const support = require('../Library/actions/project-support')
+                const approval = support.resolveApprovalReply({
+                    text: approvalText,
+                    quotedText: m.quoted?.text,
+                    quotedId: m.quoted?.id,
+                    chat: m.chat
+                })
+                if (approval) {
+                    const action = approval.action === 'approve'
+                        ? `approve ${approval.caseId}${approval.mode ? ` ${approval.mode}` : ''}`
+                        : `undo ${approval.caseId}`
+                    m.text = `${getPrefix()}agent project ${action}`
+                    m.body = m.text
+                }
+            } catch (error) {
+                console.error('[PROJECT APPROVAL REPLY]', error?.message || error)
+            }
+        }
+
         // Voice notes are NOT auto-transcribed — user must explicitly request it.
         // Use: .transcribe (while quoting a voice note)
         //  or: quote the voice note and say "bera transcribe this"

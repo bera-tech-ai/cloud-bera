@@ -190,6 +190,32 @@ const createBuildApproval = async (record, { userId, chat, requestedPublish = fa
     return entry
 }
 
+const recordApprovalPromptMessage = async (caseId, messageKey) => {
+    const entry = supportState().cases[String(caseId || '')]
+    const messageId = String(messageKey?.id || '')
+    if (!entry || entry.state !== 'preview_ready' || !entry.sameProject || !messageId) return false
+    if (String(messageKey?.remoteJid || entry.chat) !== String(entry.chat || '')) return false
+    entry.approvalPromptMessageId = messageId
+    entry.updatedAt = Date.now()
+    await persist()
+    return true
+}
+
+const resolveApprovalReply = ({ text, quotedText, quotedId, chat } = {}) => {
+    const choice = String(text || '').trim()
+    if (!['1', '2'].includes(choice) || !quotedId) return null
+    const match = String(quotedText || '').match(/^Bera project approval request\r?\nCase ID:\s*([a-f0-9]{12})(?:\r?\n|$)/im)
+    if (!match) return null
+    const entry = supportState().cases[match[1]]
+    if (!entry || entry.state !== 'preview_ready' || !entry.sameProject) return null
+    if (String(entry.chat || '') !== String(chat || '') || entry.approvalPromptMessageId !== String(quotedId)) return null
+    return {
+        caseId: entry.id,
+        action: choice === '1' ? 'approve' : 'undo',
+        mode: entry.requestedDeploy ? 'deploy' : entry.requestedPublish ? 'github' : ''
+    }
+}
+
 const safeCopy = (source, target) => {
     const excluded = new Set(['.git', 'node_modules', '.env', '.env.local', '.env.production', '.bera-preview.log', '.bera-revisions'])
     fs.mkdirSync(target, { recursive: true })
@@ -432,4 +458,4 @@ const handleCommand = async (raw, ctx = {}) => {
     } catch (error) { return reply(`Project action stopped safely: ${error.message}`) }
 }
 
-module.exports = { registerProject, createBuildApproval, getMemoryContext, handleCommand, findProject, createCase, previewCase, applyCase, undoCase }
+module.exports = { registerProject, createBuildApproval, recordApprovalPromptMessage, resolveApprovalReply, getMemoryContext, handleCommand, findProject, createCase, previewCase, applyCase, undoCase }

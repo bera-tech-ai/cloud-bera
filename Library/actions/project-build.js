@@ -92,22 +92,26 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         record.github?.url ? `GitHub: ${record.github.url}` : null,
         record.deployment?.url ? `Live site: ${record.deployment.url}` : null,
         record.deployment?.status === 'approval_required' ? 'Production deployment needs approval.' : null,
-        approvalCase ? `Owner approval required before publishing: .agent project approve ${approvalCase.id} ${deployRequested ? 'deploy' : 'github'}` : null,
+        approvalCase ? `Owner approval is pending. Reply directly to the separate approval prompt with 1 to approve or 2 to decline (case ${approvalCase.id}).` : null,
         !approvalCase && (repoRequested || deployRequested) && buildValidated ? 'No repository or deployment was created; project approval metadata was not recorded.' : null
     ].filter(Boolean)
     await replyProgress(parts.join('\n'))
     if (approvalCase && conn?.sendMessage && chat) {
         try {
-            const { sendBtn } = require('./btns')
-            const prefix = global.prefix || '.'
-            await sendBtn(conn, chat, {
-                title: 'Owner approval required',
-                text: `Build ${record.name || record.id} is validated locally. No repository or deployment has been created.`,
-                footer: 'Buttons invoke the same owner and case-state checks as text commands.',
-                buttons: [
-                    { id: `${prefix}agent project approve ${approvalCase.id} ${deployRequested ? 'deploy' : 'github'}`, text: deployRequested ? 'Approve GitHub + Deploy' : 'Approve GitHub' },
-                    { id: `${prefix}agent project undo ${approvalCase.id}`, text: 'Cancel approval' }
-                ]
+            const mode = deployRequested ? 'GitHub publication and deployment' : 'GitHub publication'
+            const prompt = [
+                'Bera project approval request',
+                `Case ID: ${approvalCase.id}`,
+                `Project: ${record.name || record.id}`,
+                `Action: ${mode}`,
+                'The project was validated locally. No repository push or deployment happens unless an authorized project owner approves.',
+                'Reply directly to this message with 1 to approve or 2 to decline.'
+            ].join('\n')
+            const sent = await conn.sendMessage(chat, { text: prompt }, message ? { quoted: message } : {})
+            const support = require('./project-support')
+            await support.recordApprovalPromptMessage(approvalCase.id, {
+                id: sent?.key?.id,
+                remoteJid: sent?.key?.remoteJid || chat
             })
         } catch {}
     }

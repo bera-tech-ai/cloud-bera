@@ -159,3 +159,36 @@ test('initial-build approval is bound to a clean source head and calls publish o
         agentOs.run = originalRun
     }
 })
+
+test('numbered replies resolve only for the exact pending prompt and preserve owner authorization', async () => {
+    const approval = await support.createBuildApproval(record, {
+        userId: owner, chat: group, requestedPublish: true, requestedDeploy: true
+    })
+    const prompt = `Bera project approval request\nCase ID: ${approval.id}\nProject: test-project\nAction: GitHub publication and deployment`
+
+    assert.equal(support.resolveApprovalReply({ text: '1', quotedText: prompt, quotedId: 'prompt-1', chat: group }), null,
+        'a quoted prompt is not valid until the outgoing message ID is recorded')
+    assert.equal(await support.recordApprovalPromptMessage(approval.id, { id: 'prompt-1', remoteJid: group }), true)
+
+    assert.deepEqual(support.resolveApprovalReply({ text: '1', quotedText: prompt, quotedId: 'prompt-1', chat: group }), {
+        caseId: approval.id, action: 'approve', mode: 'deploy'
+    })
+    assert.deepEqual(support.resolveApprovalReply({ text: '2', quotedText: prompt, quotedId: 'prompt-1', chat: group }), {
+        caseId: approval.id, action: 'undo', mode: 'deploy'
+    })
+    assert.equal(support.resolveApprovalReply({ text: '1', quotedText: prompt, quotedId: 'different-message', chat: group }), null)
+    assert.equal(support.resolveApprovalReply({ text: '1', quotedText: prompt, quotedId: 'prompt-1', chat: '15550000001@s.whatsapp.net' }), null)
+    assert.equal(support.resolveApprovalReply({ text: '1', quotedText: 'ordinary quoted message', quotedId: 'prompt-1', chat: group }), null)
+    assert.equal(support.resolveApprovalReply({ text: '1', quotedText: '', quotedId: '', chat: group }), null,
+        'an unquoted number cannot be interpreted as an approval')
+    assert.equal(support.resolveApprovalReply({ text: '1. yes', quotedText: prompt, quotedId: 'prompt-1', chat: group }), null)
+
+    let unauthorizedReply = ''
+    await support.handleCommand(`approve ${approval.id} deploy`, {
+        m: { chat: group, sender: '15550000002@s.whatsapp.net' },
+        sender: '15550000002@s.whatsapp.net', chat: group, isOwner: false,
+        reply: async text => { unauthorizedReply = text }
+    })
+    assert.match(unauthorizedReply, /Only the project owner/i)
+    assert.equal(approval.state, 'preview_ready', 'an unauthorized numeric approval must not alter the case')
+})
