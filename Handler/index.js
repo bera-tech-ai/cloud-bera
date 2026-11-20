@@ -620,6 +620,12 @@ const handleMessage = async (conn, rawMsg) => {
             }
         }
 
+        // Persist user activity seen in live groups for read-only inactivity reports.
+        // Replayed and duplicate messages have already been excluded above.
+        if (m.isGroup) {
+            try { require('../Library/xadon-pack/src/lib/cody/plugin_groupActivity').trackGroupMessage(m, rawMsg) } catch {}
+        }
+
         // ── INTERACTIVE BUTTON CLICK HANDLER ─────────────────────────────────
         // When user taps a quick_reply/cta button, WA sends interactiveResponseMessage
         const irm = m.message?.interactiveResponseMessage

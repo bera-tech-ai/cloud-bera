@@ -317,6 +317,7 @@ async function handleMessage(sock, raw) {
   if (!raw?.message || raw.key?.fromMe || raw.key?.remoteJid === 'status@broadcast') return false;
   const m = serialize(sock, raw);
   if (!m.isGroup) return false;
+  try { require('./lib/cody/plugin_groupActivity').trackGroupMessage(m, raw); } catch {}
   const jid = m.chat;
   try {
     recentKeys.push({ chat: jid, id: m.id, sender: m.sender, participant: raw.key?.participant || m.sender, fromMe: !!raw.key?.fromMe });

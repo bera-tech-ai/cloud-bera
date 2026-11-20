@@ -363,7 +363,13 @@ const preDispatch = async (text, m, conn) => {
     const t = text.trim()
     const lc = t.toLowerCase()
 
-    const { parseMovieLookupTitle, parseWebSearchQuery, isGitHubStatusQuery } = require('./command-intent')
+    const { parseMovieLookupTitle, parseWebSearchQuery, isGitHubStatusQuery, parseGroupInactiveRequest } = require('./command-intent')
+    const inactiveRequest = parseGroupInactiveRequest(t)
+    if (inactiveRequest) {
+        const result = await executeToolCall({ tool: 'wa_group_activity', days: inactiveRequest.days }, m?.chat || '', conn, m)
+        const reply = String(result || 'Group activity could not be checked.')
+        return { success: !/^(?:❌|⛔)/.test(reply), reply }
+    }
     if (isGitHubStatusQuery(t)) {
         const result = await executeToolCall({ tool: 'github', action: 'whoami' }, m?.chat || '', conn, m)
         const reply = String(result || 'GitHub status could not be verified.')
@@ -626,6 +632,7 @@ GROUP SETTINGS (open/close/lock/unlock):
 
 GROUP INFO & IDENTITY:
 {"tool":"wa_group_info"} → get group name, description, member count, admins list
+{"tool":"wa_group_activity","days":30} → list current members with no message observed in the requested period; read-only; never removes members
 {"tool":"wa_group_subject","name":"New Group Name"} → rename/change group name/subject
 {"tool":"wa_group_desc","description":"New description here"} → change group description
 {"tool":"wa_group_invite"} → get the group invite link
@@ -643,6 +650,7 @@ INTENT EXAMPLES:
 "kick @user" → {"tool":"wa_kick","number":"<their number>"}
 "get invite link" → {"tool":"wa_group_invite"}
 "how many members?" → {"tool":"wa_group_info"}
+"list all inactive members" / "who has not been active in the last 30 days?" → {"tool":"wa_group_activity","days":30} (read-only; report tracking limits)
 
 ══════════════════════════════════════════════
 MEMORY & NOTES
@@ -1881,6 +1889,36 @@ try {
                 `*Restricted:* ${meta.announce ? 'Yes (only admins can send)' : 'No'}`,
             ].join('\n')
         } catch (e) { return `❌ Could not get group info: ${e.message}` }
+    }
+
+    // ── wa_group_activity: read-only report; never changes group membership ───
+    if (t === 'wa_group_activity') {
+        if (!conn) return '❌ WhatsApp connection is unavailable.'
+        const group = tc.group || chatId
+        if (!group?.endsWith('@g.us')) return '❌ I can only check activity when you ask from inside the WhatsApp group.'
+        try {
+            const meta = await conn.groupMetadata(group)
+            const tracker = require('../xadon-pack/src/lib/cody/plugin_groupActivity')
+            const days = Math.min(365, Math.max(1, Number(tc.days) || 30))
+            const report = await tracker.getInactiveMembers(conn, group, meta.participants || [], days)
+            if (!report.ready) {
+                const started = report.startedAt ? new Date(report.startedAt).toISOString().slice(0, 10) : null
+                const observed = started
+                    ? `Tracking began ${started} (${report.trackedDays.toFixed(1)} days ago).`
+                    : 'No activity history has been recorded for this group yet.'
+                return `I can’t reliably identify members inactive for ${days} days yet. ${observed} Bera must observe the group for the full ${days}-day period first. I’ll only use messages Bera sees while connected; this report is read-only and will not remove anyone.`
+            }
+            const participants = report.members.map(({ participant }) => {
+                const rawId = participant.phoneNumber || participant.id || participant.jid || participant.lid || ''
+                const number = String(rawId).split('@')[0].split(':')[0]
+                return participant.pushName ? `${participant.pushName}${number ? ` (+${number})` : ''}` : (number ? `+${number}` : 'Unknown member')
+            })
+            const total = meta.participants?.length || 0
+            const header = `Members with no recorded messages in the last ${days} days: ${participants.length} of ${total}.`
+            const shown = participants.slice(0, 100).map((name, index) => `${index + 1}. ${name}`).join('\n')
+            const overflow = participants.length > 100 ? `\n…and ${participants.length - 100} more.` : ''
+            return `${header}\n${shown || 'No current members meet that inactivity threshold.'}${overflow}\n\nBased on messages observed by Bera while connected; newly joined members may not have a full-period history. Read-only — no members were removed.`
+        } catch (e) { return `❌ Could not read group activity: ${e.message}` }
     }
 
     // ── wa_group_subject ──────────────────────────────────────────────────────

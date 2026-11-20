@@ -990,7 +990,8 @@ const detectIntent = (text) => {
           /\bquote\s+(of\s+the\s+day|me|for\s+today)\b/i.test(t)) return 'quote_check'
 
       // ── Group activity stats ──────────────────────────────────────────────────
-      if (/\b(group\s+activity|who\s+(is\s+)?(most|least)\s+active|chat\s+stats?|activity\s+stats?)\b/i.test(t) ||
+      if (/\b(inactive\s+members?|least\s+active\s+members?|members?\s+with\s+no\s+activity)\b/i.test(t) ||
+          /\b(group\s+activity|who\s+(is\s+)?(most|least)\s+active|chat\s+stats?|activity\s+stats?)\b/i.test(t) ||
           /\b(top\s+chatters?|most\s+active\s+members?|least\s+active)\b/i.test(t)) return 'group_activity'
 
       // ── Stalk user ────────────────────────────────────────────────────────────

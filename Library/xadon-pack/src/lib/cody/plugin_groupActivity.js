@@ -163,9 +163,23 @@ function getTrackingStartedAt(groupId) {
     return readState().groups[groupId]?.startedAt || null;
 }
 
+async function getInactiveMembers(sock, groupId, participants = [], inactivityDays = 30) {
+    const startedAt = getTrackingStartedAt(groupId);
+    const days = Math.min(365, Math.max(1, Number(inactivityDays) || 30));
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    const trackedDays = startedAt ? Math.max(0, (Date.now() - startedAt) / (24 * 60 * 60 * 1000)) : 0;
+    const counts = await getParticipantCounts(sock, groupId, participants);
+    const ready = !!startedAt && startedAt <= cutoff;
+    const members = ready
+        ? counts.filter(entry => !entry.lastAt || entry.lastAt <= cutoff)
+        : [];
+    return { ready, days, startedAt, trackedDays, members };
+}
+
 module.exports = {
     trackGroupMessage,
     getParticipantCounts,
     getTrackingStartedAt,
+    getInactiveMembers,
     isBotParticipant,
 };

@@ -35,4 +35,18 @@ const isGitHubStatusQuery = (input) => {
         /\b(?:connect(?:ed|ion)?|access|logged[ -]?in|account|credential|configured|linked|authori[sz]ed)\b/i.test(text)
 }
 
-module.exports = { parseMovieLookupTitle, parseWebSearchQuery, isGitHubStatusQuery }
+const parseGroupInactiveRequest = (input) => {
+    const text = String(input || '')
+    if (!/\b(?:inactive|least\s+active|no\s+activity|haven['’]?t\s+(?:been\s+)?active|not\s+active)\b/i.test(text)) return null
+    if (!/\b(?:member|members|people|users|group|chat|here|this|all)\b/i.test(text)) return null
+    const period = text.match(/\b(?:last|past|for)\s+(\d{1,3})\s*(day|days|week|weeks|month|months)\b/i)
+    let days = 30
+    if (period) {
+        const amount = Number(period[1])
+        const unit = period[2].toLowerCase()
+        days = amount * (unit.startsWith('week') ? 7 : unit.startsWith('month') ? 30 : 1)
+    }
+    return { days: Math.min(365, Math.max(1, days)) }
+}
+
+module.exports = { parseMovieLookupTitle, parseWebSearchQuery, isGitHubStatusQuery, parseGroupInactiveRequest }
