@@ -226,7 +226,21 @@ const makePlan = async (record, task, options = {}) => {
             await notifyProgress(options, { phase: 'planner_json_local_repair' })
             parsed = parsePlannerJson(recovery.text, true)
         }
-        if (!parsed.success) return { success: false, error: `Planner JSON error after AI and local format recovery: ${parsed.error.message}` }
+        if (!parsed.success) {
+            await notifyProgress(options, { phase: 'planner_json_regeneration' })
+            const regeneration = await xcasper.chat([
+                { role: 'system', content: `${prompt}\nThe previous response could not be parsed. Discard it and create a fresh plan from scratch. Return one compact, valid JSON object only, with no Markdown or explanations. Include only the steps needed to complete the task.` },
+                { role: 'user', content: `Generate a fresh valid plan for this task. Previous local JSON repair error: ${parsed.error.message}\nTask: ${String(task || record.task).slice(0, 4000)}\nCurrent project inspection: ${JSON.stringify(inspect(record.dir))}` }
+            ], {
+                timeout: 45000,
+                maxChars: 24000,
+                onProviderProgress: progress => notifyProgress(options, { phase: 'planner_json_regeneration_provider', ...progress })
+            })
+            if (!regeneration.success) return { success: false, error: `Planner JSON remained invalid after local recovery; fresh plan generation failed: ${regeneration.error}` }
+            parsed = parsePlannerJson(regeneration.text)
+            if (!parsed.success) parsed = parsePlannerJson(regeneration.text, true)
+            if (!parsed.success) return { success: false, error: `Planner JSON remained invalid after fresh plan generation: ${parsed.error.message}` }
+        }
     }
     const plan = parsed.value
     if (!Array.isArray(plan.steps) || !plan.steps.length) return { success: false, error: 'Planner returned no steps.' }
