@@ -7,9 +7,7 @@ const fs   = require('fs')
 const path = require('path')
 const { exec } = require('child_process')
 const axios = require('axios')
-
-const WORKSPACE_ROOT = process.env.BERA_WORKSPACE || '/workspace'
-try { fs.mkdirSync(WORKSPACE_ROOT, { recursive: true }) } catch {}
+const { WORKSPACE_ROOT, getUserWorkspace } = require('../lib/workspace')
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const run = (cmd, cwd = WORKSPACE_ROOT, timeout = 60000) => new Promise(resolve => {
@@ -26,13 +24,11 @@ const pm2Name = (userId, projectName) =>
     `${String(userId || '').replace(/@.+/, '').replace(/\D/g, '').slice(-8)}-${safeId(projectName)}`
 
 const projectDir = (userId, projectName) => {
-    const uid = String(userId || 'shared').replace(/@.+/, '').replace(/[^a-zA-Z0-9_-]/g, '_')
-    return path.join(WORKSPACE_ROOT, uid, safeId(projectName))
+    return path.join(getUserWorkspace(userId), safeId(projectName))
 }
 
 const getProjectList = (userId) => {
-    const uid = String(userId || 'shared').replace(/@.+/, '').replace(/[^a-zA-Z0-9_-]/g, '_')
-    const userDir = path.join(WORKSPACE_ROOT, uid)
+    const userDir = getUserWorkspace(userId)
     try {
         if (!fs.existsSync(userDir)) return []
         return fs.readdirSync(userDir)
@@ -888,7 +884,7 @@ const uninstallPackages = async (userId, packages, projectName, manager = 'auto'
 // ══════════════════════════════════════════════════════════════════════════════
 
 const getEnvPath = (userId, projectName) => {
-    const dir = projectName ? projectDir(userId, projectName) : path.join(WORKSPACE_ROOT, String(userId || 'shared').replace(/@.+/, '').replace(/[^a-zA-Z0-9_-]/g, '_'))
+    const dir = projectName ? projectDir(userId, projectName) : getUserWorkspace(userId)
     return path.join(dir, '.env')
 }
 
@@ -936,7 +932,7 @@ const deleteEnvVar = (userId, projectName, key) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const getFileTree = async (userId, projectName, maxDepth = 3) => {
-    const dir = projectName ? projectDir(userId, projectName) : path.join(WORKSPACE_ROOT, String(userId || 'shared').replace(/@.+/, '').replace(/[^a-zA-Z0-9_-]/g, '_'))
+    const dir = projectName ? projectDir(userId, projectName) : getUserWorkspace(userId)
     if (!fs.existsSync(dir)) return { success: false, output: `Directory not found: ${dir}` }
 
     const r = await run(`find . -not -path './node_modules/*' -not -path './__pycache__/*' -not -path './.git/*' -not -name '*.log' | sort | head -60`, dir)

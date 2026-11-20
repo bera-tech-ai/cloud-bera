@@ -3,15 +3,13 @@
 const fs   = require('fs')
 const path = require('path')
 const { exec } = require('child_process')
-
-const WORKSPACE_ROOT = process.env.BERA_WORKSPACE || '/workspace'
+const { getUserWorkspace } = require('./workspace')
 const sessions = new Map()   // userId → session
 
 const getOrCreate = (userId) => {
     if (!sessions.has(userId)) {
         const uid = String(userId || 'shared').replace(/@.+/, '').replace(/[^a-zA-Z0-9_-]/g, '_')
-        const cwd = path.join(WORKSPACE_ROOT, uid)
-        try { fs.mkdirSync(cwd, { recursive: true }) } catch {}
+        const cwd = getUserWorkspace(userId)
         sessions.set(userId, {
             uid,
             cwd,

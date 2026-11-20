@@ -6,3 +6,4 @@ Database/project_lifecycle.json
 .env
 *.log
 .phone
+workspace/

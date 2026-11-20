@@ -1,9 +1,46 @@
 const fs   = require('fs')
 const path = require('path')
+const os   = require('os')
 
-const WORKSPACE_ROOT = process.env.BERA_WORKSPACE || '/workspace'
+const requestedRoot = path.resolve(process.env.BERA_WORKSPACE || '/workspace')
 
-try { fs.mkdirSync(WORKSPACE_ROOT, { recursive: true }) } catch {}
+const ensureWritable = (root) => {
+    fs.mkdirSync(root, { recursive: true })
+    const probe = path.join(root, `.bera-write-test-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    try {
+        fs.writeFileSync(probe, 'ok', { flag: 'wx', mode: 0o600 })
+    } finally {
+        try { fs.unlinkSync(probe) } catch {}
+    }
+    return root
+}
+
+const candidates = [...new Set([
+    requestedRoot,
+    path.resolve(process.cwd(), 'workspace'),
+    path.join(os.homedir(), '.bera', 'workspace')
+])]
+const rootErrors = []
+let WORKSPACE_ROOT = null
+
+for (const candidate of candidates) {
+    try {
+        WORKSPACE_ROOT = ensureWritable(candidate)
+        break
+    } catch (error) {
+        rootErrors.push(`${candidate}: ${error.code || error.message}`)
+    }
+}
+
+if (!WORKSPACE_ROOT) {
+    throw new Error(`[WORKSPACE] No writable workspace directory. Set BERA_WORKSPACE to a writable persistent path. Tried: ${rootErrors.join('; ')}`)
+}
+
+if (WORKSPACE_ROOT !== requestedRoot) {
+    console.warn(`[WORKSPACE] ${requestedRoot} is not writable; using fallback ${WORKSPACE_ROOT}. Set BERA_WORKSPACE to a writable persistent path to choose the storage location.`)
+} else {
+    console.log(`[WORKSPACE] Using ${WORKSPACE_ROOT}`)
+}
 
 const sanitizeId = (str) =>
     String(str || 'shared').replace(/@.+/, '').replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 40)
@@ -12,7 +49,11 @@ const sanitizeId = (str) =>
 const getUserWorkspace = (userId) => {
     const uid = sanitizeId(userId || 'shared')
     const dir = path.join(WORKSPACE_ROOT, uid)
-    try { fs.mkdirSync(dir, { recursive: true }) } catch {}
+    try {
+        fs.mkdirSync(dir, { recursive: true })
+    } catch (error) {
+        throw new Error(`[WORKSPACE] Unable to create user directory ${dir}: ${error.code || error.message}. Check BERA_WORKSPACE permissions.`)
+    }
     return dir
 }
 
