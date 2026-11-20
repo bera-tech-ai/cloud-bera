@@ -124,6 +124,7 @@ test('runtime registry finds imported commands and native dispatcher rejects una
 
 test('movie lookup parser recognizes search phrasing and keeps only the title', () => {
   assert.equal(parseMovieLookupTitle('search for the movie Dune?'), 'Dune')
+  assert.equal(parseMovieLookupTitle('Bera, search for the movie Dune and show me the results'), 'Dune')
   assert.equal(parseMovieLookupTitle('find me a film “Arrival”'), 'Arrival')
   assert.equal(parseMovieLookupTitle('search Dune movie'), 'Dune')
   assert.equal(parseMovieLookupTitle('search the web for movie news'), null)
@@ -140,7 +141,7 @@ test('Bera AI search-for-movie wording dispatches movie command instead of gener
     }
   }, async () => {
     const message = { sender: '1111111111@s.whatsapp.net', chat: 'chat' }
-    const result = await generateAdvancedReply('search for the movie Dune', 'movie-test-chat', {}, message)
+    const result = await generateAdvancedReply('Bera, search for the movie Dune and show me the results', 'movie-test-chat', {}, message)
     assert.equal(result.success, true)
     assert.equal(result.reply, 'Dune movie details')
     assert.equal(received[0], 'movie')

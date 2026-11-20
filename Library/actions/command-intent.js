@@ -1,12 +1,17 @@
 'use strict'
 
 const parseMovieLookupTitle = (input) => {
-    const text = String(input || '').trim().replace(/^[\s:,-]+/, '')
+    const text = String(input || '').trim()
+        .replace(/^(?:(?:hey|hi|hello|yo)\s+)?@?bera(?:\s+ai)?\s*[,;:!—-]?\s*/i, '')
+        .replace(/^[\s:,-]+/, '')
     const prefix = /^(?:please\s+)?(?:(?:can|could)\s+you\s+)?(?:search|find|look\s*up|lookup)\s+(?:for\s+)?(?:me\s+)?(?:(?:the|a|an)\s+)?(?:movie|film|tv\s*show|series)\s+(?:(?:called|named)\s+)?(.+?)\s*[?.!]*$/i
     const suffix = /^(?:please\s+)?(?:(?:can|could)\s+you\s+)?(?:search|find|look\s*up|lookup)\s+(?:for\s+)?(?:me\s+)?(.+?)\s+(?:movie|film|tv\s*show|series)\s*[?.!]*$/i
     const match = text.match(prefix) || text.match(suffix)
     if (!match) return null
-    const title = String(match[1] || '').trim().replace(/^["'“‘]+|["'”’]+$/g, '')
+    const title = String(match[1] || '')
+        .replace(/\s+(?:and\s+)?(?:please\s+)?(?:show|give|display|list|fetch|provide|return|tell)\s+(?:me\s+)?(?:the\s+)?(?:search\s+)?(?:results?|details?|information|info|answer)\b[\s\S]*$/i, '')
+        .trim()
+        .replace(/^['"“‘]+|['"”’]+$/g, '')
     return title && !/^(?:a|an|the|called|named)$/i.test(title) ? title : null
 }
 
