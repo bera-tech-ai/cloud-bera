@@ -22,25 +22,35 @@ test('Agent OS safely runs allowlisted package-manager plan steps without genera
         fs.mkdirSync(bin, { recursive: true })
         fs.mkdirSync(projectDir, { recursive: true })
         const npmPath = path.join(bin, 'npm')
-        fs.writeFileSync(npmPath, '#!/usr/bin/env node\\nrequire("node:fs").writeFileSync(process.env.BERA_NPM_ARGS_FILE, process.argv.slice(2).join(String.fromCharCode(10)) + String.fromCharCode(10))\\n')
+        fs.writeFileSync(npmPath, '#!/usr/bin/env node\\nrequire("node:fs").writeFileSync(process.env.BERA_NPM_ARGS_FILE, JSON.stringify({ args: process.argv.slice(2), registry: process.env.npm_config_registry }))\\n')
         fs.chmodSync(npmPath, 0o755)
         process.env.PATH = bin + path.delimiter + process.env.PATH
         process.env.BERA_NPM_ARGS_FILE = argsFile
+        process.env.npm_config_registry = 'http://package-firewall.replit.internal/npm/'
         ;(async () => {
             const record = { dir: projectDir }
             const result = await agentOs.executeStep(record, { action: 'shell', command: 'npm install --save-dev vite' })
             assert.equal(result.success, true, result.output)
-            assert.equal(fs.readFileSync(argsFile, 'utf8'), 'install\\n--save-dev\\nvite\\n')
+            let invocation = JSON.parse(fs.readFileSync(argsFile, 'utf8'))
+            assert.deepEqual(invocation.args, ['install', '--save-dev', 'vite', '--registry=https://registry.npmjs.org/'])
+            assert.equal(invocation.registry, 'https://registry.npmjs.org/')
+
+            fs.writeFileSync(path.join(projectDir, 'package.json'), JSON.stringify({ name: 'registry-test', scripts: {} }))
+            const validation = await agentOs.validate(record)
+            assert.equal(validation.success, true)
+            invocation = JSON.parse(fs.readFileSync(argsFile, 'utf8'))
+            assert.deepEqual(invocation.args, ['install', '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org/'])
+            assert.equal(invocation.registry, 'https://registry.npmjs.org/')
 
             const skippedTest = await agentOs.executeStep(record, { action: 'shell', command: 'npm test' })
             assert.equal(skippedTest.success, true)
             assert.match(skippedTest.output, /test script not defined; skipped/)
-            assert.equal(fs.readFileSync(argsFile, 'utf8'), 'install\\n--save-dev\\nvite\\n', 'missing test script must not invoke npm')
+            assert.deepEqual(JSON.parse(fs.readFileSync(argsFile, 'utf8')).args, ['install', '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org/'], 'missing test script must not invoke npm')
 
             const rejected = await agentOs.executeStep(record, { action: 'shell', command: 'npm install vite && git push' })
             assert.equal(rejected.success, false)
             assert.match(rejected.output, /requires allowShell=true/)
-            assert.equal(fs.readFileSync(argsFile, 'utf8'), 'install\\n--save-dev\\nvite\\n', 'rejected chained command must not run')
+            assert.deepEqual(JSON.parse(fs.readFileSync(argsFile, 'utf8')).args, ['install', '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org/'], 'rejected chained command must not run')
 
             const progress = []
             const skipped = await agentOs.executeStep(record, { action: 'shell', command: 'npm install vite && git push' }, {
@@ -50,7 +60,7 @@ test('Agent OS safely runs allowlisted package-manager plan steps without genera
             assert.equal(skipped.success, true)
             assert.match(skipped.output, /Skipped an unapproved planner shell command/)
             assert.equal(progress[0].phase, 'shell_skipped')
-            assert.equal(fs.readFileSync(argsFile, 'utf8'), 'install\\n--save-dev\\nvite\\n', 'skipped chained command must not run')
+            assert.deepEqual(JSON.parse(fs.readFileSync(argsFile, 'utf8')).args, ['install', '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org/'], 'skipped chained command must not run')
 
             assert.equal(agentOs.safePackageManagerCommand('git push'), null)
             assert.equal(agentOs.safePackageManagerCommand('node -e process.exit(1)'), null)

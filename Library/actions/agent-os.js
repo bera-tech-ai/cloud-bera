@@ -11,6 +11,13 @@ const github = require('./github')
 const { takeScreenshot } = require('./browser')
 
 const execFileAsync = promisify(execFile)
+const NPM_REGISTRY = 'https://registry.npmjs.org/'
+const packageManagerEnv = () => ({
+    ...process.env,
+    npm_config_registry: NPM_REGISTRY,
+    NPM_CONFIG_REGISTRY: NPM_REGISTRY,
+    YARN_NPM_REGISTRY_SERVER: NPM_REGISTRY
+})
 const STATE_FILE = process.env.BERA_AGENT_STATE_FILE || path.join(__dirname, '../../Database/agent_os.json')
 const now = () => new Date().toISOString()
 const notifyProgress = async (options, progress) => {
@@ -62,17 +69,27 @@ const safePackageManagerCommand = raw => {
 
 const runSafePackageManagerCommand = async (commandInfo, cwd, timeout = 120000) => {
     try {
-        const result = await execFileAsync(commandInfo.manager, commandInfo.args, {
+        const args = commandInfo.args.slice()
+        const installCommand = ['install', 'i', 'add'].includes(args[0])
+        if (installCommand && commandInfo.manager !== 'yarn' && !args.some(arg => arg.startsWith('--registry='))) {
+            args.push(`--registry=${NPM_REGISTRY}`)
+        }
+        const result = await execFileAsync(commandInfo.manager, args, {
             cwd,
             timeout,
             maxBuffer: 8 * 1024 * 1024,
-            env: process.env
+            env: packageManagerEnv()
         })
         return { success: true, output: `${result.stdout || ''}${result.stderr ? `\n${result.stderr}` : ''}`.trim().slice(-12000) }
     } catch (error) {
         return { success: false, output: `${error.stdout || ''}${error.stderr ? `\n${error.stderr}` : ''}`.trim().slice(-12000), error: error.message }
     }
 }
+
+const installProjectDependencies = (manager, cwd, timeout = 180000) => runSafePackageManagerCommand({
+    manager,
+    args: manager === 'yarn' ? ['install'] : ['install', '--no-audit', '--no-fund']
+}, cwd, timeout)
 
 const inspect = dir => {
     let pkg = null
@@ -200,7 +217,7 @@ const executeStep = async (record, step, options = {}) => {
     if (action === 'install') {
         const info = inspect(root)
         if (!info.manager) return { success: true, output: 'No package manifest; install skipped.' }
-        return command(`${info.manager} install --no-audit --no-fund`, root, options.timeout || 180000)
+        return installProjectDependencies(info.manager, root, options.timeout || 180000)
     }
     if (action === 'build' || action === 'test') {
         const info = inspect(root)
@@ -258,7 +275,7 @@ const repair = async (record, failure, options) => {
 const validate = async (record, options = {}) => {
     const info = inspect(record.dir)
     const checks = []
-    if (info.manager) checks.push({ name: 'install', ...(await command(`${info.manager} install --no-audit --no-fund`, record.dir, options.installTimeout || 180000)) })
+    if (info.manager) checks.push({ name: 'install', ...(await installProjectDependencies(info.manager, record.dir, options.installTimeout || 180000)) })
     if (info.buildCommand) checks.push({ name: 'build', ...(await command(info.buildCommand, record.dir, options.buildTimeout || 180000)) })
     if (info.testCommand) checks.push({ name: 'test', ...(await command(info.testCommand, record.dir, options.testTimeout || 120000)) })
     record.checks = checks
