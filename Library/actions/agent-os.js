@@ -32,6 +32,48 @@ const command = async (cmd, cwd, timeout = 120000) => {
     }
 }
 
+const safePackageManagerCommand = raw => {
+    const tokens = String(raw || '').trim().split(/\s+/).filter(Boolean)
+    const [manager, subcommand, ...args] = tokens
+    if (!['npm', 'pnpm', 'yarn'].includes(manager) || !subcommand) return null
+    if ((manager === 'npm' || manager === 'pnpm') && subcommand === 'run' && args.length === 1 && ['build', 'test'].includes(args[0])) {
+        return { manager, args: ['run', args[0]] }
+    }
+    if ((manager === 'npm' || manager === 'pnpm') && subcommand === 'test' && args.length === 0) return { manager, args: ['test'] }
+    if (manager === 'yarn' && ['build', 'test'].includes(subcommand) && args.length === 0) return { manager, args: [subcommand] }
+
+    const isNpmInstall = manager === 'npm' && ['install', 'i'].includes(subcommand)
+    const isPnpmInstall = manager === 'pnpm' && subcommand === 'install'
+    const isAdd = (manager === 'pnpm' || manager === 'yarn') && subcommand === 'add'
+    if (!isNpmInstall && !isPnpmInstall && !isAdd) return null
+
+    const safeFlags = new Set(['--save-dev', '-D', '--save-prod', '-P', '--save-exact', '-E', '--no-audit', '--no-fund', '--legacy-peer-deps'])
+    const packageSpec = /^(@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*(?:@[a-z0-9*][a-z0-9._~^*+-]*)?$/i
+    let packages = 0
+    for (const arg of args) {
+        if (safeFlags.has(arg)) continue
+        if (!packageSpec.test(arg)) return null
+        packages++
+    }
+    if (isPnpmInstall && packages > 0) return null
+    if (isAdd && packages === 0) return null
+    return { manager, args: [subcommand, ...args] }
+}
+
+const runSafePackageManagerCommand = async (commandInfo, cwd, timeout = 120000) => {
+    try {
+        const result = await execFileAsync(commandInfo.manager, commandInfo.args, {
+            cwd,
+            timeout,
+            maxBuffer: 8 * 1024 * 1024,
+            env: process.env
+        })
+        return { success: true, output: `${result.stdout || ''}${result.stderr ? `\n${result.stderr}` : ''}`.trim().slice(-12000) }
+    } catch (error) {
+        return { success: false, output: `${error.stdout || ''}${error.stderr ? `\n${error.stderr}` : ''}`.trim().slice(-12000), error: error.message }
+    }
+}
+
 const inspect = dir => {
     let pkg = null
     try { pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) } catch {}
@@ -98,7 +140,7 @@ const parsePlannerJson = raw => {
 }
 
 const makePlan = async (record, task, options = {}) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only: {"summary":"...","steps":[{"action":"write_file|mkdir|install|build|test|shell","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}\nRules: paths must be relative to the project; do not use secrets; do not delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for package-manager commands. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only: {"summary":"...","steps":[{"action":"write_file|mkdir|install|build|test|shell","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}\nRules: paths must be relative to the project; do not use secrets; do not delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
         timeout: 45000,
@@ -161,8 +203,10 @@ const executeStep = async (record, step, options = {}) => {
         return command(cmd, root, options.timeout || 180000)
     }
     if (action === 'shell') {
-        if (!options.allowShell) return { success: false, output: 'Shell execution requires allowShell=true.' }
         const raw = String(step.command || '')
+        const packageCommand = safePackageManagerCommand(raw)
+        if (packageCommand) return runSafePackageManagerCommand(packageCommand, root, options.timeout || 120000)
+        if (!options.allowShell) return { success: false, output: 'Shell execution requires allowShell=true; only allowlisted package-manager commands run without it.' }
         if (!/^(npm|pnpm|yarn|node|python3|pytest|git)\b/.test(raw)) return { success: false, output: 'Only approved development commands are allowed.' }
         return command(raw, root, options.timeout || 120000)
     }
@@ -341,4 +385,4 @@ const run = async options => {
     return { success: true, record, validation, screenshot: previewScreenshot }
 }
 
-module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, validate, checkpoint, previewStart, previewStop, screenshot }
+module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot }
