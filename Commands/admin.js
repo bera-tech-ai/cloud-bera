@@ -5,6 +5,71 @@ const os = require('os')
 
 const handle = async (m, { conn, text, reply, react, prefix, command, sender, chat, isOwner, args }) => {
 
+    if (command === 'dbstatus') {
+        if (!isOwner) return reply('⛔ Owner only.')
+        if (m?.isGroup || String(chat || m?.chat || '').endsWith('@g.us')) {
+            return reply('🔒 Use .dbstatus in a private chat; it shows database and session health.')
+        }
+
+        const db = global.db
+        const sessionStatus = db?.data?.sessions?.whatsapp?.status || 'unknown'
+        if (!db?.ready) return reply('🗄 *DATABASE STATUS*\nDatabase: not initialized. Check the startup logs.')
+
+        if (db.provider !== 'postgresql' || !db.pool?.query) {
+            return reply([
+                '🗄 *DATABASE STATUS*',
+                'Provider: JSON fallback (PostgreSQL is not active)',
+                `WhatsApp session status: ${sessionStatus}`,
+                'WhatsApp authentication: file-backed; not stored in PostgreSQL.'
+            ].join('\n'))
+        }
+
+        try {
+            await db.pool.query('SELECT 1 AS ok')
+            const stateResult = await db.pool.query(
+                "SELECT data #>> '{sessions,whatsapp,status}' AS session_status FROM bera_state WHERE id = 1"
+            )
+            const sessionRow = stateResult.rows?.[0] || null
+            const storedSessionStatus = sessionRow?.session_status || db.data?.sessions?.whatsapp?.status || 'unknown'
+
+            let authCounts = null
+            try {
+                const authResult = await db.pool.query(
+                    `SELECT
+                         COUNT(*) FILTER (WHERE auth_type = 'creds')::int AS credential_records,
+                         COUNT(*) FILTER (WHERE auth_type <> 'creds')::int AS key_records
+                     FROM bera_whatsapp_auth
+                     WHERE session_id = $1`,
+                    [process.env.BERA_AUTH_SESSION_ID || 'whatsapp']
+                )
+                authCounts = authResult.rows?.[0] || { credential_records: 0, key_records: 0 }
+            } catch {
+                authCounts = null
+            }
+
+            const credsSaved = Number(authCounts?.credential_records || 0) > 0
+            const keyCount = Number(authCounts?.key_records || 0)
+
+            return reply([
+                '🗄 *DATABASE STATUS*',
+                'Provider: PostgreSQL',
+                'Connection ping: ✅ OK',
+                `Bera state row: ${sessionRow ? '✅ present' : '⚠️ missing'}`,
+                `WhatsApp session: ${storedSessionStatus}`,
+                `Encrypted credentials: ${credsSaved ? '✅ saved' : authCounts === null ? '⚠️ auth table unavailable' : '⚠️ no credentials row'}`,
+                `Encrypted Signal-key records: ${keyCount}`
+            ].join('\n'))
+        } catch {
+            return reply([
+                '🗄 *DATABASE STATUS*',
+                'Provider: PostgreSQL is configured',
+                'Connection ping: ❌ FAILED',
+                `WhatsApp session status in memory: ${sessionStatus}`,
+                'Details were omitted; check the server logs for the database error.'
+            ].join('\n'))
+        }
+    }
+
     if (command === 'broadcast') {
         if (!isOwner) return reply(`⛔ Owner only.`)
         if (!text) return reply(`❌ Usage: ${prefix}broadcast <message>`)
@@ -979,7 +1044,7 @@ Generate at: https://github.com/settings/tokens`)
 
 }
 
-handle.command = ['update','reload','hotreload','selfupdate','up','broadcast', 'backup', 'stats', 'ban', 'unban', 'premium', 'depremium',
+handle.command = ['dbstatus', 'update','reload','hotreload','selfupdate','up','broadcast', 'backup', 'stats', 'ban', 'unban', 'premium', 'depremium',
     'autoreply', 'schedule', 'listusers', 'resetlimit', 'cleandb', 'mode',
     'autostatusview', 'statusview', 'autotyping', 'autobio',
     'addbio', 'setbio', 'listbios', 'clearbio', 'noprefix',
