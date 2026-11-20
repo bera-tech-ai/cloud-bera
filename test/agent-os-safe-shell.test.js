@@ -32,6 +32,11 @@ test('Agent OS safely runs allowlisted package-manager plan steps without genera
             assert.equal(result.success, true, result.output)
             assert.equal(fs.readFileSync(argsFile, 'utf8'), 'install\\n--save-dev\\nvite\\n')
 
+            const skippedTest = await agentOs.executeStep(record, { action: 'shell', command: 'npm test' })
+            assert.equal(skippedTest.success, true)
+            assert.match(skippedTest.output, /test script not defined; skipped/)
+            assert.equal(fs.readFileSync(argsFile, 'utf8'), 'install\\n--save-dev\\nvite\\n', 'missing test script must not invoke npm')
+
             const rejected = await agentOs.executeStep(record, { action: 'shell', command: 'npm install vite && git push' })
             assert.equal(rejected.success, false)
             assert.match(rejected.output, /requires allowShell=true/)

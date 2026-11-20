@@ -37,10 +37,10 @@ const safePackageManagerCommand = raw => {
     const [manager, subcommand, ...args] = tokens
     if (!['npm', 'pnpm', 'yarn'].includes(manager) || !subcommand) return null
     if ((manager === 'npm' || manager === 'pnpm') && subcommand === 'run' && args.length === 1 && ['build', 'test'].includes(args[0])) {
-        return { manager, args: ['run', args[0]] }
+        return { manager, args: ['run', args[0]], script: args[0] }
     }
-    if ((manager === 'npm' || manager === 'pnpm') && subcommand === 'test' && args.length === 0) return { manager, args: ['test'] }
-    if (manager === 'yarn' && ['build', 'test'].includes(subcommand) && args.length === 0) return { manager, args: [subcommand] }
+    if ((manager === 'npm' || manager === 'pnpm') && subcommand === 'test' && args.length === 0) return { manager, args: ['test'], script: 'test' }
+    if (manager === 'yarn' && ['build', 'test'].includes(subcommand) && args.length === 0) return { manager, args: [subcommand], script: subcommand }
 
     const isNpmInstall = manager === 'npm' && ['install', 'i'].includes(subcommand)
     const isPnpmInstall = manager === 'pnpm' && subcommand === 'install'
@@ -205,6 +205,9 @@ const executeStep = async (record, step, options = {}) => {
     if (action === 'shell') {
         const raw = String(step.command || '')
         const packageCommand = safePackageManagerCommand(raw)
+        if (packageCommand?.script && !inspect(root).scripts[packageCommand.script]) {
+            return { success: true, output: `${packageCommand.script} script not defined; skipped.` }
+        }
         if (packageCommand) return runSafePackageManagerCommand(packageCommand, root, options.timeout || 120000)
         if (!options.allowShell) return { success: false, output: 'Shell execution requires allowShell=true; only allowlisted package-manager commands run without it.' }
         if (!/^(npm|pnpm|yarn|node|python3|pytest|git)\b/.test(raw)) return { success: false, output: 'Only approved development commands are allowed.' }
