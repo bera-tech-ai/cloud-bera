@@ -300,24 +300,45 @@ const executeStep = async (record, step, options = {}) => {
 const repair = async (record, failure, options) => {
     if ((record.repairs || []).length >= (options.maxRepairs ?? 2)) return { success: false, error: 'Repair limit reached.' }
     const context = `Project task: ${record.task}\nFailure output:\n${String(failure).slice(-10000)}\nProject inspection:\n${JSON.stringify(inspect(record.dir))}`
-    const result = await xcasper.chat([{ role: 'system', content: 'You are a senior repair planner. Return JSON only: {"steps":[{"action":"write_file|build|test|install","path":"relative path","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. For source files always use contentBase64, never a literal content field. Never delete files or use secrets.' }, { role: 'user', content: context }], {
+    const result = await xcasper.chat([{ role: 'system', content: 'You are a senior software repair planner. Return one valid JSON object only: {"steps":[{"action":"write_file","path":"relative path from the project root","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. Every step action MUST be exactly one of "write_file", "build", "test", or "install"; choose one value and never put alternatives, pipes, or lists in action. When validation says there is no runnable application entrypoint, write complete, non-placeholder app files at the project root, such as index.html or package.json plus its entrypoint. Do not create an extra project/project_root wrapper directory. Use contentBase64 for source files, never a literal content field. Never delete files or use secrets.' }, { role: 'user', content: context }], {
         timeout: 45000,
         maxChars: 20000,
         onProviderProgress: progress => notifyProgress(options, { phase: 'repair_provider', ...progress })
     })
     if (!result.success) return { success: false, error: result.error }
-    const match = result.text.match(/\{[\s\S]*\}/)
-    if (!match) return { success: false, error: 'Repair planner returned invalid JSON.' }
-    let plan
-    try { plan = JSON.parse(match[0]) } catch (e) { return { success: false, error: e.message } }
-    record.repairs.push({ at: now(), reason: plan.reason || 'automatic repair', failure: String(failure).slice(-3000) })
-    for (const rawStep of (plan.steps || []).slice(0, 10)) {
+    const parsed = parsePlannerJson(result.text)
+    if (!parsed.success) return { success: false, error: `Repair planner returned invalid JSON: ${parsed.error.message}` }
+    const plan = parsed.value
+    if (!Array.isArray(plan.steps) || !plan.steps.length) return { success: false, error: 'Repair planner returned no actionable steps.' }
+    const normalizedSteps = []
+    for (const [index, rawStep] of plan.steps.slice(0, 10).entries()) {
+        const rawAction = String(rawStep.action || '').trim().toLowerCase()
+        const actionOptions = rawAction.split('|').map(value => value.trim())
+        const hasContent = Boolean(rawStep.contentBase64 || (typeof rawStep.content === 'string' && rawStep.content.length))
+        const action = actionOptions.length === 1
+            ? actionOptions[0]
+            : hasContent && actionOptions.includes('write_file') ? 'write_file' : ''
+        if (!['write_file', 'build', 'test', 'install'].includes(action)) {
+            return { success: false, error: `Repair planner returned an unsupported or ambiguous action at step ${index + 1}.` }
+        }
         const step = {
             ...rawStep,
+            action,
             content: rawStep.contentBase64 && !rawStep.content
                 ? Buffer.from(String(rawStep.contentBase64).replace(/\s+/g, ''), 'base64').toString('utf8')
                 : rawStep.content
         }
+        if (action === 'write_file' && (!String(step.path || '').trim() || typeof step.content !== 'string' || !step.content.length)) {
+            return { success: false, error: `Repair planner returned an incomplete write_file step at step ${index + 1}.` }
+        }
+        if (action === 'write_file' && !inside(record.dir, path.resolve(record.dir, step.path))) {
+            return { success: false, error: `Repair planner requested a path outside the project workspace at step ${index + 1}.` }
+        }
+        normalizedSteps.push(step)
+    }
+    record.repairs.push({ at: now(), reason: plan.reason || 'automatic repair', failure: String(failure).slice(-3000) })
+    update(record, { stage: 'repairing', status: 'repairing' })
+    for (const step of normalizedSteps) {
         const result = await executeStep(record, step, options)
         if (!result.success) return { success: false, error: result.output }
     }
@@ -446,13 +467,17 @@ const run = async options => {
     }
     await notifyProgress(options, { phase: 'validation' })
     let validation = await validate(record, options)
+    let repairError = null
     for (let attempt = 0; !validation.success && attempt < (options.maxRepairs ?? 2); attempt++) {
         await notifyProgress(options, { phase: 'repair', attempt: attempt + 1, total: options.maxRepairs ?? 2 })
         const fixed = await repair(record, validation.checks.filter(c => !c.success).map(c => c.output).join('\n'), options)
-        if (!fixed.success) break
+        if (!fixed.success) { repairError = fixed.error || 'Automatic repair failed.'; break }
         validation = await validate(record, options)
     }
-    if (!validation.success) { update(record, { status: 'failed', stage: 'validation_failed' }); return { success: false, validation, record } }
+    if (!validation.success) {
+        update(record, { status: 'failed', stage: 'validation_failed' })
+        return { success: false, ...(repairError ? { error: `Automatic repair failed: ${repairError}` } : {}), validation, record }
+    }
     await notifyProgress(options, { phase: 'checkpoint' })
     const saved = await checkpoint(record, options.message || `feat: ${record.name} generated by Bera AI`)
     if (!saved.success) return { success: false, error: saved.output, record }

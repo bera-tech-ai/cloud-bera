@@ -84,6 +84,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     })
     const record = result.record || {}
     const failureDetails = validationFailureDetails(result, record)
+    const failureMessage = [result.error, failureDetails].filter(Boolean).join(' | ').slice(0, 1800)
     const buildValidated = Boolean(record.checkpoint) && (record.checks || []).length > 0 && (record.checks || []).every(check => check.success)
     let approvalCase = null
     if (record.id) {
@@ -98,7 +99,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         }
     }
     const parts = [
-        buildValidated ? '✅ Project built and validated locally.' : `❌ Project build failed: ${result.error || failureDetails || 'validation or checkpoint did not pass; no diagnostic was returned'}`,
+        buildValidated ? '✅ Project built and validated locally.' : `❌ Project build failed: ${failureMessage || 'validation or checkpoint did not pass; no diagnostic was returned'}`,
         !result.success && buildValidated ? `⚠️ Publishing/deployment did not finish: ${result.error || 'unknown error'}` : null,
         record.name ? `Project: ${record.name}` : null,
         record.dir ? `Workspace: ${record.dir}` : null,
