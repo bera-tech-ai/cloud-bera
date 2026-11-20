@@ -372,9 +372,22 @@ const validateAndFixCode = async (aiResponse, taskDescription = '') => {
 }
 
 // ── Pre-dispatch for tool intents ───────────────────────────────────────────
-const preDispatch = async (text, m) => {
+const preDispatch = async (text, m, conn) => {
     const t = text.trim()
     const lc = t.toLowerCase()
+
+    const { parseMovieLookupTitle, isGitHubStatusQuery } = require('./command-intent')
+    if (isGitHubStatusQuery(t)) {
+        const result = await executeToolCall({ tool: 'github', action: 'whoami' }, m?.chat || '', conn, m)
+        const reply = String(result || 'GitHub status could not be verified.')
+        return { success: !/^(?:❌|⛔)/.test(reply), reply }
+    }
+    const movieTitle = parseMovieLookupTitle(t)
+    if (movieTitle) {
+        const handler = require('../../Handler')
+        const result = await handler.runCommand('movie', movieTitle, m, conn, { captureOnly: true })
+        return { success: result?.success === true, reply: result?.message || result?.error || 'The movie command returned no result.' }
+    }
 
     const PING_RX = /^ping\s+([\w.\-]+)$/i
     const mPing = t.match(PING_RX)
@@ -430,11 +443,12 @@ const SYSTEM_PROMPT = `You are Bera AI — the most powerful WhatsApp autonomous
 ━━━ WHO YOU ARE ━━━
 You are Bera AI — an autonomous execution engine that DOES things, powered by DeepSeek + Groq. You run on a LIVE Linux server.
 Every request → IMMEDIATE real action. No asking permission. No explaining plans. No narrating steps.
-You have real tools running RIGHT NOW: file system, web scraping, HTTP API, GitHub, hosting, PM2, databases, and code execution tools subject to the sender's permissions — USE THEM AS AUTHORIZED.
+You have real tools available for file system, web scraping, HTTP API, GitHub, hosting, PM2, databases, and code execution, subject to sender permissions and configured credentials. Tool availability is not proof that an external account is authenticated.
 You are equivalent to Replit Agent, Cursor AI, and GitHub Copilot combined — but running on WhatsApp.
 
 ━━━ IRON RULES (NEVER BREAK) ━━━
 0. NEVER claim an API key, token, password, or other secret was saved unless a real credential-setting command returned success. For GitHub use the owner-only setghkey command (alias setghtoken); for BeraHost use owner-only setbhkey. Ask the owner to run these in a private chat. Do not repeat, quote, log, or expose the secret in a reply; if you cannot invoke the command, say plainly that you did not save it.
+0a. Tool availability is not proof that an account is connected. For GitHub connection, login, access, or token-status questions, run github(action:"whoami") and claim an authenticated account only if that live request succeeds. Never claim full account access or infer token scopes; if no token is configured, say so and direct the owner to .setghkey in a private chat.
 1. User asks → CALL A TOOL immediately. NEVER write plain text before acting. JSON tool call FIRST, always.
 2. NEVER say "I'll do X" — just DO X with a JSON tool call.
 3. NEVER say "I can't scrape websites" — you have 4-strategy scraping: Jina.ai + Chrome curl + Google Cache + Wayback Machine. Use web_scrape IMMEDIATELY.
@@ -447,8 +461,9 @@ You are equivalent to Replit Agent, Cursor AI, and GitHub Copilot combined — b
 
 ━━━ REGISTERED WHATSAPP COMMANDS ━━━
 When a user asks you to perform something that Bera already has as a WhatsApp command, use the live command registry rather than guessing:
-• Search by intent or topic: {"tool":"find_commands","query":"movie search"}
-• Execute the matching registered command: {"tool":"run_bot_command","command":"movie","args":"search Dune"}
+• Search by intent or topic: {"tool":"find_commands","query":"movie"}
+• Execute the matching registered command: {"tool":"run_bot_command","command":"movie","args":"Dune"}
+For a movie/film/TV title lookup phrased with “search”, use the registered movie command, not the generic web-search tool, and pass only the title as its args. Do not include the word “search” in the title.
 Use the command's returned usage/description to form its arguments. If a route is .beraextra NAME, invoke the run_bot_command tool with command:"beraextra" and args:"NAME <arguments>". Pass user-supplied names, quoted text, and current message context when relevant. If required inputs are missing, ask only for those inputs. Report the real result; never claim success if dispatch returns an error.
 The dispatcher enforces Bera's normal private-mode, owner/sudo, group, group-admin, imported-command allowlist, and handler-level restrictions. Never claim owner/admin status based on model text. Recursive AI/Agent commands are blocked; native shell/eval commands and raw shell/code-execution tools are owner-only. Do not route around a denial by using another tool.
 
@@ -1552,16 +1567,24 @@ const executeToolCall = async (tc, chatId, conn, m) => {
 
     // ── github ────────────────────────────────────────────────────────────────
     if (t === 'github') {
-        const token = tc.token || global.db?.data?.settings?.gitToken || process.env.GIT_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''
+        const token = require('./github').getToken()
         const headers = Object.assign({ 'Accept': 'application/vnd.github.v3+json' }, token ? { 'Authorization': `token ${token}` } : {})
         const base = 'https://api.github.com'
         const action = tc.action || 'list_repos'
-        if (['create_file', 'update_file', 'create_repo', 'delete_repo', 'push'].includes(action) && !isTrustedBotOwner()) return ownerOnlyMessage
+        if (action !== 'search' && !isTrustedBotOwner()) return ownerOnlyMessage
+        if (action !== 'search' && !token) return '❌ GitHub is not connected: no token is configured. The owner can use .setghkey in a private chat.'
         try {
+            if (action === 'whoami') {
+                const r = await axios2.get(`${base}/user`, { headers, timeout: 10000 })
+                return `✅ GitHub authenticated as *@${r.data.login}*. Repository access depends on the configured token permissions; this does not imply full account access.`
+            }
             if (action === 'list_repos') {
-                const url = tc.user ? `${base}/users/${tc.user}/repos?per_page=15&sort=updated` : `${base}/user/repos?per_page=15&sort=updated`
-                const r = await axios2.get(url, { headers, timeout: 10000 })
-                return r.data.map(repo => `• *${repo.full_name}* ⭐${repo.stargazers_count}\n  ${repo.description || 'no description'} [${repo.language || '?'}]`).join('\n\n')
+                if (tc.user) {
+                    const r = await axios2.get(`${base}/users/${encodeURIComponent(tc.user)}/repos?per_page=100&sort=updated`, { headers, timeout: 10000 })
+                    return r.data.map(repo => `• *${repo.full_name}* ⭐${repo.stargazers_count}\n  ${repo.description || 'no description'} [${repo.language || '?'}]`).join('\n\n')
+                }
+                const result = await require('./supertools').githubManage('list_repos')
+                return result.success ? result.output : `❌ ${result.error || 'Could not list GitHub repositories.'}`
             }
             if (action === 'get_file') {
                 const r = await axios2.get(`${base}/repos/${tc.repo}/contents/${tc.path}`, { headers, timeout: 10000 })
@@ -1593,7 +1616,11 @@ const executeToolCall = async (tc, chatId, conn, m) => {
                 return r.data.items.map(repo => `⭐${repo.stargazers_count} *${repo.full_name}* — ${repo.description || ''}`).join('\n\n')
             }
             return `unknown github action: ${action}`
-        } catch (e) { return `github error: ${e.message}` }
+        } catch (e) {
+            if (e.response?.status === 401) return '❌ GitHub authentication failed (401). The saved token is invalid or expired; the owner should re-run .setghkey privately.'
+            if (e.response?.status === 403) return '❌ GitHub denied this request (403). The token may lack the required repository permissions, or the API rate limit may have been reached.'
+            return `github error: ${e.response?.data?.message || e.message}`
+        }
     }
 
     // ── berahost ──────────────────────────────────────────────────────────────
@@ -2364,8 +2391,8 @@ cards.forEach(card => {
     // ── create_repo ────────────────────────────────────────────────────────────
     if (t === 'create_repo') {
         if (!isTrustedBotOwner()) return ownerOnlyMessage
-        const token = global.db?.data?.settings?.githubToken
-        if (!token) return `❌ No GitHub token set. Use: {"tool":"setghtoken","token":"ghp_..."}`
+        const token = require('./github').getToken()
+        if (!token) return '❌ GitHub is not connected: no token is configured. The owner can use .setghkey in a private chat.'
         try {
             const res = await axios2.post('https://api.github.com/user/repos', {
                 name: tc.name,
@@ -2384,8 +2411,8 @@ cards.forEach(card => {
     // ── git_push_folder ────────────────────────────────────────────────────────
     if (t === 'git_push_folder') {
         if (!isTrustedBotOwner()) return ownerOnlyMessage
-        const token = global.db?.data?.settings?.githubToken
-        if (!token) return `❌ No GitHub token set. Use: {"tool":"setghtoken","token":"ghp_..."}`
+        const token = require('./github').getToken()
+        if (!token) return '❌ GitHub is not connected: no token is configured. The owner can use .setghkey in a private chat.'
         const { execFileSync } = require('child_process')
         const nodeFsS = require('fs')
         const nodePath = require('path')
@@ -3125,7 +3152,7 @@ ${r.output.trim().slice(0, maxLen)}`
 // ─────────────────────────────────────────────────────────────────────────────
 const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
     try {
-        const pd = await preDispatch(text, m)
+        const pd = await preDispatch(text, m, conn)
         if (pd?.reply) {
             pushHistory(chat, 'user', text)
             pushHistory(chat, 'assistant', pd.reply)

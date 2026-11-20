@@ -3,6 +3,9 @@ const assert = require('node:assert/strict')
 const { execFileSync } = require('node:child_process')
 const path = require('node:path')
 const { executeToolCall, parseToolCalls, generateAdvancedReply } = require('../Library/actions/beraai')
+const { executeStep } = require('../Library/actions/agent')
+const { parseMovieLookupTitle, isGitHubStatusQuery } = require('../Library/actions/command-intent')
+const github = require('../Library/actions/github')
 
 const handlerPath = require.resolve('../Handler')
 const withHandlerStub = async (exports, fn) => {
@@ -117,4 +120,105 @@ test('runtime registry finds imported commands and native dispatcher rejects una
   assert.match(recursive.error, /blocked from AI invocation/i)
   assert.equal(namespace.success, true)
   assert.match(namespace.message, /Bera extra commands:/)
+})
+
+test('movie lookup parser recognizes search phrasing and keeps only the title', () => {
+  assert.equal(parseMovieLookupTitle('search for the movie Dune?'), 'Dune')
+  assert.equal(parseMovieLookupTitle('find me a film “Arrival”'), 'Arrival')
+  assert.equal(parseMovieLookupTitle('search Dune movie'), 'Dune')
+  assert.equal(parseMovieLookupTitle('search the web for movie news'), null)
+  assert.equal(isGitHubStatusQuery('Is my GitHub account connected?'), true)
+  assert.equal(isGitHubStatusQuery('save my GitHub token'), false)
+})
+
+test('Bera AI search-for-movie wording dispatches movie command instead of generic web search', async () => {
+  let received
+  await withHandlerStub({
+    runCommand: async (...args) => {
+      received = args
+      return { success: true, message: 'Dune movie details' }
+    }
+  }, async () => {
+    const message = { sender: '1111111111@s.whatsapp.net', chat: 'chat' }
+    const result = await generateAdvancedReply('search for the movie Dune', 'movie-test-chat', {}, message)
+    assert.equal(result.success, true)
+    assert.equal(result.reply, 'Dune movie details')
+    assert.equal(received[0], 'movie')
+    assert.equal(received[1], 'Dune')
+    assert.equal(received[2], message)
+    assert.equal(received[4].captureOnly, true)
+  })
+})
+
+test('Agent OS registered-command action dispatches the parsed movie title through Handler', async () => {
+  let received
+  const title = parseMovieLookupTitle('search for the movie Dune')
+  await withHandlerStub({
+    runCommand: async (...args) => {
+      received = args
+      return { success: true, message: 'Dune movie details' }
+    }
+  }, async () => {
+    const message = { sender: '1111111111@s.whatsapp.net' }
+    const result = await executeStep({ action: 'run_bot_command', args: { command: 'movie', args: title }, desc: 'movie lookup' }, {}, 'chat', message)
+    assert.equal(result.success, true)
+    assert.equal(result.output, 'Dune movie details')
+    assert.equal(received[0], 'movie')
+    assert.equal(received[1], 'Dune')
+    assert.equal(received[4].captureOnly, true)
+  })
+})
+
+test('GitHub status tool reports missing credentials without claiming an account is connected', async () => {
+  const previousDb = global.db
+  const envNames = ['GITHUB_TOKEN', 'GIT_TOKEN', 'GITHUB_PERSONAL_ACCESS_TOKEN']
+  const previousEnv = Object.fromEntries(envNames.map(name => [name, process.env[name]]))
+  try {
+    envNames.forEach(name => delete process.env[name])
+    global.db = { data: { settings: {} } }
+    const owner = String(require('../Config').owner || '').replace(/\D/g, '') || '0000000000'
+    const jid = `${owner}@s.whatsapp.net`
+    const message = { sender: jid, chat: jid, key: { remoteJid: jid } }
+    const result = await executeToolCall({ tool: 'github', action: 'whoami' }, jid, {}, message)
+    assert.match(result, /not connected|no token is configured/i)
+    assert.doesNotMatch(result, /authenticated as|full access/i)
+    const routed = await generateAdvancedReply('Is my GitHub account connected?', jid, {}, message)
+    assert.match(routed.reply, /not connected|no token is configured/i)
+    assert.doesNotMatch(routed.reply, /authenticated as|full access/i)
+    const agentStatus = await executeStep({ action: 'github_manage', args: { action: 'whoami' }, desc: 'verify GitHub' }, {}, jid, message, { userId: jid })
+    assert.equal(agentStatus.success, false)
+    assert.match(agentStatus.output, /no GitHub token configured|setghkey/i)
+  } finally {
+    global.db = previousDb
+    for (const name of envNames) {
+      if (previousEnv[name] === undefined) delete process.env[name]
+      else process.env[name] = previousEnv[name]
+    }
+  }
+})
+
+test('shared GitHub token getter reads the .setghkey database field and compatible environment names', () => {
+  const previousDb = global.db
+  const envNames = ['GITHUB_TOKEN', 'GIT_TOKEN', 'GITHUB_PERSONAL_ACCESS_TOKEN']
+  const previousEnv = Object.fromEntries(envNames.map(name => [name, process.env[name]]))
+  try {
+    envNames.forEach(name => delete process.env[name])
+    global.db = { data: { settings: { githubToken: 'unit-test-placeholder' } } }
+    assert.equal(github.getToken(), 'unit-test-placeholder')
+    global.db.data.settings = { gitToken: 'legacy-placeholder' }
+    assert.equal(github.getToken(), 'legacy-placeholder')
+    global.db.data.settings = {}
+    process.env.GITHUB_PERSONAL_ACCESS_TOKEN = 'env-placeholder'
+    assert.equal(github.getToken(), 'env-placeholder')
+    process.env.GIT_TOKEN = 'git-token-placeholder'
+    assert.equal(github.getToken(), 'git-token-placeholder')
+    process.env.GITHUB_TOKEN = 'github-token-placeholder'
+    assert.equal(github.getToken(), 'github-token-placeholder')
+  } finally {
+    global.db = previousDb
+    for (const name of envNames) {
+      if (previousEnv[name] === undefined) delete process.env[name]
+      else process.env[name] = previousEnv[name]
+    }
+  }
 })

@@ -200,22 +200,54 @@ const config = require('../Config')
                   }
               }
               const imported = bridge.allCommands || []
-              const pageSize = 35
-              const pageCount = Math.max(1, Math.ceil(imported.length / pageSize))
+              const categoryLabels = {
+                  ai: ['🧠', 'AI & AGENT'], anime: ['🎌', 'ANIME'], anti: ['🛡️', 'GROUP SAFETY'],
+                  audio: ['🎧', 'AUDIO'], boss: ['👑', 'OWNER & ADMIN'], downloader: ['📥', 'DOWNLOADS'],
+                  economy: ['💰', 'ECONOMY'], extra: ['🧩', 'EXTRAS'], fun: ['🎭', 'FUN & EXTRAS'],
+                  fun2: ['🎭', 'FUN & EXTRAS'], games: ['🎮', 'GAMES'], general: ['📋', 'GENERAL'],
+                  group: ['👥', 'GROUPS'], group2: ['👥', 'GROUPS'], media: ['🖼️', 'MEDIA'],
+                  'media-modifier': ['🎨', 'IMAGE EFFECTS'], owner: ['👑', 'OWNER & ADMIN'],
+                  owner2: ['👑', 'OWNER & ADMIN'], rich: ['💎', 'REWARDS & ECONOMY'],
+                  search: ['🔎', 'SEARCH'], textmaker: ['✨', 'TEXT EFFECTS'],
+                  tools: ['🛠️', 'TOOLS & UTILITIES'], tools2: ['🛠️', 'TOOLS & UTILITIES']
+              }
+              const getCategory = cmd => {
+                  const key = String(cmd.category || 'general').trim().toLowerCase()
+                  return categoryLabels[key] || ['📦', key.replace(/[-_]+/g, ' ').toUpperCase() || 'OTHER']
+              }
+              const sorted = imported.slice().sort((a, b) => {
+                  const categoryOrder = getCategory(a)[1].localeCompare(getCategory(b)[1])
+                  return categoryOrder || String(a.name || '').localeCompare(String(b.name || ''))
+              })
+              const pageSize = 20
+              const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize))
               const page = Math.min(pageCount, Math.max(1, Number(args?.[0]) || 1))
-              const entries = imported.slice((page - 1) * pageSize, page * pageSize)
-              const lines = entries.map(cmd => {
+              const entries = sorted.slice((page - 1) * pageSize, page * pageSize)
+              const lines = []
+              let currentCategory = ''
+              for (const cmd of entries) {
+                  const [icon, label] = getCategory(cmd)
+                  if (label !== currentCategory) {
+                      lines.push('*' + icon + ' ' + label + '*')
+                      currentCategory = label
+                  }
                   const source = cmd.sourceFile || cmd.sourceId || cmd.name
                   const routes = directRoutes.get(source) || []
-                  const invocation = routes.length ? routes.map(name => p + name).join(' / ')
+                  const shownRoutes = routes.slice(0, 3)
+                  const invocation = routes.length
+                      ? shownRoutes.map(name => p + name).join(' · ') + (routes.length > shownRoutes.length ? ' (+' + (routes.length - shownRoutes.length) + ' aliases)' : '')
                       : p + 'beraextra ' + source
-                  const description = String(cmd.desc || cmd.description || cmd.category || 'Imported command')
-                      .replace(/\bXADON(?:\s+AI)?\b/gi, 'Bera AI').replace(/\s+/g, ' ').trim().slice(0, 100)
-                  return '• ' + invocation + (description ? ' — ' + description : '')
-              })
-              return reply('🧩 *EXTRA COMMANDS*  |  Page ' + page + '/' + pageCount + '  |  ' + imported.length + ' entries\n\n' +
-                  lines.join('\n') + '\n\nUse ' + p + 'extra ' + Math.min(page + 1, pageCount) + ' for the next page. ' +
-                  'Some commands need media, credentials, or owner/admin access.')
+                  const rawDescription = String(cmd.desc || cmd.description || 'Imported command')
+                      .replace(/\bXADON(?:\s+AI)?\b/gi, 'Bera AI').replace(/\s+/g, ' ').trim()
+                  const description = rawDescription.length > 72 ? rawDescription.slice(0, 71).trimEnd() + '…' : rawDescription
+                  lines.push('❯ ' + invocation + (description ? ' — ' + description : ''))
+              }
+              const previous = page > 1 ? '‹ ' + p + 'extra ' + (page - 1) : ''
+              const next = page < pageCount ? p + 'extra ' + (page + 1) + ' ›' : ''
+              const navigation = [previous, next].filter(Boolean).join('     ')
+              const header = '╭─〔 🧩 *EXTRA COMMANDS* 〕─╮\n│ Page ' + page + '/' + pageCount + ' · ' + imported.length + ' commands\n╰────────────────────────╯'
+              return reply(header + '\n\n' + lines.join('\n') + '\n\n' + navigation +
+                  '\nUse ' + p + 'extra <page> to browse · aliases may be shortened.\nSome commands require media, credentials, or owner/admin access.')
           } catch (error) {
               return reply('Could not load extra commands: ' + error.message)
           }
@@ -307,4 +339,3 @@ const config = require('../Config')
 
   handle.commands=['ping','uptime','up','status','dashboard','botstat','info','menu','help','start','commands','men','menus','mainmenu','list','listmenu','listmen','cmds','allcmds','extra','aimenu','dlmenu','searchmenu','groupmenu','toolsmenu','gamesmenu','convertmenu','musicmenu','sportsmenu','deploymenu','devmenu','ptmenu','keymenu','funmenu','notesmenu','religionmenu','tempmailmenu','settingsmenu','ownermenu','sticker','s','st','take','ai','dl','search','gc','dev','bhost','fun','cfg','owner','ghostmenu','privacymenu']
   module.exports = handle
-

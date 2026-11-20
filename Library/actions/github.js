@@ -1,11 +1,14 @@
 const axios = require('axios')
 
-const getToken = () =>
-    global.db?.data?.settings?.githubToken || process.env.GITHUB_TOKEN || ''
+const getToken = () => {
+    const settings = global.db?.data?.settings || {}
+    return settings.githubToken || settings.gitToken ||
+        process.env.GITHUB_TOKEN || process.env.GIT_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''
+}
 
 const gh = (endpoint, method = 'GET', data = null) => {
     const token = getToken()
-    if (!token) return Promise.resolve({ error: 'No GitHub token set. Tell me your GitHub token like: "my github token is ghp_xxxx"' })
+    if (!token) return Promise.resolve({ error: 'No GitHub token configured. The owner can set it with .setghkey in a private chat.' })
     return axios({
         method,
         url: `https://api.github.com${endpoint}`,

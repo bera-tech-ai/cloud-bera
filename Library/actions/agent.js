@@ -374,14 +374,14 @@ app.listen(PORT, () => console.log(\`${name} running on port \${PORT}\`))
 
 const githubTokenRegen = async (tokenInDB) => {
     try {
-        const ghToken = process.env.GITHUB_PERSONAL_ACCESS_TOKEN || tokenInDB
-        if (!ghToken) return { success: false, error: 'No GitHub token configured' }
+        const ghToken = require('./github').getToken() || tokenInDB
+        if (!ghToken) return { success: false, error: 'No GitHub token configured. The owner can set one with .setghkey in a private chat.' }
         const meRes = await axios.get('https://api.github.com/user', {
             headers: { 'Authorization': `Bearer ${ghToken}`, 'User-Agent': 'Bera-AI' }, timeout: 10000
         })
         return {
             success: true, username: meRes.data.login, canAutoCreate: false,
-            message: `Token is valid for *${meRes.data.login}*.\n\nTo generate a new token:\n1. Go to: https://github.com/settings/tokens/new\n2. Set expiry, select repo/workflow scopes\n3. Click Generate token\n4. Send *.setgithub <token>* to update`
+            message: `GitHub authentication verified for *@${meRes.data.login}*. Repository access depends on the token permissions; this does not imply full account access.\n\nTo update it, the owner can use *.setghkey <token>* in a private chat.`
         }
     } catch (e) {
         return { success: false, error: e.message }
@@ -392,7 +392,7 @@ const githubTokenRegen = async (tokenInDB) => {
 //  AGENT PLANNER — powered by Puter AI (primary) + fallbacks
 // ══════════════════════════════════════════════════════════════════════════════
 
-const PLAN_PROMPT = `You are Bera AI's action planner. You have FULL access to the server file system, bash shell, Puter cloud storage, and all tools below.
+const PLAN_PROMPT = `You are Bera AI's action planner. You can use the server file system, bash shell, Puter cloud storage, and the tools below subject to authorization and configured credentials. Tool availability does not prove that an external account is authenticated.
 
 WORKSPACE RULES (CRITICAL):
 - All files and folders are created inside /workspace/{userId}/ by default unless the user specifies an absolute path.
@@ -563,6 +563,10 @@ DATABASE (SQLite):
 GITHUB:
 - github_manage  → args: { action("whoami"|"list_repos"|"create_repo"|"delete_repo"|"create_issue"|"list_issues"|"commit_file"|"read_file"|"get_commits"|"fork"|"star"|"search_repos"), opts: { name, repo, owner, title, body, path, content, message, description, private, query, labels } }
 
+REGISTERED WHATSAPP COMMANDS:
+- find_commands   → args: { query, limit }  ← search Bera's live command registry by intent
+- run_bot_command → args: { command, args } ← dispatch a registered command through Bera's normal authorization checks
+
 DOCS & TESTING:
 - generate_docs  → args: { code, language, style("markdown"|"jsdoc"|"html") }
 - generate_tests → args: { code, language, framework("jest"|"mocha"|"pytest") }
@@ -613,6 +617,9 @@ RULES:
 - For any programming language task → run_code with the right lang
 - For SQLite → sqlite_manage
 - For GitHub management → github_manage
+- For an existing Bera WhatsApp feature, use find_commands then run_bot_command; do not substitute a generic web-search tool.
+- For movie/film/TV-title lookup phrased with “search”, discover the movie command and pass only the title as its args (example: “search for the movie Dune” → command:"movie", args:"Dune"). Never pass the verb “search” as part of the title.
+- If asked whether GitHub is connected, authorized, or accessible, call github_manage(action:"whoami") first. Tool availability is not proof of an authenticated account. Claim a connected account only when whoami succeeds; do not claim full access or infer token scopes. If no token is configured, say so plainly and direct the owner to .setghkey in a private chat.
 - urls arg in bulk_scrape must be an array
 
 Return format (ONLY JSON, no markdown):
@@ -682,6 +689,26 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
     const ownerDenied = () => ({ success: false, output: '⛔ This GitHub/publishing/deployment action requires the bot owner.', desc })
     try {
         switch (action) {
+            case 'find_commands': {
+                const handler = require('../../Handler')
+                if (typeof handler.findCommands !== 'function') return { success: false, output: 'Bera command discovery is unavailable.', desc }
+                const query = String(args.query || args.search || '').trim()
+                const limit = Math.max(1, Math.min(30, Number(args.limit) || 15))
+                const result = handler.findCommands(query, limit)
+                return { success: result?.success !== false, output: JSON.stringify(result), desc }
+            }
+            case 'run_bot_command': {
+                const handler = require('../../Handler')
+                if (typeof handler.runCommand !== 'function') return { success: false, output: 'Bera command dispatch is unavailable.', desc }
+                const rawCommand = String(args.command || args.name || '').trim()
+                if (!rawCommand) return { success: false, output: 'No registered command name was provided.', desc }
+                const parts = rawCommand.replace(/^[.!/]+/, '').split(/\s+/)
+                const command = parts.shift()
+                const suppliedArgs = Array.isArray(args.args) ? args.args.join(' ') : String(args.args || args.text || '')
+                const commandArgs = [parts.join(' '), suppliedArgs].filter(Boolean).join(' ').trim()
+                const result = await handler.runCommand(command, commandArgs, m, conn, { captureOnly: true })
+                return { success: result?.success === true, output: result?.message || result?.error || 'Command returned no message.', desc }
+            }
             case 'shell':        return { ...await runShell(args.cmd, 45000), desc }
             case 'file_read': {
                 const filePath = resolveAgentPath(args.path, userId)

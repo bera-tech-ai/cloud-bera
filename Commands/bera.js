@@ -239,7 +239,7 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
             return reply(`✅ Cloned \`${folderName}\` — GitHub repo creation failed: ${ghRes.error}`)
         }
 
-        const token = process.env.GITHUB_TOKEN
+        const token = require('../Library/actions/github').getToken()
         const remoteRes = await setupRepoRemote(folderName, ghUsername, folderName, token)
 
         global.db.data.settings = global.db.data.settings || {}
@@ -579,12 +579,23 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
             await react(conn, m, '✅')
             return reply(`✅ Deleted \`${nameMatch[1]}\``)
         }
+        const { isGitHubStatusQuery } = require('../Library/actions/command-intent')
+        if (isGitHubStatusQuery(text)) {
+            const github = require('../Library/actions/github')
+            if (!github.getToken()) return reply('❌ GitHub is not connected: no token is configured. The owner can use .setghkey in a private chat.')
+            const user = await github.getUser()
+            if (!user?.login) return reply(`❌ GitHub authentication could not be verified${user?.error ? `: ${user.error}` : ''}. The owner can re-run .setghkey privately.`)
+            await react(conn, m, '✅')
+            return reply(`✅ GitHub authentication verified for *@${user.login}*. Repository access depends on the configured token permissions; this does not imply full account access.`)
+        }
         if (/\b(access|reach|connect|have|got|can you|do you)\b/.test(t) ||
             /\b(github|repos?|repositories)\b/.test(t)) {
-            const res = await listRepos().catch(() => null)
-            const count = Array.isArray(res) ? res.length : '?'
+            const res = await listRepos().catch(error => ({ error: error.message }))
+            if (res?.error) return reply(`❌ GitHub: ${res.error}`)
+            if (!Array.isArray(res)) return reply('❌ GitHub did not return a repository list.')
+            const lines = res.map(repo => `${repo.private ? '🔒' : '🌐'} *${repo.name}* — ${repo.url}`).join('\n')
             await react(conn, m, '✅')
-            return reply(`Yes, I have full GitHub access as *bera-tech-ai* 🐙\n\nI can:\n• List your repos (${count} so far)\n• Create or delete repos\n• Clone any repo\n• Push code\n\nWhat do you need?`)
+            return reply(`✅ GitHub returned ${res.length} accessible repositories:\n${lines || '(No repositories found.)'}`)
         }
         await react(conn, m, '❌')
         return reply(`❌ Try: "list repos", "create repo <name>", "delete repo <name>"`)
@@ -1179,6 +1190,20 @@ Start immediately with the code — no lengthy intro.`
         await react(conn, m, '🤖')
         const task = text.replace(/\b(agent|automate|plan and execute|do the following|step by step)\b/gi, '').trim() || text
         if (!task || task.length < 5) return reply(`❌ Describe what you want me to do. E.g: "agent: create a folder called projects with files index.js and README.md"`)
+
+        const { parseMovieLookupTitle, isGitHubStatusQuery } = require('../Library/actions/command-intent')
+        const { executeStep } = require('../Library/actions/agent')
+        if (isGitHubStatusQuery(task)) {
+            const checked = await executeStep({ action: 'github_manage', args: { action: 'whoami' }, desc: 'Verify GitHub authentication' }, conn, m.chat, m, { userId: sender })
+            await react(conn, m, checked.success ? '✅' : '❌')
+            return reply(checked.output || 'GitHub status could not be verified.')
+        }
+        const movieTitle = parseMovieLookupTitle(task)
+        if (movieTitle) {
+            const result = await executeStep({ action: 'run_bot_command', args: { command: 'movie', args: movieTitle }, desc: `Look up movie: ${movieTitle}` }, conn, m.chat, m, { userId: sender })
+            await react(conn, m, result.success ? '✅' : '❌')
+            return reply(result.output || 'The movie command returned no result.')
+        }
 
         // Workspace path for this user so created files persist
         const wsDir = getUserWorkspace(sender)

@@ -5,8 +5,9 @@
  */
 
 const axios = require('axios')
+const github = require('../Library/actions/github')
 
-const getToken = () => global.db?.data?.settings?.githubToken || process.env.GITHUB_TOKEN || ''
+const getToken = () => github.getToken()
 
 const gh = (path, method = 'GET', data = null, token = null) => {
     const t = token || getToken()

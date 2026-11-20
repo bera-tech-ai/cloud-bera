@@ -660,8 +660,8 @@ const sqliteManage = async (action, dbPath, query = '', data = {}) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const githubManage = async (action, opts = {}) => {
-    const token = global.db?.data?.settings?.githubToken || process.env.GITHUB_TOKEN || ''
-    if (!token) return { success: false, error: 'No GitHub token. Set one with .setgithub <token>' }
+    const token = require('./github').getToken()
+    if (!token) return { success: false, error: 'No GitHub token configured. The owner can set it with .setghkey in a private chat.' }
 
     const gh = async (endpoint, method = 'GET', data = null) => {
         try {
@@ -689,17 +689,21 @@ const githubManage = async (action, opts = {}) => {
     switch (action) {
         case 'whoami': {
             const r = await gh('/user')
-            if (!r.ok) return { success: false, error: 'Auth failed' }
-            return { success: true, output: `👤 *${r.data.name || r.data.login}*\n📧 ${r.data.email || 'hidden'}\n⭐ ${r.data.public_repos} public repos | 👥 ${r.data.followers} followers\n🔗 ${r.data.html_url}` }
+            if (!r.ok) return { success: false, error: r.status === 401 ? 'GitHub authentication failed (401). The saved token is invalid or expired; the owner should re-run .setghkey privately.' : r.status === 403 ? 'GitHub denied the request (403); check token permissions or API rate limits.' : r.data?.message || r.error || `GitHub returned HTTP ${r.status}.` }
+            return { success: true, output: `✅ GitHub authenticated as *@${r.data.login}*.\n🔐 Repository access depends on this token's GitHub permissions; this does not imply full account access.\n⭐ ${r.data.public_repos} public repos\n🔗 ${r.data.html_url}` }
         }
 
         case 'list_repos': {
-            const r = await gh(`/user/repos?per_page=20&sort=updated&affiliation=owner`)
-            if (!r.ok) return { success: false, error: r.data?.message }
-            const repos = r.data.map(repo =>
-                `${repo.private ? '🔒' : '🌐'} *${repo.name}* — ${repo.description || 'no desc'} [${repo.language || '?'}] ⭐${repo.stargazers_count}`
-            )
-            return { success: true, output: `📁 Your repos (${repos.length}):\n\n${repos.join('\n')}` }
+            const allRepos = []
+            for (let page = 1; page <= 5; page++) {
+                const r = await gh(`/user/repos?per_page=100&page=${page}&sort=updated&affiliation=owner,collaborator,organization_member`)
+                if (!r.ok) return { success: false, error: r.status === 401 ? 'GitHub authentication failed (401). The saved token is invalid or expired; the owner should re-run .setghkey privately.' : r.status === 403 ? 'GitHub denied the request (403); check token repository permissions or API rate limits.' : r.data?.message || r.error || `GitHub returned HTTP ${r.status}.` }
+                allRepos.push(...r.data)
+                if (r.data.length < 100) break
+            }
+            const repos = allRepos.map(repo => `${repo.private ? '🔒' : '🌐'} *${repo.full_name}* [${repo.language || '?'}]`)
+            const capNote = allRepos.length === 500 ? '\n\nShowing the first 500 accessible repositories; the account may have more.' : ''
+            return { success: true, output: `📁 Accessible repositories (${repos.length}):\n\n${repos.join('\n')}${capNote}` }
         }
 
         case 'create_repo': {
