@@ -22,7 +22,11 @@ test('Agent OS separates comma-combined mkdir action and relative path', () => {
         xcasper.chat = async () => ({
             success: true,
             provider: 'deepseek',
-            text: JSON.stringify({ steps: [{ action: 'mkdir,kijani-coffee-site' }] })
+            text: JSON.stringify({ steps: [
+                { action: 'mkdir,kijani-coffee-site' },
+                { action: 'write_file|mkdir', path: 'index.html', contentBase64: Buffer.from('<h1>Kijani</h1>').toString('base64') },
+                { action: 'write_file|mkdir', path: 'assets' }
+            ] })
         })
         ;(async () => {
             const record = { id: 'mkdir-normalize-test', name: 'mkdir-normalize-test', dir, task: 'create a project' }
@@ -30,11 +34,19 @@ test('Agent OS separates comma-combined mkdir action and relative path', () => {
             assert.equal(planned.success, true, planned.error)
             assert.equal(planned.plan.steps[0].action, 'mkdir')
             assert.equal(planned.plan.steps[0].path, 'kijani-coffee-site')
+            assert.equal(planned.plan.steps[1].action, 'write_file')
+            assert.equal(planned.plan.steps[2].action, 'mkdir')
 
             const executed = await agentOs.executeStep(record, planned.plan.steps[0])
             assert.equal(executed.success, true)
             assert.equal(fs.existsSync(path.join(dir, 'kijani-coffee-site')), true)
             assert.equal(fs.existsSync(path.join(root, 'kijani-coffee-site')), false)
+            const written = await agentOs.executeStep(record, planned.plan.steps[1])
+            assert.equal(written.success, true)
+            assert.equal(fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), '<h1>Kijani</h1>')
+            const folder = await agentOs.executeStep(record, planned.plan.steps[2])
+            assert.equal(folder.success, true)
+            assert.equal(fs.existsSync(path.join(dir, 'assets')), true)
             const blocked = await agentOs.executeStep(record, { action: 'mkdir', path: '../outside-project' })
             assert.equal(blocked.success, false)
             assert.match(blocked.output, /Blocked path outside project workspace/)

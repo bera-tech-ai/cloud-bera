@@ -174,7 +174,7 @@ const parsePlannerJson = (raw, repairMalformed = false) => {
 }
 
 const makePlan = async (record, task, options = {}) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only: {"summary":"...","steps":[{"action":"write_file|mkdir|install|build|test|shell","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}\nRules: action must be exactly one listed value; never append a path or other value to action. Put every relative path only in path. Do not use secrets or delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"mkdir","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. Do not use secrets or delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
         timeout: 45000,
@@ -186,7 +186,7 @@ const makePlan = async (record, task, options = {}) => {
     if (!parsed.success) {
         await notifyProgress(options, { phase: 'planner_json_recovery' })
         const recovery = await xcasper.chat([
-            { role: 'system', content: 'Repair the malformed planner response into exactly one valid JSON object with the schema {"summary":"...","steps":[{"action":"write_file|mkdir|install|build|test|shell","path":"relative path","contentBase64":"...","command":"...","reason":"..."}]}. Preserve the original plan and every value; do not invent or omit steps. Return JSON only, with all strings correctly escaped, no comments, no trailing commas, and no Markdown fences.' },
+            { role: 'system', content: 'Repair the malformed planner response into exactly one valid JSON object. Each steps[].action must be exactly one of write_file, mkdir, install, build, test, or shell; choose one value, never copy an alternatives list into the field. Use separate path, contentBase64, and command fields. Preserve the original plan and every value; do not invent or omit steps. Return JSON only, with all strings correctly escaped, no comments, no trailing commas, and no Markdown fences.' },
             { role: 'user', content: `Original project task: ${String(task || record.task).slice(0, 4000)}\nMalformed planner response:\n${String(result.text || '').slice(-18000)}` }
         ], {
             timeout: 45000,
@@ -207,10 +207,15 @@ const makePlan = async (record, task, options = {}) => {
     plan.steps = plan.steps.slice(0, 40).map(step => {
         const rawAction = String(step.action || '').trim().toLowerCase()
         const combinedPath = rawAction.match(/^(mkdir|write_file)\s*,\s*(.+)$/)
+        const actionAlternatives = rawAction.split('|').map(value => value.trim())
+        const contentProvided = Boolean(step.contentBase64 || (typeof step.content === 'string' && step.content.length))
+        const chosenFileAction = actionAlternatives.length === 2 && actionAlternatives.includes('write_file') && actionAlternatives.includes('mkdir')
+            ? contentProvided ? 'write_file' : 'mkdir'
+            : null
         const pathValue = typeof step.path === 'string' && step.path.trim() ? step.path.trim() : combinedPath?.[2]?.trim()
         return {
             ...step,
-            action: rawAction === 'git init' ? 'git_init' : combinedPath?.[1] || rawAction,
+            action: rawAction === 'git init' ? 'git_init' : combinedPath?.[1] || chosenFileAction || rawAction,
             ...(pathValue ? { path: pathValue } : {}),
             content: step.contentBase64 && !step.content
                 ? Buffer.from(String(step.contentBase64).replace(/\s+/g, ''), 'base64').toString('utf8')
