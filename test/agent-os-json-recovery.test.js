@@ -19,7 +19,7 @@ test('Agent OS extracts fenced plans and recovers once from malformed planner JS
         const replies = [
             { success: true, provider: 'deepseek', text: 'Plan:\\n\\x60\\x60\\x60json\\n{"summary":"fenced plan","steps":[{"action":"mkdir","path":"public"}]}\\n\\x60\\x60\\x60' },
             { success: true, provider: 'deepseek', text: '{"summary":"broken plan","steps":[{"action":"mkdir","path":"src",}]}' },
-            { success: true, provider: 'publicai', text: '{"summary":"repaired plan","steps":[{"action":"mkdir","path":"src"}]}' }
+            { success: true, provider: 'publicai', text: "{ summary: 'repaired plan', steps: [{ action: 'mkdir', path: 'src', },], }" }
         ]
         const calls = []
         xcasper.chat = async (messages, options) => {
@@ -48,6 +48,7 @@ test('Agent OS extracts fenced plans and recovers once from malformed planner JS
             assert.match(calls[2][0].content, /Repair the malformed planner response/)
             assert.match(calls[2][1].content, /broken plan/)
             assert.ok(secondEvents.some(e => e.phase === 'planner_json_recovery'))
+            assert.ok(secondEvents.some(e => e.phase === 'planner_json_local_repair'))
             assert.equal(secondEvents.at(-1).phase, 'planning_complete')
             console.log('AGENT_OS_JSON_RECOVERY_OK')
         })().catch(error => { console.error(error); process.exitCode = 1 })

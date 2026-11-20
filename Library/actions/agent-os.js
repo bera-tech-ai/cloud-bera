@@ -5,6 +5,7 @@ const path = require('path')
 const crypto = require('crypto')
 const { spawn, execFile } = require('child_process')
 const { promisify } = require('util')
+const { jsonrepair } = require('jsonrepair')
 const { getUserWorkspace } = require('../lib/workspace')
 const xcasper = require('./xcasper')
 const github = require('./github')
@@ -123,13 +124,24 @@ const create = async options => {
 const get = id => load().projects[id] || null
 const event = (record, type, data = {}) => { record.events = (record.events || []).slice(-99); record.events.push({ type, at: now(), ...data }); update(record, {}) }
 
-const parsePlannerJson = raw => {
+const parsePlannerJson = (raw, repairMalformed = false) => {
     const text = String(raw || '').replace(/```(?:json)?/gi, '').trim()
     let inString = false
     let escaped = false
     let depth = 0
     let start = -1
     let lastError = new Error('No JSON object found.')
+    const parseCandidate = candidate => {
+        let value
+        try { value = JSON.parse(candidate) } catch (error) {
+            lastError = error
+            if (!repairMalformed) return null
+            try { value = JSON.parse(jsonrepair(candidate)) } catch (repairError) { lastError = repairError; return null }
+        }
+        if (value && typeof value === 'object' && !Array.isArray(value)) return { success: true, value }
+        lastError = new Error('Planner JSON must be an object.')
+        return null
+    }
     for (let i = 0; i < text.length; i++) {
         const char = text[i]
         if (inString) {
@@ -145,12 +157,17 @@ const parsePlannerJson = raw => {
         } else if (char === '}' && depth > 0) {
             depth--
             if (depth === 0) {
-                try {
-                    const value = JSON.parse(text.slice(start, i + 1))
-                    if (value && typeof value === 'object' && !Array.isArray(value)) return { success: true, value }
-                    lastError = new Error('Planner JSON must be an object.')
-                } catch (error) { lastError = error }
+                const parsed = parseCandidate(text.slice(start, i + 1))
+                if (parsed) return parsed
             }
+        }
+    }
+    if (repairMalformed) {
+        const first = text.indexOf('{')
+        const last = text.lastIndexOf('}')
+        if (first >= 0 && last > first) {
+            const parsed = parseCandidate(text.slice(first, last + 1))
+            if (parsed) return parsed
         }
     }
     return { success: false, error: lastError }
@@ -178,7 +195,11 @@ const makePlan = async (record, task, options = {}) => {
         })
         if (!recovery.success) return { success: false, error: `Planner returned malformed JSON; format recovery failed: ${recovery.error}` }
         parsed = parsePlannerJson(recovery.text)
-        if (!parsed.success) return { success: false, error: `Planner JSON error after format recovery: ${parsed.error.message}` }
+        if (!parsed.success) {
+            await notifyProgress(options, { phase: 'planner_json_local_repair' })
+            parsed = parsePlannerJson(recovery.text, true)
+        }
+        if (!parsed.success) return { success: false, error: `Planner JSON error after AI and local format recovery: ${parsed.error.message}` }
     }
     const plan = parsed.value
     if (!Array.isArray(plan.steps) || !plan.steps.length) return { success: false, error: 'Planner returned no steps.' }

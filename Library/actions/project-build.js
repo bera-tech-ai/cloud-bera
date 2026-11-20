@@ -46,6 +46,8 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
             } else if (progress.phase === 'planning_complete') {
                 const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
                 await replyProgress(`✅ AI planner responded via ${label}; preparing the project files.`)
+            } else if (progress.phase === 'planner_json_local_repair') {
+                await replyProgress('🔧 Planner JSON needed formatting; repairing the response locally before continuing.')
             } else if (progress.phase === 'execute') {
                 const { index, total, action } = progress
                 if (index === 0 || index === total - 1 || (index + 1) % 4 === 0) {
