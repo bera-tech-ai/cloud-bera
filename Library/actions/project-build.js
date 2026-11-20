@@ -13,6 +13,19 @@ const projectName = text => {
     return `${(hint || 'bera').toLowerCase()}-app`
 }
 
+const validationFailureDetails = (result = {}, record = {}) => {
+    const checks = Array.isArray(result.validation?.checks) ? result.validation.checks : Array.isArray(record.checks) ? record.checks : []
+    return checks.filter(check => !check.success).map(check => {
+        const detail = String(check.output || check.error || 'No diagnostic was returned.')
+            .replace(/\u001b\[[0-9;]*m/g, '')
+            .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 600)
+        return `${check.name || 'validation'}: ${detail}`
+    }).join('; ').slice(0, 1400)
+}
+
 const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     const agentOs = require('./agent-os')
     const { addRequesterMention } = require('../lib/group-mentions')
@@ -70,6 +83,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         }
     })
     const record = result.record || {}
+    const failureDetails = validationFailureDetails(result, record)
     const buildValidated = Boolean(record.checkpoint) && (record.checks || []).length > 0 && (record.checks || []).every(check => check.success)
     let approvalCase = null
     if (record.id) {
@@ -84,7 +98,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         }
     }
     const parts = [
-        buildValidated ? '✅ Project built and validated locally.' : `❌ Project build failed: ${result.error || 'see validation details'}`,
+        buildValidated ? '✅ Project built and validated locally.' : `❌ Project build failed: ${result.error || failureDetails || 'validation or checkpoint did not pass; no diagnostic was returned'}`,
         !result.success && buildValidated ? `⚠️ Publishing/deployment did not finish: ${result.error || 'unknown error'}` : null,
         record.name ? `Project: ${record.name}` : null,
         record.dir ? `Workspace: ${record.dir}` : null,
@@ -129,4 +143,4 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     return result
 }
 
-module.exports = { looksLikeProjectBuild, runProjectBuild }
+module.exports = { looksLikeProjectBuild, runProjectBuild, validationFailureDetails }
