@@ -64,6 +64,39 @@ const create = async options => {
 const get = id => load().projects[id] || null
 const event = (record, type, data = {}) => { record.events = (record.events || []).slice(-99); record.events.push({ type, at: now(), ...data }); update(record, {}) }
 
+const parsePlannerJson = raw => {
+    const text = String(raw || '').replace(/```(?:json)?/gi, '').trim()
+    let inString = false
+    let escaped = false
+    let depth = 0
+    let start = -1
+    let lastError = new Error('No JSON object found.')
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i]
+        if (inString) {
+            if (escaped) escaped = false
+            else if (char === '\\') escaped = true
+            else if (char === '"') inString = false
+            continue
+        }
+        if (char === '"') inString = true
+        else if (char === '{') {
+            if (depth === 0) start = i
+            depth++
+        } else if (char === '}' && depth > 0) {
+            depth--
+            if (depth === 0) {
+                try {
+                    const value = JSON.parse(text.slice(start, i + 1))
+                    if (value && typeof value === 'object' && !Array.isArray(value)) return { success: true, value }
+                    lastError = new Error('Planner JSON must be an object.')
+                } catch (error) { lastError = error }
+            }
+        }
+    }
+    return { success: false, error: lastError }
+}
+
 const makePlan = async (record, task, options = {}) => {
     const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only: {"summary":"...","steps":[{"action":"write_file|mkdir|install|build|test|shell","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}\nRules: paths must be relative to the project; do not use secrets; do not delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for package-manager commands.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
@@ -73,25 +106,36 @@ const makePlan = async (record, task, options = {}) => {
         onProviderProgress: progress => notifyProgress(options, { phase: 'ai_provider', ...progress })
     })
     if (!result.success) return { success: false, error: result.error }
+    let parsed = parsePlannerJson(result.text)
+    if (!parsed.success) {
+        await notifyProgress(options, { phase: 'planner_json_recovery' })
+        const recovery = await xcasper.chat([
+            { role: 'system', content: 'Repair the malformed planner response into exactly one valid JSON object with the schema {"summary":"...","steps":[{"action":"write_file|mkdir|install|build|test|shell","path":"relative path","contentBase64":"...","command":"...","reason":"..."}]}. Preserve the original plan and every value; do not invent or omit steps. Return JSON only, with all strings correctly escaped, no comments, no trailing commas, and no Markdown fences.' },
+            { role: 'user', content: `Original project task: ${String(task || record.task).slice(0, 4000)}\nMalformed planner response:\n${String(result.text || '').slice(-18000)}` }
+        ], {
+            timeout: 45000,
+            maxChars: 22000,
+            onProviderProgress: progress => notifyProgress(options, { phase: 'planner_json_recovery_provider', ...progress })
+        })
+        if (!recovery.success) return { success: false, error: `Planner returned malformed JSON; format recovery failed: ${recovery.error}` }
+        parsed = parsePlannerJson(recovery.text)
+        if (!parsed.success) return { success: false, error: `Planner JSON error after format recovery: ${parsed.error.message}` }
+    }
+    const plan = parsed.value
+    if (!Array.isArray(plan.steps) || !plan.steps.length) return { success: false, error: 'Planner returned no steps.' }
     await notifyProgress(options, { phase: 'planning_complete', provider: result.provider })
-    const match = result.text.match(/\{[\s\S]*\}/)
-    if (!match) return { success: false, error: 'Planner returned invalid JSON.' }
-    try {
-        const plan = JSON.parse(match[0])
-        if (!Array.isArray(plan.steps) || !plan.steps.length) return { success: false, error: 'Planner returned no steps.' }
-        plan.steps = plan.steps.slice(0, 40).map(step => ({
-            ...step,
-            action: String(step.action || '').toLowerCase(),
-            content: step.contentBase64 && !step.content
-                ? Buffer.from(String(step.contentBase64).replace(/\s+/g, ''), 'base64').toString('utf8')
-                : step.content
-        }))
-        record.plan = plan
-        record.task = task || record.task
-        update(record, { stage: 'planned', status: 'planned' })
-        event(record, 'plan_created', { count: plan.steps.length })
-        return { success: true, plan }
-    } catch (e) { return { success: false, error: `Planner JSON error: ${e.message}` } }
+    plan.steps = plan.steps.slice(0, 40).map(step => ({
+        ...step,
+        action: String(step.action || '').toLowerCase(),
+        content: step.contentBase64 && !step.content
+            ? Buffer.from(String(step.contentBase64).replace(/\s+/g, ''), 'base64').toString('utf8')
+            : step.content
+    }))
+    record.plan = plan
+    record.task = task || record.task
+    update(record, { stage: 'planned', status: 'planned' })
+    event(record, 'plan_created', { count: plan.steps.length })
+    return { success: true, plan }
 }
 
 const executeStep = async (record, step, options = {}) => {
