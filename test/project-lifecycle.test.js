@@ -16,6 +16,15 @@ const existingRepo = {
     private: true
 }
 
+test('normalizes GitHub descriptions to 350 Unicode code points', () => {
+    const longAscii = github.normalizeRepositoryDescription('a'.repeat(500))
+    assert.equal(Array.from(longAscii).length, 350)
+
+    const longEmoji = github.normalizeRepositoryDescription('🧋'.repeat(400))
+    assert.equal(Array.from(longEmoji).length, 350)
+    assert.ok(longEmoji.endsWith('🧋'))
+})
+
 afterEach(() => {
     github.getRepo = originalGetRepo
     github.createRepo = originalCreateRepo

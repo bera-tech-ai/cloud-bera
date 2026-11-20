@@ -5,6 +5,9 @@ const getToken = () => {
     return settings.githubToken || settings.gitToken ||
         process.env.GITHUB_TOKEN || process.env.GIT_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''
 }
+const MAX_REPOSITORY_DESCRIPTION_LENGTH = 350
+const normalizeRepositoryDescription = description => Array.from(String(description || '').trim())
+    .slice(0, MAX_REPOSITORY_DESCRIPTION_LENGTH).join('')
 
 const gh = (endpoint, method = 'GET', data = null) => {
     const token = getToken()
@@ -46,7 +49,7 @@ const createRepo = (name, isPrivate = false, description = '', options = {}) =>
     gh('/user/repos', 'POST', {
         name,
         private: isPrivate,
-        description,
+        description: normalizeRepositoryDescription(description),
         auto_init: options.autoInit !== undefined ? Boolean(options.autoInit) : true
     })
 
@@ -202,7 +205,7 @@ const detectProjectType = (text) => {
 }
 
 module.exports = {
-    getToken, getUser, getOwner, getRepo, listRepos, createRepo, deleteRepo,
+    getToken, getUser, getOwner, getRepo, listRepos, createRepo, normalizeRepositoryDescription, deleteRepo,
     listFiles, getFile, createFile, updateFile, upsertFile, pushMultipleFiles,
     createIssue, listIssues, forkRepo, createBranch, getCommits,
     listBranches, searchRepos, PROJECT_TEMPLATES, detectProjectType
