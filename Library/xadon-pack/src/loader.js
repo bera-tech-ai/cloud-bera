@@ -52,14 +52,14 @@ function load() {
   commands.clear();
   aliases.clear();
   allCommands.length = 0;
-  const stats = { xadon: 0, imported: 0, skipped: 0, failed: 0 };
+  const stats = { xadon: 0, imported: 0, duplicateNames: 0, duplicateAliases: 0, invalid: 0, failed: 0 };
   for (const file of walk(DIR).sort()) {
     delete require.cache[require.resolve(file)];
     try {
       const mod = unwrap(require(file));
       if (!mod?.name || (typeof mod.run !== 'function' && typeof mod.execute !== 'function')) {
         console.warn(`  skip  ${path.relative(DIR, file)} (needs "name" and either "run" or "execute")`);
-        stats.skipped++;
+        stats.invalid++;
         continue;
       }
       const cmd = normalize(mod);
@@ -71,8 +71,9 @@ function load() {
       cmd.sourceId = cmd.sourceFile.replace(/\.js$/i, '');
       allCommands.push(cmd);
       if (commands.has(cmd.name)) {
-        console.warn(`  collision ${path.relative(DIR, file)}: command name '${cmd.name}' already registered; skipped`);
-        stats.skipped++;
+        // Files are sorted above, so the first declaration wins consistently.
+        // Keep later declarations available through the source-path namespace.
+        stats.duplicateNames++;
         continue;
       }
       commands.set(cmd.name, cmd);
@@ -81,7 +82,9 @@ function load() {
         const alias = String(rawAlias).trim().toLowerCase();
         if (!alias || alias === cmd.name) continue;
         if (commands.has(alias) || aliases.has(alias)) {
-          console.warn(`  collision ${path.relative(DIR, file)}: alias '${alias}' already registered; skipped`);
+          // The earlier command owns this direct alias; source-path dispatch
+          // still keeps the later command reachable without shadowing it.
+          stats.duplicateAliases++;
           continue;
         }
         aliases.set(alias, cmd.name);
@@ -91,7 +94,7 @@ function load() {
       stats.failed++;
     }
   }
-  console.log(`  ◈ ${stats.xadon} native-format + ${stats.imported} imported = ${commands.size} direct commands; ${allCommands.length} declarations retained (${stats.skipped} duplicate/invalid, ${stats.failed} failed)`);
+  console.log(`  ◈ ${stats.xadon} native-format + ${stats.imported} imported = ${commands.size} direct commands; ${allCommands.length} declarations retained; resolved ${stats.duplicateNames} duplicate names and ${stats.duplicateAliases} duplicate aliases; ${stats.invalid} invalid declarations; ${stats.failed} load failures`);
   return commands;
 }
 
