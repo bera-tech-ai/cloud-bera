@@ -5,25 +5,25 @@
  */
 const axios = require('axios')
 
-// API base — try multiple known URLs for BeraHost, configurable via env or DB
-const BH_FALLBACK_URLS = [
-    'https://bera-host--nelimadinah22.replit.app',
-    'https://bera-host--nelimadinah22.replit.app',
-]
+// Current customer API base from the BeraHost developer documentation.
+const BH_DEFAULT_URL = 'https://berahost-cywge4uc.manus.space'
+const BH_FALLBACK_URLS = [BH_DEFAULT_URL]
 const getBhBaseUrl = () => {
     const fromDb  = global.db?.data?.settings?.bhApiUrl
     const fromEnv = process.env.BERAHOST_API_URL
-    return (fromDb || fromEnv || BH_FALLBACK_URLS[0]).replace(/\/$/, '')
+    const valid = value => value && !/\.replit\.app\/?$/i.test(String(value))
+    return String((valid(fromDb) && fromDb) || (valid(fromEnv) && fromEnv) || BH_DEFAULT_URL)
+        .replace(/\/api\/?$/, '').replace(/\/$/, '')
 }
 const BH_API  = () => getBhBaseUrl() + '/api'
 const getKey  = () => global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY || process.env.BERAHOST_API_KEY || null
 
-const bh = () => {
+const bh = (options = {}) => {
     const k = getKey()
-    if (!k) throw new Error('NO_BH_KEY — run .setbhkey bh_yourkey')
+    if (!k && !options.public) throw new Error('NO_BH_KEY — set BERAHOST_API_KEY or save a scoped key with .setbhkey in a private chat')
     return axios.create({
         baseURL: BH_API(),
-        headers: { 'x-api-key': k, 'Content-Type': 'application/json' },
+        headers: { ...(k && !options.public ? { 'x-api-key': k } : {}), 'Content-Type': 'application/json' },
         timeout: 30000
     })
 }
@@ -34,7 +34,7 @@ const discoverBhUrl = async () => {
     if (!key) return null
     for (const base of BH_FALLBACK_URLS) {
         try {
-            const r = await axios.get(base + '/api/coins/balance', {
+            const r = await axios.get(base + '/api/deployments', {
                 headers: { 'x-api-key': key },
                 timeout: 8000
             })
@@ -48,7 +48,90 @@ const discoverBhUrl = async () => {
     return null
 }
 
-const bhErr = (e) => e.response?.data?.error || e.response?.data?.message || e.message || 'Unknown error'
+const bhErr = (e) => {
+    const status = e.response?.status
+    const detail = e.response?.data?.error || e.response?.data?.message || e.message || 'Unknown error'
+    if (status === 401) return `BeraHost rejected the API key (401): ${detail}`
+    if (status === 403) return `BeraHost denied this request (403). The key may lack the required read, write, or payments scope, or the plan may not include this feature: ${detail}`
+    return status ? `BeraHost API HTTP ${status}: ${detail}` : detail
+}
+
+// Route allowlist mirrors the documented customer API. No arbitrary URL/path
+// is accepted, and all IDs are encoded before interpolation.
+const CUSTOMER_ROUTES = {
+    deployments: ['GET', '/deployments', 'private'],
+    'deployment.create': ['POST', '/deployments', 'private'],
+    'deployment.get': ['GET', '/deployments/:id', 'private'],
+    'deployment.delete': ['DELETE', '/deployments/:id', 'private'],
+    'deployment.start': ['POST', '/deployments/:id/start', 'private'],
+    'deployment.stop': ['POST', '/deployments/:id/stop', 'private'],
+    'deployment.env': ['PUT', '/deployments/:id/env', 'private'],
+    'deployment.clone': ['POST', '/deployments/:id/clone', 'private'],
+    'deployment.phone': ['POST', '/deployments/:id/phone', 'private'],
+    'deployment.webhook': ['PUT', '/deployments/:id/webhook', 'private'],
+    'deployment.webhookTest': ['POST', '/deployments/:id/webhook/test', 'private'],
+    'deployment.logs': ['GET', '/deployments/:id/logs', 'private'],
+    'deployment.logsSearch': ['GET', '/deployments/:id/logs/search', 'private'],
+    'deployment.logsExport': ['GET', '/deployments/:id/logs/export', 'private'],
+    'deployment.logsStream': ['GET', '/deployments/:id/logs/stream', 'private'],
+    'deployment.metrics': ['GET', '/deployments/:id/metrics', 'private'],
+    'deployment.schedule': ['GET', '/deployments/:id/schedule', 'private'],
+    'deployment.scheduleUpdate': ['PUT', '/deployments/:id/schedule', 'private'],
+    'deployment.scheduleDelete': ['DELETE', '/deployments/:id/schedule', 'private'],
+    'webDeployments': ['GET', '/web-deployments', 'private'],
+    'webDeployment.get': ['GET', '/web-deployments/:id', 'private'],
+    'webDeployment.scan': ['POST', '/web-deployments/scan', 'private'],
+    'webDeployment.create': ['POST', '/web-deployments', 'private'],
+    'webDeployment.update': ['PATCH', '/web-deployments/:id', 'private'],
+    'webDeployment.start': ['POST', '/web-deployments/:id/start', 'private'],
+    'webDeployment.stop': ['POST', '/web-deployments/:id/stop', 'private'],
+    'webDeployment.delete': ['DELETE', '/web-deployments/:id', 'private'],
+    'webDeployment.addDomain': ['POST', '/web-deployments/:id/domains', 'private'],
+    'webDeployment.verifyDomain': ['POST', '/web-deployments/domains/:domainId/verify', 'private'],
+    'subscriptions.plans': ['GET', '/subscriptions/plans', 'public'],
+    'payments.plans': ['GET', '/payments/plans', 'public'],
+    'subscriptions.status': ['GET', '/subscriptions/status', 'private'],
+    'payments.subscribe': ['POST', '/payments/subscribe', 'private'],
+    'payments.domain': ['POST', '/payments/domain', 'private'],
+    'payments.status': ['GET', '/payments/status/:id', 'private'],
+    'payments.history': ['GET', '/payments/history', 'private'],
+    'marketplace.submissions': ['GET', '/marketplace/submissions', 'private'],
+    'marketplace.submit': ['POST', '/marketplace/submit', 'private'],
+    'support.tickets': ['GET', '/support/tickets', 'private'],
+    'support.ticketCreate': ['POST', '/support/tickets', 'private'],
+    'support.messages': ['GET', '/support/tickets/:id/messages', 'private'],
+    'support.messageCreate': ['POST', '/support/tickets/:id/messages', 'private'],
+    notifications: ['GET', '/notifications', 'private'],
+    'notifications.read': ['POST', '/notifications/:id/read', 'private'],
+    teams: ['GET', '/teams', 'private'],
+    'teams.create': ['POST', '/teams', 'private'],
+    'teams.join': ['POST', '/teams/join', 'private'],
+    'teams.removeMember': ['DELETE', '/teams/:id/members/:memberId', 'private'],
+    'teams.regenerateInvite': ['POST', '/teams/:id/regenerate-invite', 'private'],
+    'referrals.my': ['GET', '/referrals/my', 'private'],
+    'referrals.apply': ['POST', '/referrals/apply', 'private'],
+    'github.status': ['GET', '/github/status', 'private'],
+    'github.repos': ['GET', '/github/repos', 'private'],
+    'github.branches': ['GET', '/github/repos/branches', 'private'],
+    'apiKeys': ['GET', '/api-keys', 'private'],
+    'apiKeys.create': ['POST', '/api-keys', 'private'],
+    'apiKeys.delete': ['DELETE', '/api-keys/:id', 'private'],
+}
+
+const requestCustomerApi = async (action, args = {}) => {
+    const route = CUSTOMER_ROUTES[action]
+    if (!route) return { success: false, error: `Unsupported BeraHost customer API action: ${action}` }
+    const [method, template, access] = route
+    try {
+        const path = template.replace(/:([A-Za-z]+)/g, (_, key) => {
+            if (args[key] === undefined || args[key] === null || args[key] === '') throw new Error(`Missing required BeraHost parameter: ${key}`)
+            return encodeURIComponent(String(args[key]))
+        })
+        const client = bh({ public: access === 'public' })
+        const response = await client.request({ method, url: path, params: args.params, data: args.body })
+        return { success: true, action, data: response.data }
+    } catch (e) { return { success: false, error: bhErr(e) } }
+}
 
 // ── DEPLOYMENTS ───────────────────────────────────────────────────────────────
 
@@ -155,14 +238,13 @@ const getDeploymentMetrics = async (id) => {
 // ── POLL until running or failed ──────────────────────────────────────────────
 const pollDeployment = async (id, maxWait = 120000, interval = 5000) => {
     const deadline = Date.now() + maxWait
-    let status = 'starting'
-    while ((status === 'starting' || status === 'installing') && Date.now() < deadline) {
+    const pending = new Set(['queued', 'building', 'deploying', 'starting', 'installing'])
+    let current = await getDeployment(id)
+    while (current.success && pending.has(current.deployment?.status) && Date.now() < deadline) {
         await new Promise(r => setTimeout(r, interval))
-        const d = await getDeployment(id)
-        if (!d.success) break
-        status = d.deployment?.status || 'unknown'
+        current = await getDeployment(id)
     }
-    return getDeployment(id)
+    return current
 }
 
 // ── WEB DEPLOYMENTS ──────────────────────────────────────────────────────────
@@ -211,53 +293,39 @@ const pollWebDeployment = async (id, maxWait = 120000, interval = 5000) => {
 // ── COINS ─────────────────────────────────────────────────────────────────────
 
 const getCoins = async () => {
-    try {
-        const r = await bh().get('/coins/balance')
-        const raw = r.data?.coins ?? r.data?.balance ?? r.data
-        const balance = typeof raw === 'object' && raw !== null
-            ? (raw.amount ?? raw.coins ?? raw.current ?? raw.value ?? raw.balance ?? JSON.stringify(raw))
-            : raw
-        return { success: true, balance, data: r.data }
-    } catch (e) { return { success: false, error: bhErr(e) } }
+    return { success: false, error: 'Coin balance is not available in the current documented BeraHost API.' }
 }
 
 const getTransactions = async () => {
-    try {
-        const r = await bh().get('/coins/transactions')
-        return { success: true, transactions: r.data?.transactions || r.data || [] }
-    } catch (e) { return { success: false, error: bhErr(e) } }
+    return { success: false, error: 'Coin transactions are not available in the current documented BeraHost API.' }
 }
 
 const claimDailyCoins = async () => {
-    try {
-        const r = await bh().post('/coins/daily-claim')
-        return { success: true, output: r.data?.message || 'Daily coins claimed!', amount: r.data?.amount, balance: r.data?.balance, data: r.data }
-    } catch (e) { return { success: false, error: bhErr(e) } }
+    return { success: false, error: 'Daily coin claims are not available in the current documented BeraHost API.' }
 }
 
 const redeemVoucher = async (code) => {
-    try {
-        const r = await bh().post('/coins/redeem', { code })
-        return { success: true, output: r.data?.message || 'Voucher redeemed!', data: r.data }
-    } catch (e) { return { success: false, error: bhErr(e) } }
+    return { success: false, error: 'Coin vouchers are not available in the current documented BeraHost API.' }
 }
 
 // ── PAYMENTS (M-Pesa) ─────────────────────────────────────────────────────────
 
 const getPlans = async () => {
     try {
-        const r = await bh().get('/payments/plans')
-        const coinPackages      = r.data?.coinPackages      || []
-        const subscriptionPlans = r.data?.subscriptionPlans || []
+        const [paymentRes, subscriptionRes] = await Promise.all([
+            bh({ public: true }).get('/payments/plans'),
+            bh({ public: true }).get('/subscriptions/plans')
+        ])
+        const coinPackages = paymentRes.data?.coinPackages || paymentRes.data?.packages || []
+        const subscriptionPlans = Array.isArray(subscriptionRes.data)
+            ? subscriptionRes.data
+            : (subscriptionRes.data?.subscriptionPlans || subscriptionRes.data?.plans || [])
         return { success: true, coinPackages, subscriptionPlans }
     } catch (e) { return { success: false, error: bhErr(e) } }
 }
 
 const initiateMpesa = async (phone, planId, amount) => {
-    try {
-        const r = await bh().post('/payments/initiate', { phone, planId, amount })
-        return { success: true, output: r.data?.message || 'STK push sent!', paymentId: r.data?.id, data: r.data }
-    } catch (e) { return { success: false, error: bhErr(e) } }
+    return { success: false, error: 'The legacy M-Pesa initiation endpoint is not part of the current documented BeraHost API. Use the PayHero subscription or domain checkout route.' }
 }
 
 const getPaymentStatus = async (id) => {
@@ -278,14 +346,14 @@ const getPaymentHistory = async () => {
 
 const listBots = async () => {
     try {
-        const r = await bh().get('/bots')
+        const r = await bh({ public: true }).get('/bots')
         return { success: true, bots: r.data?.bots || r.data || [] }
     } catch (e) { return { success: false, error: bhErr(e) } }
 }
 
 const getBot = async (id) => {
     try {
-        const r = await bh().get(`/bots/${id}`)
+        const r = await bh({ public: true }).get(`/bots/${encodeURIComponent(id)}`)
         return { success: true, bot: r.data?.bot || r.data }
     } catch (e) { return { success: false, error: bhErr(e) } }
 }
@@ -335,6 +403,7 @@ const pollForPairCode = async (id, maxWait = 180000, interval = 6000) => {
 
 module.exports = {
     BH_API,
+    requestCustomerApi,
     listDeployments, deployBot, getDeployment, deleteDeployment,
     startDeployment, stopDeployment, updateEnv,
     getDeploymentLogs, exportLogs, getDeploymentMetrics, pollDeployment,

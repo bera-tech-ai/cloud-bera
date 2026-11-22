@@ -480,35 +480,14 @@ const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, 
 
         if (sub === 'balance') {
             await react(conn, m, '💰')
-            try {
-                const res = await axios.get(`${BERAHOST_API}/coins/balance`, {
-                    headers: { 'x-api-key': BERAHOST_KEY },
-                    timeout: 10000
-                })
-                const d = res.data
-                await react(conn, m, '✅')
-                return reply(`╭══〘 *💰 BERAHOST BALANCE* 〙═⊷\n┃❍ *Coins:* ${d.balance || d.coins || '0'}\n╰══════════════════⊷`)
-            } catch (e) {
-                await react(conn, m, '❌')
-                return reply(`❌ Balance check failed: ${e.message}`)
-            }
+            await react(conn, m, 'ℹ️')
+            return reply('Coin balance is not available in the current documented BeraHost API.')
         }
 
         if (sub === 'daily') {
             await react(conn, m, '🎁')
-            try {
-                const res = await axios.post(`${BERAHOST_API}/coins/daily-claim`, {}, {
-                    headers: { 'x-api-key': BERAHOST_KEY, 'Content-Type': 'application/json' },
-                    timeout: 10000
-                })
-                const d = res.data
-                await react(conn, m, '✅')
-                return reply(`╭══〘 *🎁 DAILY COINS* 〙═⊷\n┃❍ *Claimed:* ${d.coins || d.amount || '?'} coins\n┃❍ *${d.message || 'See you tomorrow!'}*\n╰══════════════════⊷`)
-            } catch (e) {
-                await react(conn, m, '❌')
-                const msg = e.response?.data?.message || e.message
-                return reply(`❌ Daily claim failed: ${msg}`)
-            }
+            await react(conn, m, 'ℹ️')
+            return reply('Daily coin claims are not available in the current documented BeraHost API.')
         }
 
         if (sub === 'plans') {

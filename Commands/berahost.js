@@ -25,16 +25,20 @@ const handle = async (m, ctx) => {
     // ─── helpers ─────────────────────────────────────────────────────────────
     const db = global.db?.data
     const getBase = () => {
-        const raw = db?.settings?.bhApiUrl || process.env.BH_API_URL || 'https://bera-host-clone--brucebera555.replit.app'
+        const valid = value => value && !/\.replit\.app\/?$/i.test(String(value))
+        const raw = (valid(db?.settings?.bhApiUrl) && db.settings.bhApiUrl) ||
+            (valid(process.env.BERAHOST_API_URL) && process.env.BERAHOST_API_URL) ||
+            (valid(process.env.BH_API_URL) && process.env.BH_API_URL) ||
+            'https://berahost-cywge4uc.manus.space'
         return raw.replace(/\/api\/?$/, '').replace(/\/$/, '') + '/api'
     }
     const getKey = () => db?.settings?.bhApiKey || process.env.BH_API_KEY || process.env.BERAHOST_API_KEY || ''
-    const bh = async (method, path, body) => {
+    const bh = async (method, path, body, publicRead = false) => {
         const key = getKey()
-        if (!key) throw new Error('No BeraHost API key set. Use: ' + prefix + 'bh setkey <key>')
+        if (!key && !publicRead) throw new Error('No BeraHost API key set. Save a scoped key privately with: ' + prefix + 'bh setkey <key>')
         const res = await axios({
             method, url: getBase() + path,
-            headers: { 'x-api-key': key, 'Content-Type': 'application/json' },
+            headers: { ...(key && !publicRead ? { 'x-api-key': key } : {}), 'Content-Type': 'application/json' },
             data: body, timeout: 20000
         })
         return res.data
@@ -76,7 +80,8 @@ const handle = async (m, ctx) => {
 
         await reply(`🔍 Looking up bot *${botName}*...`)
         let bots
-        try { bots = await bh('get', '/bots') } catch (e) { return reply('❌ ' + e.message) }
+        try { bots = await bh('get', '/bots', undefined, true) } catch (e) { return reply('❌ ' + e.message) }
+        bots = bots.bots || bots
 
         const bot = bots.find(b =>
             b.name.toLowerCase().replace(/[\s\-_]/g, '').includes(botName.toLowerCase().replace(/[\s\-_]/g, '')) ||
@@ -107,26 +112,26 @@ const handle = async (m, ctx) => {
             return reply('❌ Deploy failed: ' + msg)
         }
 
-        const depId = dep.id
-        let status = dep.status
+        const deployment = dep.deployment || dep
+        const depId = deployment.id
+        let latest = deployment
+        let status = deployment.status
         let attempts = 0
-        while ((status === 'starting' || status === 'installing') && attempts < 24) {
+        while (['queued', 'building', 'deploying', 'starting', 'installing'].includes(status) && attempts < 24) {
             await new Promise(r => setTimeout(r, 5000))
             attempts++
             try {
                 const d = await bh('get', `/deployments/${depId}`)
-                status = d.status
+                latest = d.deployment || d
+                status = latest.status || 'unknown'
             } catch {}
         }
 
-        let coins = null
-        try { coins = await bh('get', '/coins/balance') } catch {}
-
         return reply(
-            `${statusEmoji(status)} *${bot.name}* deployed!\n\n` +
+            `${statusEmoji(status)} *${bot.name} deployment*\n\n` +
             `🆔 Deployment ID: *${depId}*\n` +
             `📊 Status: *${status}*\n` +
-            `${coins ? `💰 Coins remaining: *${coins.coins?.toLocaleString() || coins.balance?.toLocaleString() || '?'}*\n` : ''}` +
+            `${latest.url || latest.liveUrl ? `🌐 URL: ${latest.url || latest.liveUrl}\n` : ''}` +
             `\n*Useful commands:*\n` +
             `  \`${prefix}bh logs ${depId}\` — view logs\n` +
             `  \`${prefix}bh metrics ${depId}\` — CPU/RAM\n` +
@@ -160,76 +165,47 @@ const handle = async (m, ctx) => {
         }
 
         // ── coins balance ──
-        if (sub === 'coins' || sub === 'balance') {
-            let c
-            try { c = await bh('get', '/coins/balance') } catch (e) { return reply('❌ ' + e.message) }
-            return reply(
-                `💰 *BeraHost Coins*\n\n` +
-                `Balance: *${(c.coins || c.balance || 0).toLocaleString()} coins*\n` +
-                `Streak: *${c.streak || 0} days*\n` +
-                `Daily claim: ${c.canClaimToday ? `✅ Available — use \`${prefix}bh claim\`` : '⏳ Already claimed today'}`
-            )
-        }
-
-        // ── claim ──
-        if (sub === 'claim') {
-            let r
-            try { r = await bh('post', '/coins/daily-claim') } catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
-            return reply(`🎁 *Daily coins claimed!*\n\n+${r.earned || r.coins || r.amount || ''} coins\nNew balance: *${(r.balance || r.newBalance || '?').toLocaleString?.() || '?'} coins*\nStreak: ${r.streak || '?'} days 🔥`)
-        }
-
-        // ── txns / transactions ──
-        if (sub === 'txns' || sub === 'transactions') {
-            let txns
-            try { txns = await bh('get', '/coins/transactions') } catch (e) { return reply('❌ ' + e.message) }
-            const rows = (Array.isArray(txns) ? txns : txns.transactions || []).slice(0, 10)
-            if (!rows.length) return reply('📭 No transactions found.')
-            const lines = rows.map(t => `${t.amount > 0 ? '📈' : '📉'} *${t.amount > 0 ? '+' : ''}${t.amount}* — ${t.reference || t.type || 'transaction'} _(${fmtDate(t.createdAt)})_`)
-            return reply(`📊 *Recent Transactions*\n\n${lines.join('\n')}`)
-        }
+        if (['coins', 'balance', 'claim', 'txns', 'transactions'].includes(sub))
+            return reply('ℹ️ Coin balance, daily-claim, and transaction endpoints are not in the current BeraHost API documentation.')
 
         // ── plans ──
         if (sub === 'plans') {
-            let p
-            try { p = await bh('get', '/payments/plans') } catch (e) { return reply('❌ ' + e.message) }
-            const coinsList = (p.coinPackages || []).map(pkg =>
-                `  ${pkg.popular ? '⭐' : pkg.best ? '🏆' : '•'} *${pkg.name}* — Ksh ${pkg.kes} → ${pkg.totalCoins} coins${pkg.bonus ? ` (+${pkg.bonus} bonus)` : ''}`
-            ).join('\n')
-            const subs = (p.subscriptionPlans || []).map(s =>
-                `  • *${s.name}* — ${s.priceKes === 0 ? 'Free' : `Ksh ${s.priceKes}/mo`} · ${s.botLimit} bots · ${(s.features || []).slice(0,2).join(', ')}`
-            ).join('\n')
-            return reply(`💳 *BeraHost Plans*\n\n*🪙 Coin Packages:*\n${coinsList || '  None available'}\n\n*📦 Subscriptions:*\n${subs || '  None available'}\n\n_Top up: \`${prefix}bh pay <amount> <phone>\`_`)
+            let p, s
+            try { [p, s] = await Promise.all([bh('get', '/payments/plans', undefined, true), bh('get', '/subscriptions/plans', undefined, true)]) }
+            catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            return reply(`💳 *BeraHost Plans*\n\n*Payments:*\n${JSON.stringify(p, null, 2).slice(0, 800)}\n\n*Subscriptions:*\n${JSON.stringify(s, null, 2).slice(0, 1200)}`)
         }
 
         // ── pay ──
         if (sub === 'pay') {
-            if (!args[1] || !args[2]) return reply(`Usage: ${prefix}bh pay <amount_kes> <phone>\nExample: ${prefix}bh pay 30 254712345678`)
-            let r
-            try { r = await bh('post', '/payments/initiate', { amount: parseInt(args[1]), phone: args[2] }) }
-            catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
-            return reply(
-                `📲 *M-Pesa STK Push Sent!*\n\n` +
-                `Amount: *Ksh ${args[1]}*\n` +
-                `Phone: *${args[2]}*\n` +
-                `Payment ID: \`${r.id || r.paymentId || 'n/a'}\`\n\n` +
-                `Check your phone for the M-Pesa prompt.\n` +
-                `_Verify: \`${prefix}bh paystatus ${r.id || r.paymentId}\`_`
-            )
+            return reply(`The current API uses PayHero checkout; the legacy /payments/initiate route is unsupported. Use: ${prefix}bh api payments.subscribe <JSON payload> (the API requires the documented checkout fields).`)
         }
 
         // ── paystatus ──
         if (sub === 'paystatus') {
             if (!args[1]) return reply(`Usage: ${prefix}bh paystatus <paymentId>`)
             let r
-            try { r = await bh('get', `/payments/status/${args[1]}`) } catch (e) { return reply('❌ ' + e.message) }
+            try { r = await bh('get', `/payments/status/${encodeURIComponent(args[1])}`) } catch (e) { return reply('❌ ' + e.message) }
             const icon = r.status === 'completed' ? '✅' : r.status === 'pending' ? '⏳' : '❌'
-            return reply(`${icon} *Payment ${r.id || args[1]}*\n\nStatus: *${r.status}*\nAmount: Ksh ${r.amount || '?'}\n${r.status === 'completed' ? `Coins added: *+${r.coins || '?'}*` : ''}`)
+            return reply(`${icon} *Payment ${r.id || args[1]}*\n\nStatus: *${r.status}*\nAmount: ${r.amount ?? 'N/A'}\n${r.status === 'completed' ? 'Payment completed.' : ''}`)
+        }
+
+        if (sub === 'subscription') {
+            let r
+            try { r = await bh('get', '/subscriptions/status') } catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            return reply(`📦 *Subscription status*\n\n${JSON.stringify(r, null, 2).slice(0, 1800)}`)
+        }
+        if (sub === 'payhistory') {
+            let r
+            try { r = await bh('get', '/payments/history') } catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
+            return reply(`💳 *Payment history*\n\n${JSON.stringify(r, null, 2).slice(0, 1800)}`)
         }
 
         // ── bots (available templates) ──
         if (sub === 'bots') {
             let bots
-            try { bots = await bh('get', '/bots') } catch (e) { return reply('❌ ' + e.message) }
+            try { bots = await bh('get', '/bots', undefined, true) } catch (e) { return reply('❌ ' + e.message) }
+            bots = bots.bots || bots
             if (!bots.length) return reply('📭 No bots available.')
             const lines = bots.map(b => {
                 const req = Object.keys(b.requiredVars || {}).join(', ')
@@ -244,9 +220,10 @@ const handle = async (m, ctx) => {
 
         // ── list / dashboard (my deployments) ──
         if (!sub || sub === 'list' || sub === 'dashboard') {
-            let [deps, coins] = [null, null]
-            try { [deps, coins] = await Promise.all([bh('get', '/deployments'), bh('get', '/coins/balance')]) }
+            let deps
+            try { deps = await bh('get', '/deployments') }
             catch (e) { return reply('❌ ' + e.message) }
+            deps = deps.deployments || deps
 
             if (!deps || !deps.length) return reply(
                 `📭 *No deployments yet.*\n\nDeploy your first bot:\n\`${prefix}deploy beraai 254712345678\``
@@ -260,10 +237,9 @@ const handle = async (m, ctx) => {
 
             return reply(
                 `🖥️ *BeraHost Dashboard*\n\n` +
-                `💰 Coins: *${(coins?.coins || coins?.balance || 0).toLocaleString()}* ${coins?.canClaimToday ? '· 🎁 claim available' : ''}\n` +
                 `🤖 Bots: *${deps.length}*\n\n` +
                 lines.join('\n\n') +
-                `\n\n_\`${prefix}bh status <id>\` · \`${prefix}bh logs <id>\` · \`${prefix}bh coins\`_`
+                `\n\n_\`${prefix}bh status <id>\` · \`${prefix}bh logs <id>\` · \`${prefix}bh subscription\`_`
             )
         }
 
@@ -376,6 +352,20 @@ const handle = async (m, ctx) => {
             return reply(`🗑️ Deployment *#${args[1]}* deleted.`)
         }
 
+        // ── documented customer API action via safe allowlist ──
+        if (sub === 'api') {
+            const action = args[1]
+            if (!action) return reply(`Usage: ${prefix}bh api <documented-action> [JSON args]\nExample: ${prefix}bh api subscriptions.status`)
+            if (action === 'apiKeys.create' && String(chat).endsWith('@g.us'))
+                return reply('For security, create BeraHost API keys only in a private chat; the key is shown only once.')
+            let payload = {}
+            try { if (args.length > 2) payload = JSON.parse(args.slice(2).join(' ')) }
+            catch { return reply('❌ API arguments must be valid JSON.') }
+            const result = await require('../Library/actions/berahost').requestCustomerApi(action, payload)
+            if (!result.success) return reply(`❌ ${result.error}`)
+            return reply(`✅ ${action}\n\n${JSON.stringify(result.data, null, 2).slice(0, 2500)}`)
+        }
+
         // ── help ──
         return reply(
             `🖥️ *BeraHost Commands*\n\n` +
@@ -393,13 +383,12 @@ const handle = async (m, ctx) => {
             `  \`${prefix}bh restart <id>\` — restart bot\n` +
             `  \`${prefix}bh env <id> KEY=VAL\` — update env vars\n` +
             `  \`${prefix}bh delete <id>\` — delete deployment\n\n` +
-            `*Coins & payments:*\n` +
-            `  \`${prefix}bh coins\` — balance + streak\n` +
-            `  \`${prefix}bh claim\` — claim daily coins\n` +
-            `  \`${prefix}bh txns\` — transaction history\n` +
-            `  \`${prefix}bh plans\` — coin & subscription plans\n` +
-            `  \`${prefix}bh pay <amount> <phone>\` — M-Pesa top-up\n` +
-            `  \`${prefix}bh paystatus <id>\` — check payment\n\n` +
+            `*Plans & payments:*\n` +
+            `  \`${prefix}bh plans\` — public plans\n` +
+            `  \`${prefix}bh subscription\` — subscription status\n` +
+            `  \`${prefix}bh payhistory\` — payment history\n` +
+            `  \`${prefix}bh paystatus <id>\` — payment status\n` +
+            `  \`${prefix}bh api <action> [JSON args]\` — any documented allowlisted API action\n\n` +
             `*Setup:*\n` +
             `  \`${prefix}bh setkey <key>\` — save API key\n` +
             `  \`${prefix}bh seturl <url>\` — save API base URL`

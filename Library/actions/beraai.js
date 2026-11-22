@@ -743,7 +743,7 @@ ADVANCED GITHUB  (create repos, push full projects)
 {"tool":"github","action":"create_file","repo":"user/repo","path":"src/index.js","content":"...","message":"feat: add file"}
 
 ══════════════════════════════════════════════
-BERAHOST DEPLOYMENTS  (https://bera-host--nelimadinah22.replit.app)
+BERAHOST API (https://berahost-cywge4uc.manus.space/api)
 ══════════════════════════════════════════════
 {"tool":"berahost","action":"list"}                    → list all your bot deployments
 {"tool":"berahost","action":"status","id":8}           → status of deployment 8
@@ -751,10 +751,9 @@ BERAHOST DEPLOYMENTS  (https://bera-host--nelimadinah22.replit.app)
 {"tool":"berahost","action":"stop","id":8}             → stop deployment 8
 {"tool":"berahost","action":"logs","id":8}             → last 20 log lines
 {"tool":"berahost","action":"metrics","id":8}          → CPU, RAM, uptime
-{"tool":"berahost","action":"deploy","botId":3,"envVars":{"OWNER_NUMBER":"254787527753"}}
-{"tool":"berahost","action":"coins"}                   → check coin balance
+{"tool":"berahost","action":"deploy","botId":3,"envVars":{"OWNER_NUMBER":"..."}}
 {"tool":"berahost","action":"bots"}                    → available bot templates
-NOTE: Current Bera AI deployment ID is 8. BeraHost API key: stored in BH_API_KEY env or .setbhkey command
+Use documented customer actions by route intent: deployment.clone/phone/webhook/webhookTest/logsSearch/logsExport/schedule/scheduleUpdate/scheduleDelete; webDeployments/webDeployment.get/scan/create/update/start/stop/delete/addDomain/verifyDomain; subscriptions.plans/status; payments.plans/subscribe/domain/status/history; marketplace.submissions/submit; support.tickets/ticketCreate/messages/messageCreate; notifications/notifications.read; teams/teams.create/teams.join/removeMember/regenerateInvite; referrals.my/apply; github.status/repos/branches; apiKeys/apiKeys.create/apiKeys.delete. Send required resource IDs as id, domainId, or memberId; provide request fields under body and filters under params. Public catalog/plan reads need no key. Private routes require a key with the matching read/write/payments scope; report 401/403 errors accurately. Never assume a fixed deployment ID or claim a write/payment succeeded before the API confirms it. Legacy coin-balance, daily-claim, and coin-transaction routes are not in the current API documentation and must not be called.
 
 ══════════════════════════════════════════════
 DEPLOY & HOSTING
@@ -816,7 +815,7 @@ User: "kick @user" → {"tool":"wa_kick","number":"254712345678","group":"GROUP_
 User: "what's AAPL stock?" → {"tool":"stock","symbols":["AAPL"]}
 User: "weather in Nairobi" → {"tool":"weather","city":"Nairobi"}
 User: "translate 'hello world' to Swahili" → {"tool":"translate_text","text":"hello world","from":"en","to":"sw"}
-User: "deploy bera ai for 254712345678 with session Gifted~abc" → {"tool":"berahost","action":"deploy","botId":2,"envVars":{"OWNER_NUMBER":"254712345678","SESSION":"Gifted~abc"}}
+User: "deploy a bot with my session" → {"tool":"berahost","action":"deploy","botId":1,"sessionId":"Gifted~session"}
 User: "clone bera-tech-ai/cloud-bera to workspace" → {"tool":"github","action":"clone","repo":"bera-tech-ai/cloud-bera","dest":"workspace/cloud-bera"}
 User: "install express in workspace/myapp then create a basic server" → [{"tool":"install","packages":["express"],"path":"workspace/myapp"},{"tool":"writefile","path":"workspace/myapp/index.js","content":"const express=require('express');const app=express();app.get('/',(_,r)=>r.json({status:'ok'}));app.listen(3000,()=>console.log('up'))"}]
 User: "what 2+2?" → Plain text: "2 + 2 = 4"
@@ -1629,7 +1628,9 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     if (t === 'berahost') {
         const bhLib = require('./berahost')
         const action = tc.action || 'list'
-        if (['start', 'stop', 'deploy', 'delete'].includes(action) && !isTrustedBotOwner()) return ownerOnlyMessage
+        if (!isTrustedBotOwner()) return ownerOnlyMessage
+        if (action === 'apiKeys.create' && String(m?.chat || '').endsWith('@g.us'))
+            return 'For security, create BeraHost API keys only in a private chat; the key is shown only once.'
         try {
             switch (action) {
                 case 'list': { const d = await bhLib.listDeployments(); return JSON.stringify(d, null, 2).slice(0, 2500) }
@@ -1637,17 +1638,32 @@ const executeToolCall = async (tc, chatId, conn, m) => {
                 case 'start': { await bhLib.startDeployment(tc.id); return `✅ started #${tc.id}` }
                 case 'stop': { await bhLib.stopDeployment(tc.id); return `🛑 stopped #${tc.id}` }
                 case 'logs': {
-                    const logs = await bhLib.getLogs(tc.id)
-                    const lines = Array.isArray(logs) ? logs : (logs.logs || [])
-                    return lines.slice(-25).map(l => l.logLine || l).join('\n')
+                    const logs = await bhLib.getDeploymentLogs(tc.id)
+                    if (!logs.success) return `BeraHost error: ${logs.error}`
+                    return logs.logs.split('\n').slice(-25).join('\n')
                 }
                 case 'deploy': {
-                    const d = await bhLib.createDeployment(tc.botId, tc.envVars || {})
-                    return `✅ deployed: id=${d.id} status=${d.status}`
+                    const d = await bhLib.deployBot(tc.botId, tc.sessionId || null, tc.envVars || {})
+                    if (!d.success) return `BeraHost error: ${d.error}`
+                    const checked = d.id ? await bhLib.pollDeployment(d.id) : null
+                    const deployment = checked?.success ? (checked.deployment || checked) : d.data
+                    const status = deployment?.status || d.status || 'unknown'
+                    const url = deployment?.url || deployment?.liveUrl
+                    return `${status === 'running' ? '✅' : status === 'failed' ? '❌' : 'ℹ️'} deployment id=${d.id} status=${status}${url ? ` url=${url}` : ''}`
                 }
-                case 'coins': { const c = await bhLib.getCoins(); return `💰 Coins: ${c.coins}\n📅 Streak: ${c.streak}\n🎁 Can claim: ${c.canClaimToday}` }
-                case 'bots': { const bots = await bhLib.getBots(); return bots.map(b => `[${b.id}] *${b.name}* — ${Object.keys(b.requiredVars||{}).join(', ')}`).join('\n') }
-                default: return `unknown berahost action: ${action}`
+                case 'coins': return 'This BeraHost API version does not document coin balance or claim endpoints.'
+                case 'bots': {
+                    const r = await bhLib.listBots()
+                    if (!r.success) return `BeraHost error: ${r.error}`
+                    return (r.bots || []).map(b => `[${b.id}] *${b.name}* — ${Object.keys(b.requiredVars||{}).join(', ')}`).join('\n') || 'No public bot templates returned.'
+                }
+                default: {
+                    const r = await bhLib.requestCustomerApi(action, {
+                        ...tc, id: tc.id, domainId: tc.domainId, memberId: tc.memberId,
+                        body: tc.body, params: tc.params
+                    })
+                    return r.success ? JSON.stringify(r.data, null, 2).slice(0, 2500) : `BeraHost error: ${r.error}`
+                }
             }
         } catch (e) { return `berahost error: ${e.message}` }
     }

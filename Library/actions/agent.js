@@ -484,7 +484,7 @@ PROJECT MANAGEMENT:
 - git_status     → args: { folder }
 - github_token   → args: {}
 - docker_manage  → args: { action, name }
-- berahost       → args: { action("list"|"status"|"start"|"stop"|"logs"|"metrics"|"deploy"|"coins"|"bots"|"delete"), id, botId, envVars }
+- berahost       → args: { action: list|status|start|stop|logs|metrics|deploy|bots|delete OR any documented customer action (deployment.*, webDeployment.*, subscriptions.*, payments.*, marketplace.*, support.*, notifications.*, teams.*, referrals.*, github.*, apiKeys.*), id, domainId, memberId, botId, sessionId, envVars, body, params }
   Examples: list all → {"tool":"berahost","action":"list"}
             status   → {"tool":"berahost","action":"status","id":8}
             start    → {"tool":"berahost","action":"start","id":8}
@@ -492,8 +492,8 @@ PROJECT MANAGEMENT:
             logs     → {"tool":"berahost","action":"logs","id":8}
             metrics  → {"tool":"berahost","action":"metrics","id":8}
             deploy   → {"tool":"berahost","action":"deploy","botId":3,"envVars":{"OWNER_NUMBER":"254712345678"}}
-            coins    → {"tool":"berahost","action":"coins"}
             bots     → {"tool":"berahost","action":"bots"}
+            current API examples: {"tool":"berahost","action":"subscriptions.status"}; {"tool":"berahost","action":"payments.history"}; {"tool":"berahost","action":"webDeployment.scan","body":{"repoUrl":"https://github.com/owner/repo"}}
 
 AI:
 - search         → args: { query }
@@ -953,27 +953,37 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                             return { success: true, output: `📊 *Metrics*\n• CPU: ${r.cpu}\n• RAM: ${r.ram}\n• Uptime: ${r.uptime}\n• Status: ${r.status}\n• Threads: ${r.threads||'N/A'}`, desc }
                         }
                         case 'deploy': {
-                            const r = await bh.deployBot(args.botId||tc.botId||3, null, args.envVars||tc.envVars||{})
+                            const r = await bh.deployBot(args.botId||tc.botId, args.sessionId||tc.sessionId||null, args.envVars||tc.envVars||{})
                             if (!r.success) return { success: false, output: r.error, desc }
-                            return { success: true, output: `🚀 Deployed! ID: ${r.id} | Status: ${r.status}`, desc }
+                            const checked = r.id ? await bh.pollDeployment(r.id) : null
+                            const deployment = checked?.success ? (checked.deployment || checked) : r.data
+                            const status = deployment?.status || r.status || 'unknown'
+                            const url = deployment?.url || deployment?.liveUrl
+                            return { success: status !== 'failed', output: `${status === 'running' ? '✅' : status === 'failed' ? '❌' : 'ℹ️'} Deployment ID: ${r.id} | Status: ${status}${url ? ` | URL: ${url}` : ''}`, desc }
                         }
                         case 'delete': {
                             const r = await bh.deleteDeployment(id)
                             return { success: r.success, output: r.output||r.error, desc }
                         }
-                        case 'coins': {
-                            const r = await bh.getCoins()
-                            if (!r.success) return { success: false, output: r.error, desc }
-                            return { success: true, output: `💰 BeraHost Coins: *${r.balance}* coins`, desc }
-                        }
+                        case 'coins':
+                            return { success: false, output: 'This BeraHost API version does not document coin balance or claim endpoints.', desc }
                         case 'bots': {
                             const r = await bh.listBots()
                             if (!r.success) return { success: false, output: r.error, desc }
                             const bots = (r.bots||[]).map(b => `• [${b.id}] ${b.name} — ${(b.description||'').slice(0,60)}...`).join('\n')
                             return { success: true, output: `🤖 *Available Bots*:\n${bots}`, desc }
                         }
-                        default:
-                            return { success: false, output: `Unknown berahost action: ${action}. Use: list, status, start, stop, logs, metrics, deploy, coins, bots`, desc }
+                        default: {
+                            const r = await bh.requestCustomerApi(action, {
+                                ...args, ...tc,
+                                id: args.id ?? tc.id,
+                                domainId: args.domainId ?? tc.domainId,
+                                memberId: args.memberId ?? tc.memberId,
+                                body: args.body ?? tc.body,
+                                params: args.params ?? tc.params
+                            })
+                            return { success: r.success, output: r.success ? JSON.stringify(r.data).slice(0, 2500) : r.error, desc }
+                        }
                     }
                 } catch(e) { return { success: false, output: `BeraHost error: ${e.message}`, desc } }
             }
