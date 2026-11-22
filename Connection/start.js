@@ -308,7 +308,11 @@ const startBot = async () => {
             pool: global.db.pool,
             sessionId: process.env.BERA_AUTH_SESSION_ID || 'whatsapp',
             encryptionKey: process.env.BERA_SESSION_ENCRYPTION_KEY,
-            legacyState: fileAuthState
+            legacyState: {
+                creds: state.creds,
+                keys: state.keys,
+                saveCreds
+            }
         })
         state = postgresAuthState.state
         saveCreds = postgresAuthState.saveCreds
