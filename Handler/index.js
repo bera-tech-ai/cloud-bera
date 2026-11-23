@@ -871,7 +871,10 @@ const handleMessage = async (conn, rawMsg) => {
         const sender = m.sender
         const chat = m.chat
 
-        const { authorized, isOwner } = isAuthorized(sender)
+        const { authorized, isOwner } = isAuthorized({
+            sender,
+            alternates: [m.senderAlt, m.key?.participantAlt, m.key?.remoteJidAlt, m.msg?.contextInfo?.participantAlt].filter(Boolean)
+        })
         const isSudo = !!(global.db?.data?.sudo || []).includes(sender)
 
         const existingUser = global.db?.data?.users?.[sender]
