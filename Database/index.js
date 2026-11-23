@@ -112,12 +112,19 @@ const acquireSessionLease = async (sessionId) => {
 const heartbeatSessionLease = async (sessionId) => {
     if (!_pool) return true
     const sid = String(sessionId || tenantId).trim() || tenantId
+    await ensureSessionLeaseTable()
     const result = await _pool.query(
         `UPDATE bera_session_leases SET heartbeat_at = NOW()
          WHERE session_id = $1 AND owner_id = $2 RETURNING session_id`,
         [sid, leaseOwnerId]
     )
-    return result.rowCount === 1
+    if (result.rowCount === 1) return true
+
+    // The table may have been recreated or the lease may have been cleared by
+    // an administrator. Reacquire this process's lease rather than killing a
+    // healthy bot and making it appear offline.
+    const reacquired = await acquireSessionLease(sid)
+    return reacquired.acquired
 }
 
 const releaseSessionLease = async (sessionId) => {
