@@ -1,5 +1,6 @@
 'use strict'
 
+const crypto = require('crypto')
 const low = require('lowdb')
 const FileSync = require('lowdb/adapters/FileSync')
 const path = require('path')
@@ -50,6 +51,8 @@ let _db
 let _pool = null
 let _provider = 'json'
 let _persistQueue = Promise.resolve()
+const leaseOwnerId = String(process.env.BERA_INSTANCE_ID || `${process.pid}-${crypto.randomUUID()}`)
+const leaseTtlSeconds = Math.max(30, Number(process.env.BERA_SESSION_LEASE_TTL || 90))
 
 const mergeDefaults = (base, value) => {
     if (Array.isArray(base)) return Array.isArray(value) ? value : base
@@ -59,6 +62,71 @@ const mergeDefaults = (base, value) => {
         return result
     }
     return value === undefined ? base : value
+}
+
+const ensureSessionLeaseTable = async () => {
+    if (!_pool) return false
+    await _pool.query(`
+        CREATE TABLE IF NOT EXISTS bera_session_leases (
+            session_id TEXT PRIMARY KEY,
+            owner_id TEXT NOT NULL,
+            acquired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    return true
+}
+
+const acquireSessionLease = async (sessionId) => {
+    if (!_pool) return { acquired: true, ownerId: leaseOwnerId, provider: 'local' }
+    const sid = String(sessionId || tenantId).trim() || tenantId
+    await ensureSessionLeaseTable()
+    const result = await _pool.query(
+        `INSERT INTO bera_session_leases (session_id, owner_id, acquired_at, heartbeat_at)
+         VALUES ($1, $2, NOW(), NOW())
+         ON CONFLICT (session_id) DO UPDATE
+         SET owner_id = EXCLUDED.owner_id,
+             acquired_at = CASE
+                 WHEN bera_session_leases.owner_id = EXCLUDED.owner_id
+                   OR bera_session_leases.heartbeat_at < NOW() - ($3 * INTERVAL '1 second')
+                 THEN NOW() ELSE bera_session_leases.acquired_at END,
+             heartbeat_at = CASE
+                 WHEN bera_session_leases.owner_id = EXCLUDED.owner_id
+                   OR bera_session_leases.heartbeat_at < NOW() - ($3 * INTERVAL '1 second')
+                 THEN NOW() ELSE bera_session_leases.heartbeat_at END
+         WHERE bera_session_leases.owner_id = EXCLUDED.owner_id
+            OR bera_session_leases.heartbeat_at < NOW() - ($3 * INTERVAL '1 second')
+         RETURNING owner_id, heartbeat_at`,
+        [sid, leaseOwnerId, leaseTtlSeconds]
+    )
+    const row = result.rows[0]
+    return {
+        acquired: Boolean(row && row.owner_id === leaseOwnerId),
+        ownerId: row?.owner_id || null,
+        sessionId: sid,
+        ttlSeconds: leaseTtlSeconds,
+        provider: 'postgresql'
+    }
+}
+
+const heartbeatSessionLease = async (sessionId) => {
+    if (!_pool) return true
+    const sid = String(sessionId || tenantId).trim() || tenantId
+    const result = await _pool.query(
+        `UPDATE bera_session_leases SET heartbeat_at = NOW()
+         WHERE session_id = $1 AND owner_id = $2 RETURNING session_id`,
+        [sid, leaseOwnerId]
+    )
+    return result.rowCount === 1
+}
+
+const releaseSessionLease = async (sessionId) => {
+    if (!_pool) return
+    const sid = String(sessionId || tenantId).trim() || tenantId
+    await _pool.query(
+        'DELETE FROM bera_session_leases WHERE session_id = $1 AND owner_id = $2',
+        [sid, leaseOwnerId]
+    )
 }
 
 const persistPostgres = () => {
@@ -276,4 +344,19 @@ const recordAudit = event => {
 
 const closeDb = async () => { try { await _pool?.end() } finally { _pool = null } }
 
-module.exports = { initDb, closeDb, getUser, getGroup, saveProject, getProject, listProjects, saveDeployment, saveSession, getSession, recordAudit }
+module.exports = {
+    initDb,
+    closeDb,
+    acquireSessionLease,
+    heartbeatSessionLease,
+    releaseSessionLease,
+    getUser,
+    getGroup,
+    saveProject,
+    getProject,
+    listProjects,
+    saveDeployment,
+    saveSession,
+    getSession,
+    recordAudit
+}

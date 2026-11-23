@@ -18,7 +18,13 @@ const chalk = require('chalk')
 const readline = require('readline')
 
 const axios = require('axios')
-const { initDb, saveSession } = require('../Database')
+const {
+    initDb,
+    saveSession,
+    acquireSessionLease,
+    heartbeatSessionLease,
+    releaseSessionLease
+} = require('../Database')
 const { handleMessage, handleGroupEvents, handleAntiDelete, handleAntiEdit } = require('../Handler')
 const config = require('../Config')
 
@@ -44,6 +50,10 @@ const PHONE_FILE = path.join(SESSION_DIR, '.phone')
 let _activeConn    = null
 let _reconnecting  = false
 let _bannerShown   = false
+let _sessionLeaseId = null
+let _sessionLeaseTimer = null
+let _sessionLeaseHeld = false
+let _shutdownStarted = false
 
 const closeActiveConn = async () => {
     if (!_activeConn) return
@@ -309,6 +319,41 @@ const startReminderLoop = (conn) => {
 const startBot = async () => {
     if (!_bannerShown) { printBanner(); _bannerShown = true }
     await initDb()
+
+    const authSessionId = process.env.BERA_AUTH_SESSION_ID || global.db.tenantId || 'whatsapp'
+    if (global.db.provider === 'postgresql') {
+        const lease = await acquireSessionLease(authSessionId)
+        if (!lease.acquired) {
+            beraLog.err(`Duplicate WhatsApp session blocked: ${authSessionId} is already active in another Bera process.`)
+            beraLog.warn('Stop the other deployment or use a different BERA_BOT_ID before starting this bot.')
+            process.exitCode = 1
+            setTimeout(() => process.exit(1), 250)
+            return null
+        }
+
+        _sessionLeaseId = authSessionId
+        _sessionLeaseHeld = true
+        if (!_sessionLeaseTimer) {
+            const intervalMs = Math.max(10000, Math.floor((lease.ttlSeconds * 1000) / 3))
+            _sessionLeaseTimer = setInterval(async () => {
+                try {
+                    const alive = await heartbeatSessionLease(_sessionLeaseId)
+                    if (alive) return
+                    beraLog.err(`Lost database lease for WhatsApp session ${_sessionLeaseId}; stopping to prevent error 440.`)
+                    clearInterval(_sessionLeaseTimer)
+                    _sessionLeaseTimer = null
+                    process.exit(1)
+                } catch (error) {
+                    beraLog.err(`Session lease heartbeat failed: ${error.message}`)
+                    clearInterval(_sessionLeaseTimer)
+                    _sessionLeaseTimer = null
+                    process.exit(1)
+                }
+            }, intervalMs)
+            _sessionLeaseTimer.unref?.()
+        }
+    }
+
     saveSession('whatsapp', { status: 'starting', sessionDir: SESSION_DIR, databaseProvider: global.db.provider, startedAt: Date.now() })
 
     const fileAuthState = await useMultiFileAuthState(SESSION_DIR)
@@ -608,6 +653,24 @@ const startBot = async () => {
 
     return conn
 }
+
+const shutdown = async (code = 0) => {
+    if (_shutdownStarted) return
+    _shutdownStarted = true
+    if (_sessionLeaseTimer) clearInterval(_sessionLeaseTimer)
+    _sessionLeaseTimer = null
+    try {
+        if (_sessionLeaseHeld && _sessionLeaseId) await releaseSessionLease(_sessionLeaseId)
+    } catch (error) {
+        _origError(`[SESSION] Could not release lease: ${error.message}`)
+    } finally {
+        _sessionLeaseHeld = false
+        process.exit(code)
+    }
+}
+
+process.once('SIGINT', () => { shutdown(0).catch(() => process.exit(0)) })
+process.once('SIGTERM', () => { shutdown(0).catch(() => process.exit(0)) })
 
 // Minimal HTTP server required by Replit Autoscale deployments
 const PORT = process.env.PORT || 3000
