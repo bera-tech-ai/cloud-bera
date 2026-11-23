@@ -44,14 +44,19 @@ function findMedia(message) {
 async function downloadRawMedia(raw, media, sock) {
     if (!raw?.message || !media) throw new Error('No original raw message is available')
     if (typeof downloadMediaMessage === 'function') {
-        try {
-            return await downloadMediaMessage(raw, 'buffer', {}, {
-                reuploadRequest: async message => {
-                    if (typeof sock?.updateMediaMessage !== 'function') throw new Error('Media re-upload is unavailable')
-                    return sock.updateMediaMessage(message)
-                },
-            })
-        } catch {}
+        const candidates = [raw]
+        const unwrapped = unwrapMessage(raw.message)
+        if (unwrapped && unwrapped !== raw.message) candidates.push({ ...raw, message: unwrapped })
+        for (const candidate of candidates) {
+            try {
+                return await downloadMediaMessage(candidate, 'buffer', {}, {
+                    reuploadRequest: async message => {
+                        if (typeof sock?.updateMediaMessage !== 'function') throw new Error('Media re-upload is unavailable')
+                        return sock.updateMediaMessage(message)
+                    },
+                })
+            } catch {}
+        }
     }
     return downloadMediaContent(media)
 }

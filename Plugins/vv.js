@@ -13,9 +13,13 @@ function ownerJid() {
 
 function rawFromQuoted(ctx, message) {
     const quoted = message.quoted
-    const chat = ctx.jid || message.key?.remoteJid
     const id = quoted?.key?.id || quoted?.id
-    return (chat && id && rawStore.get(chat, id)) || (quoted?.message ? { key: quoted.key, message: quoted.message } : null)
+    const chats = [ctx.jid, quoted?.key?.remoteJid, message.key?.remoteJid].filter(Boolean)
+    for (const chat of [...new Set(chats)]) {
+        const raw = id && rawStore.get(chat, id)
+        if (raw) return raw
+    }
+    return (quoted?.message ? { key: quoted.key, message: quoted.message } : null)
 }
 
 function senderOf(quoted, ctx) {
