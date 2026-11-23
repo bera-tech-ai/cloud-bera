@@ -2509,9 +2509,10 @@ const handleMessage = async (conn, rawMsg) => {
                     if (m.isGroup && (!isAdmin || (!isSenderAdmin && !isOwner))) { await reply('❌ The bot and requesting user must have group admin rights.'); return }
                     try {
                         await react('📌')
-                        await conn.sendMessage(chat, { pin: { type: 1, time: 604800, key: targetKey } })
+                        const sent = await conn.sendMessage(chat, { pin: targetKey, type: 1, time: 604800 })
+                        if (!sent) throw new Error('Baileys did not accept the pin request.')
                         await react('✅')
-                        await reply('📌 Message pinned for 7 days.')
+                        await reply('📌 Pin request accepted by Baileys for 7 days.')
                     } catch(e) { await react('❌'); await reply('❌ Failed to pin: ' + e.message) }
                     return
                 }
@@ -2519,7 +2520,7 @@ const handleMessage = async (conn, rawMsg) => {
                 if (intent === 'unpin_msg') {
                     const targetKey = m.quoted ? m.quoted.key : m.key
                     if (m.isGroup && (!isAdmin || (!isSenderAdmin && !isOwner))) { await reply('❌ The bot and requesting user must have group admin rights.'); return }
-                    try { await conn.sendMessage(chat, { pin: { type: 0, time: 0, key: targetKey } }); await reply('✅ Message unpinned.') }
+                    try { const sent = await conn.sendMessage(chat, { pin: targetKey, type: 0, time: 0 }); if (!sent) throw new Error('Baileys did not accept the unpin request.'); await reply('✅ Unpin request accepted by Baileys.') }
                     catch (e) { await reply('❌ Failed to unpin: ' + e.message) }
                     return
                 }
@@ -2527,9 +2528,11 @@ const handleMessage = async (conn, rawMsg) => {
                 if (intent === 'edit_msg') {
                     const target = m.quoted
                     const replacement = text.replace(/^\s*(edit|change|correct|update)\b/i, '').replace(/^\s*(this|that)\s*(message|text)?\s*(to)?\s*/i, '').trim()
-                    if (!target?.key?.fromMe) { await reply('❌ For safety, I can edit only a recent message sent by this bot. Quote that message and provide the replacement text.'); return }
+                    const botIds = [conn.user?.id, conn.user?.lid].filter(Boolean).map(String)
+                    const keyIsBotAuthored = Boolean(target?.key?.fromMe) || botIds.some(id => [target?.key?.participant, target?.key?.participantAlt, target?.key?.remoteJid].filter(Boolean).some(value => String(value).split(':')[0].toLowerCase() === id.split(':')[0].toLowerCase()))
+                    if (!keyIsBotAuthored) { await reply('❌ For safety, I can edit only a recent message sent by this bot. Quote that message and provide the replacement text.'); return }
                     if (!replacement) { await reply('❓ Provide the replacement text.'); return }
-                    try { await conn.sendMessage(chat, { text: replacement, edit: target.key }); await reply('✅ Bot message edited.') }
+                    try { const sent = await conn.sendMessage(chat, { text: replacement, edit: target.key }); if (!sent) throw new Error('Baileys did not accept the edit request.'); await reply('✅ Edit request accepted by Baileys.') }
                     catch (e) { await reply('❌ Edit failed: ' + e.message) }
                     return
                 }

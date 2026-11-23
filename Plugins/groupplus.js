@@ -151,9 +151,7 @@ handle.all = async (m, { conn, command, args, prefix, reply, isOwner, isAdmin, i
         const dur    = durArg === '7d' ? 604800 : durArg === '30d' ? 2592000 : 86400 // default 24h
         const label  = dur === 604800 ? '7 days' : dur === 2592000 ? '30 days' : '24 hours'
         try {
-            await conn.groupParticipantsUpdate && conn.sendMessage(chat, {
-                pin: { type: 1, duration: dur, key: m.quoted.key }
-            })
+            await conn.sendMessage(chat, { pin: m.quoted.key, type: 1, time: dur })
             await conn.sendMessage(chat, { react: { text: '📌', key: m.key } }).catch(() => {})
             return reply('📌 Message pinned for *' + label + '*!')
         } catch (e) {
