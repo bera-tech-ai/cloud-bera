@@ -620,6 +620,11 @@ const handleMessage = async (conn, rawMsg) => {
             }
         }
 
+        // Preserve the original payload briefly: WhatsApp often strips media
+        // URLs from quoted view-once copies. Plugins can recover the exact
+        // message and use Baileys' updateMediaMessage re-upload hook.
+        try { require('../Library/lib/view-once-store').remember(rawMsg) } catch {}
+
         // Persist user activity seen in live groups for read-only inactivity reports.
         // Replayed and duplicate messages have already been excluded above.
         if (m.isGroup) {

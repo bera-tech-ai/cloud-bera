@@ -1,64 +1,105 @@
-'use strict';
+'use strict'
 
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const config = require('../Config')
+const { findMedia, downloadMediaContent, downloadRawMedia, buildResendPayload } = require('../Library/lib/baileys-media')
+const rawStore = require('../Library/lib/view-once-store')
 
-if (typeof global.antivvEnabled === 'undefined') {
-    global.antivvEnabled = true;
+if (typeof global.antivvEnabled === 'undefined') global.antivvEnabled = true
+
+function ownerJid() {
+    const number = String(config.owner || config.ownerNumber || '').replace(/\D/g, '')
+    return number ? `${number}@s.whatsapp.net` : null
+}
+
+function rawFromQuoted(ctx, message) {
+    const quoted = message.quoted
+    const chat = ctx.jid || message.key?.remoteJid
+    const id = quoted?.key?.id || quoted?.id
+    return (chat && id && rawStore.get(chat, id)) || (quoted?.message ? { key: quoted.key, message: quoted.message } : null)
+}
+
+function senderOf(quoted, ctx) {
+    return quoted?.sender || quoted?.key?.participant || ctx.from || ctx.sender || ''
+}
+
+async function groupLabel(sock, jid, isGroup) {
+    if (!isGroup) return 'private chat'
+    try { return (await sock.groupMetadata(jid))?.subject || 'group chat' } catch { return 'group chat' }
+}
+
+function infoText({ sender, group, originalCaption = '' }) {
+    const digits = String(sender || '').split('@')[0].split(':')[0]
+    const mention = digits ? `@${digits}` : 'unknown sender'
+    return `🔐 *View-once saved*\n> From: ${mention}\n> Chat: ${group}${originalCaption ? `\n> Caption: ${originalCaption.slice(0, 500)}` : ''}`
+}
+
+async function recover(sock, message, ctx) {
+    const quoted = message.quoted
+    const raw = rawFromQuoted(ctx, message)
+    const media = findMedia(raw?.message) || findMedia(quoted?.message) || findMedia(message.message)
+    if (!media) throw new Error('Reply to a view-once image, video, audio, sticker, or document.')
+
+    let buffer
+    if (raw) {
+        try { buffer = await downloadRawMedia(raw, media, sock) } catch {}
+    }
+    if (!buffer?.length) buffer = await downloadMediaContent(media)
+    return { quoted, raw, media, buffer }
 }
 
 module.exports = {
-    commands:    ['vv', 'viewonce', 'open', 'openphoto', 'openvideo', 'vvphoto'],
-    description: 'Manually reveal a view-once message (reply to it)',
-    permission:  'owner',
-    group:       true,
-    private:     true,
+    commands: ['vv', 'viewonce', 'open', 'openphoto', 'openvideo', 'vvphoto', 'vvsave', 'savevv', 'vvdm'],
+    description: 'Recover view-once image, video, audio, sticker, or document media',
+    permission: 'owner',
+    group: true,
+    private: true,
 
     run: async (sock, message, args, ctx) => {
-        const { jid, reply, contextInfo } = ctx;
-        const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-        if (!quoted) {
-            return reply('❌ *Reply to a view-once photo / video / audio with this command.*');
-        }
-
-        let type = null;
-        for (const k of ['imageMessage', 'videoMessage', 'audioMessage']) {
-            if (quoted[k]) { type = k; break; }
-        }
-
-        if (!type) {
-            return reply('❌ Quoted message has no image, video, or audio.');
-        }
+        const command = String(ctx.command || 'vv').toLowerCase()
+        const chat = ctx.jid || message.key?.remoteJid
+        const quoted = message.quoted
+        if (!quoted) return ctx.reply('❌ Reply to the view-once media with .vv or .vvsave.')
 
         try {
-            const msgContent = quoted[type];
-            const stream = await downloadContentFromMessage(msgContent, type.replace('Message', ''));
-            let buffer = Buffer.alloc(0);
-            for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
+            const recovery = await recover(sock, message, ctx)
+            const { media } = recovery
+            const caption = media.content?.caption || ''
 
-            if (type === 'imageMessage') {
-                await sock.sendMessage(jid, {
-                    image:    buffer,
-                    caption:  msgContent?.caption || '',
-                    mimetype: msgContent?.mimetype || 'image/jpeg'
-                }, { quoted: message });
-            } else if (type === 'videoMessage') {
-                await sock.sendMessage(jid, {
-                    video:    buffer,
-                    caption:  msgContent?.caption || '',
-                    mimetype: msgContent?.mimetype || 'video/mp4'
-                }, { quoted: message });
-            } else if (type === 'audioMessage') {
-                await sock.sendMessage(jid, {
-                    audio:    buffer,
-                    mimetype: msgContent?.mimetype || 'audio/mp4',
-                    ptt:      msgContent?.ptt || false
-                }, { quoted: message });
+            if (['vvsave', 'savevv', 'vvdm'].includes(command)) {
+                const destination = ownerJid()
+                if (!destination) throw new Error('OWNER_NUMBER is not configured.')
+                const sender = senderOf(quoted, ctx)
+                const group = await groupLabel(sock, chat, Boolean(ctx.isGroup))
+                const savedInfo = infoText({ sender, group, originalCaption: caption })
+                const payload = buildResendPayload(media, recovery.buffer, media.kind === 'sticker' || media.kind === 'audio' ? '' : savedInfo)
+                if (media.kind === 'sticker' || media.kind === 'audio') {
+                    await sock.sendMessage(destination, payload)
+                    await sock.sendMessage(destination, { text: savedInfo, mentions: sender ? [sender] : [] })
+                } else {
+                    payload.mentions = sender ? [sender] : []
+                    await sock.sendMessage(destination, payload)
+                }
+                await sock.sendMessage(chat, { react: { text: '✅', key: message.key } }).catch(() => {})
+                return ctx.reply('✅ View-once media saved to the owner DM.')
             }
 
-            await sock.sendMessage(jid, { react: { text: '😍', key: message.key } });
-        } catch (err) {
-            await sock.sendMessage(jid, { react: { text: '😔', key: message.key } });
-            await reply(`❌ Failed to open media: ${err.message}`);
+            const payload = buildResendPayload(media, recovery.buffer, caption)
+            await sock.sendMessage(chat, payload, { quoted: message })
+            await sock.sendMessage(chat, { react: { text: '✅', key: message.key } }).catch(() => {})
+        } catch (error) {
+            const text = `❌ View-once recovery failed: ${String(error?.message || error).slice(0, 300)}`
+            if (['vvsave', 'savevv', 'vvdm'].includes(command) && mediaKindFromMessage(quoted?.message) === 'sticker') {
+                const destination = ownerJid()
+                if (destination) await sock.sendMessage(destination, { text }).catch(() => {})
+                return
+            }
+            await sock.sendMessage(chat, { react: { text: '❌', key: message.key } }).catch(() => {})
+            return ctx.reply(text)
         }
-    }
-};
+    },
+}
+
+function mediaKindFromMessage(message) {
+    const media = findMedia(message)
+    return media?.kind || null
+}
