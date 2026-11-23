@@ -1536,7 +1536,8 @@ const handleMessage = async (conn, rawMsg) => {
                     try { const gm = await conn.groupMetadata(chat); senderAdmin = (gm.participants || []).some(p => p.id === sender && p.admin); botAdmin = (gm.participants || []).some(p => p.id === conn.user?.id && p.admin) } catch {}
                     if (!quoted.key?.fromMe && !(m.isGroup && botAdmin && (senderAdmin || isOwner))) { await reply('❌ I can delete my own message, or a group admin can authorize deletion.'); return }
                     try {
-                        await conn.sendMessage(chat, { delete: quoted.key })
+                        const sent = await conn.sendMessage(chat, { delete: quoted.key })
+                        if (!sent) throw new Error('Baileys did not accept the delete request.')
                         await react('🗑️')
                     } catch(e) { await reply('❌ Could not delete: ' + e.message + ' (I may not be admin or it may be too old)') }
                     return
@@ -2098,7 +2099,9 @@ const handleMessage = async (conn, rawMsg) => {
                     if (!question || options.length < 2) { await reply('❓ Format: *Bera poll: Question, Option 1, Option 2, Option 3*'); return }
                     try {
                         await react('📊')
-                        await conn.sendMessage(chat, { poll: { name: question, values: options.slice(0,12), selectableCount: 1 } }, { quoted: m })
+                        const sent = await conn.sendMessage(chat, { poll: { name: question, values: options.slice(0,12), selectableCount: 1 } }, { quoted: m })
+                        if (!sent) throw new Error('Baileys did not accept the poll.')
+                        await reply('✅ Poll request accepted by Baileys.')
                     } catch(e) { await reply('❌ ' + e.message) }
                     return
                 }
@@ -2540,7 +2543,7 @@ const handleMessage = async (conn, rawMsg) => {
                 if (intent === 'react_msg') {
                     const key = m.quoted?.key || m.key
                     const emoji = (text.match(/[\u{1F300}-\u{1FAFF}]|❤️|❤/u) || [])[0] || '👍'
-                    try { await conn.sendMessage(chat, { react: { text: emoji, key } }); await reply(`✅ Reacted ${emoji}`) }
+                    try { const sent = await conn.sendMessage(chat, { react: { text: emoji, key } }); if (!sent) throw new Error('Baileys did not accept the reaction request.'); await reply(`✅ Reaction request accepted by Baileys: ${emoji}`) }
                     catch (e) { await reply('❌ Reaction failed: ' + e.message) }
                     return
                 }
@@ -2696,7 +2699,8 @@ const handleMessage = async (conn, rawMsg) => {
                     if (m.isGroup) { try { const gm = await conn.groupMetadata(chat); senderAdmin = (gm.participants || []).some(p => p.id === sender && p.admin); botAdmin = (gm.participants || []).some(p => p.id === conn.user?.id && p.admin) } catch {} }
                     if (m.quoted && !delKey?.fromMe && !(m.isGroup && botAdmin && (senderAdmin || isOwner))) { await reply('❌ I can delete my own message, or a group admin can authorize deletion.'); return }
                     try {
-                        await conn.sendMessage(chat, { delete: delKey })
+                        const sent = await conn.sendMessage(chat, { delete: delKey })
+                        if (!sent) throw new Error('Baileys did not accept the delete request.')
                         await react('🗑️')
                     } catch(e) { await reply('❌ Couldn\'t delete: ' + e.message) }
                     return

@@ -966,7 +966,12 @@ const _safeWsPath = (p) => {
 const executeToolCall = async (tc, chatId, conn, m) => {
     const isTrustedBotOwner = () => {
         const caller = m?.sender || m?.key?.participant || ''
-        try { return require('../../Auth').isAuthorized(caller).isOwner === true } catch { return false }
+        try {
+            return require('../../Auth').isAuthorized({
+                sender: caller,
+                alternates: [m?.senderAlt, m?.key?.participantAlt, m?.key?.remoteJidAlt].filter(Boolean)
+            }).isOwner === true
+        } catch { return false }
     }
     const ownerOnlyMessage = '⛔ This GitHub/publishing/deployment action requires the bot owner.'
     const t = tc.tool
@@ -979,6 +984,22 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         action.number = target.number
         const token = waActions.stage(m.sender || m.key?.participant || chatId, action)
         return `⏳ Preview only — nothing was sent.\nTarget: ${target.jid}\nAction: ${action.type}\nToken: ${token}\nReply with .wact confirm ${token} to execute, or .wact cancel ${token}.`
+    }
+    const requireGroupMutationAccess = async group => {
+        if (!group || !String(group).endsWith('@g.us')) return '❌ This action must target a WhatsApp group.'
+        let meta
+        try { meta = await conn.groupMetadata(group) } catch (e) { return `❌ Could not read group permissions: ${e.message}` }
+        const participants = meta?.participants || []
+        const sameIdentity = (participant, value) => {
+            const { identityMatches } = require('../lib/permissions')
+            return identityMatches(participant, value)
+        }
+        const senderAdmin = participants.some(p => sameIdentity(p, m?.sender) || sameIdentity(p, m?.key?.participantAlt) || sameIdentity(p, m?.key?.participant)) &&
+            participants.some(p => (sameIdentity(p, m?.sender) || sameIdentity(p, m?.key?.participantAlt) || sameIdentity(p, m?.key?.participant)) && Boolean(p.admin))
+        const botAdmin = participants.some(p => (sameIdentity(p, conn?.user?.id) || sameIdentity(p, conn?.user)) && Boolean(p.admin))
+        if (!isTrustedBotOwner() && !senderAdmin) return '❌ Only a group admin or the bot owner can perform this action.'
+        if (!botAdmin) return '❌ The bot account is not a group admin, so WhatsApp will reject this action.'
+        return null
     }
 
     if (['bash', 'multi_bash', 'runcode'].includes(t) && !isTrustedBotOwner()) {
@@ -1885,6 +1906,8 @@ try {
         if (!conn) return 'ERROR: no connection'
         const group = tc.group || chatId
         if (!group?.endsWith('@g.us')) return '❌ This must be used inside a WhatsApp group.'
+        const accessError = await requireGroupMutationAccess(group)
+        if (accessError) return accessError
         const action = (tc.action || tc.setting || '').toLowerCase()
         let setting
         if (['close','lock','mute','locked','announcement'].includes(action)) {
@@ -1969,6 +1992,8 @@ try {
         const name = tc.name || tc.subject || tc.title || ''
         if (!name) return '❌ Provide a new group name: {"tool":"wa_group_subject","name":"New Name"}'
         if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
+        const accessError = await requireGroupMutationAccess(group)
+        if (accessError) return accessError
         try {
             await conn.groupUpdateSubject(group, name)
             return `✅ Group renamed to: *${name}*`
@@ -1981,6 +2006,8 @@ try {
         const group = tc.group || chatId
         const desc = tc.description || tc.desc || tc.text || ''
         if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
+        const accessError = await requireGroupMutationAccess(group)
+        if (accessError) return accessError
         try {
             await conn.groupUpdateDescription(group, desc)
             return `✅ Group description updated.`
@@ -1992,6 +2019,8 @@ try {
         if (!conn) return 'ERROR: no connection'
         const group = tc.group || chatId
         if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
+        const accessError = await requireGroupMutationAccess(group)
+        if (accessError) return accessError
         try {
             const code = await conn.groupInviteCode(group)
             const link = `https://chat.whatsapp.com/${code}`
@@ -2007,6 +2036,8 @@ try {
         const num = String(tc.number || '').replace(/[^0-9]/g, '')
         if (!num) return '❌ No number provided.'
         if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
+        const accessError = await requireGroupMutationAccess(group)
+        if (accessError) return accessError
         const jid = `${num}@s.whatsapp.net`
         try {
             const r = await conn.groupParticipantsUpdate(group, [jid], 'add')
@@ -2023,12 +2054,16 @@ try {
         if (!conn) return 'ERROR: no connection'
         const group = tc.group || chatId
         if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
+        const accessError = await requireGroupMutationAccess(group)
+        if (accessError) return accessError
         const num = String(tc.number || '').replace(/[^0-9]/g, '')
         if (!num) return 'ERROR: no number'
         const jid = num.includes('@') ? tc.number : `${num}@s.whatsapp.net`
         try {
-            await conn.groupParticipantsUpdate(group, [jid], 'remove')
-            return `✅ Kicked +${num} from the group.`
+            const result = await conn.groupParticipantsUpdate(group, [jid], 'remove')
+            const status = result?.[0]?.status
+            if (status && ![200, '200'].includes(status)) return `❌ Kick was not accepted for +${num}. WhatsApp status: ${status}`
+            return `✅ Kick request accepted by Baileys for +${num}.`
         } catch (e) { return `❌ Kick failed: ${e.message}` }
     }
 
@@ -2037,9 +2072,13 @@ try {
         if (!conn) return 'ERROR: no connection'
         const num = String(tc.number || '').replace(/[^0-9]/g, '')
         const jid = `${num}@s.whatsapp.net`
+        const accessError = await requireGroupMutationAccess(tc.group || chatId)
+        if (accessError) return accessError
         try {
-            await conn.groupParticipantsUpdate(tc.group || chatId, [jid], 'promote')
-            return `✅ Promoted +${num} to admin.`
+            const result = await conn.groupParticipantsUpdate(tc.group || chatId, [jid], 'promote')
+            const status = result?.[0]?.status
+            if (status && ![200, '200'].includes(status)) return `❌ Promote was not accepted for +${num}. WhatsApp status: ${status}`
+            return `✅ Promote request accepted by Baileys for +${num}.`
         } catch (e) { return `❌ Promote failed: ${e.message}` }
     }
 
@@ -2048,9 +2087,13 @@ try {
         if (!conn) return 'ERROR: no connection'
         const num = String(tc.number || '').replace(/[^0-9]/g, '')
         const jid = `${num}@s.whatsapp.net`
+        const accessError = await requireGroupMutationAccess(tc.group || chatId)
+        if (accessError) return accessError
         try {
-            await conn.groupParticipantsUpdate(tc.group || chatId, [jid], 'demote')
-            return `✅ Removed admin from +${num}.`
+            const result = await conn.groupParticipantsUpdate(tc.group || chatId, [jid], 'demote')
+            const status = result?.[0]?.status
+            if (status && ![200, '200'].includes(status)) return `❌ Demote was not accepted for +${num}. WhatsApp status: ${status}`
+            return `✅ Demote request accepted by Baileys for +${num}.`
         } catch (e) { return `❌ Demote failed: ${e.message}` }
     }
 
@@ -2068,8 +2111,9 @@ try {
         if (!conn || !m) return 'ERROR: no connection'
         try {
             const targetKey = m.quoted?.key || m.quoted?.message?.key || m.key
-            await conn.sendMessage(chatId, { react: { text: tc.emoji || '👍', key: targetKey } })
-            return `reacted: ${tc.emoji}`
+            const sent = await conn.sendMessage(chatId, { react: { text: tc.emoji || '👍', key: targetKey } })
+            if (!sent) throw new Error('Baileys did not accept the reaction request.')
+            return `reaction request accepted by Baileys: ${tc.emoji || '👍'}`
         } catch (e) { return `react failed: ${e.message}` }
     }
 
