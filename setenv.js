@@ -40,6 +40,11 @@ const botId = safeId(derivedBotId) || 'bot-default'
 process.env.BERA_BOT_ID = process.env.BERA_BOT_ID || botId
 process.env.BERA_TENANT_ID = process.env.BERA_TENANT_ID || botId
 process.env.BERA_AUTH_SESSION_ID = process.env.BERA_AUTH_SESSION_ID || botId
+// PostgreSQL remains available for bot application data, but WhatsApp
+// credentials and duplicate-session leasing stay local unless explicitly
+// enabled for a deployment.
+process.env.BERA_DB_AUTH_STATE = process.env.BERA_DB_AUTH_STATE || 'false'
+process.env.BERA_DB_SESSION_LEASE = process.env.BERA_DB_SESSION_LEASE || 'false'
 
 // Keep the auth directory inside the deployed, writable application directory
 // by default. Explicit BERA_SESSION_DIR remains supported for persistent

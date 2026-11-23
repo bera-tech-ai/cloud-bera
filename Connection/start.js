@@ -66,6 +66,9 @@ const closeActiveConn = async () => {
     await new Promise(r => setTimeout(r, 800))
 }
 
+const databaseAuthEnabled = () => /^(1|true|yes)$/i.test(process.env.BERA_DB_AUTH_STATE || '')
+const databaseLeaseEnabled = () => /^(1|true|yes)$/i.test(process.env.BERA_DB_SESSION_LEASE || '')
+
 const scheduleReconnect = (delayMs = 5000) => {
     if (_reconnecting) return
     _reconnecting = true
@@ -321,7 +324,7 @@ const startBot = async () => {
     await initDb()
 
     const authSessionId = process.env.BERA_AUTH_SESSION_ID || global.db.tenantId || 'whatsapp'
-    if (global.db.provider === 'postgresql') {
+    if (global.db.provider === 'postgresql' && databaseLeaseEnabled()) {
         const lease = await acquireSessionLease(authSessionId)
         if (!lease.acquired) {
             beraLog.err(`Duplicate WhatsApp session blocked: ${authSessionId} is already active in another Bera process.`)
@@ -359,7 +362,7 @@ const startBot = async () => {
     const fileAuthState = await useMultiFileAuthState(SESSION_DIR)
     let { state, saveCreds } = fileAuthState
     let clearAuthState = null
-    if (global.db.provider === 'postgresql') {
+    if (global.db.provider === 'postgresql' && databaseAuthEnabled()) {
         const { createPostgresAuthState } = require('../Library/lib/postgres-auth-state')
         const postgresAuthState = await createPostgresAuthState({
             pool: global.db.pool,
@@ -375,6 +378,8 @@ const startBot = async () => {
         saveCreds = postgresAuthState.saveCreds
         clearAuthState = postgresAuthState.clear
         console.log(chalk.green(`[DB] Encrypted WhatsApp auth state enabled (session: ${postgresAuthState.sessionId})`))
+    } else if (global.db.provider === 'postgresql') {
+        console.log(chalk.gray('[DB] WhatsApp auth state uses local session files (BERA_DB_AUTH_STATE is disabled)'))
     }
     const { version } = await fetchLatestBaileysVersion()
 
