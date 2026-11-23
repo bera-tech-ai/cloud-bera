@@ -93,34 +93,66 @@ const migrateStateTable = async () => {
     `)
     const names = new Set(columns.rows.map(row => row.column_name))
 
-    // Migrate the original schema:
+    // Migrate the original or partially migrated schema:
     //   id INTEGER PRIMARY KEY, data JSONB, updated_at TIMESTAMPTZ
     // The existing global row is assigned to the current tenant so its data is
-    // preserved for the bot performing the first migration.
-    if (names.has('id') && !names.has('tenant_id')) {
-        const client = await _pool.connect()
-        try {
-            await client.query('BEGIN')
+    // preserved. The advisory lock prevents two bot processes from changing
+    // this shared table at the same time.
+    const client = await _pool.connect()
+    try {
+        await client.query('BEGIN')
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('bera_state_tenant_migration'))")
+
+        const lockedColumns = await client.query(`
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'bera_state'
+        `)
+        const lockedNames = new Set(lockedColumns.rows.map(row => row.column_name))
+        const hasId = lockedNames.has('id')
+        const hasTenantId = lockedNames.has('tenant_id')
+
+        if (hasId && !hasTenantId) {
             await client.query('ALTER TABLE bera_state ADD COLUMN tenant_id TEXT')
+        }
+
+        if (hasId || hasTenantId) {
             await client.query(
-                'UPDATE bera_state SET tenant_id = $1 WHERE id = 1 AND tenant_id IS NULL',
-                [tenantId]
-            )
-            await client.query(
-                "UPDATE bera_state SET tenant_id = $1 WHERE tenant_id IS NULL",
+                'UPDATE bera_state SET tenant_id = $1 WHERE tenant_id IS NULL',
                 [tenantId]
             )
             await client.query('ALTER TABLE bera_state ALTER COLUMN tenant_id SET NOT NULL')
-            await client.query('ALTER TABLE bera_state DROP CONSTRAINT IF EXISTS bera_state_pkey')
+
+            // Keep the legacy id column for compatibility with old tooling,
+            // but make it nullable because new tenant rows do not use it.
+            if (hasId) await client.query('ALTER TABLE bera_state ALTER COLUMN id DROP NOT NULL')
+
+            // Drop whichever primary-key constraint the old table used, then
+            // make tenant_id the sole identity for application state.
+            await client.query(`
+                DO $$
+                DECLARE primary_key_name TEXT;
+                BEGIN
+                    SELECT conname INTO primary_key_name
+                    FROM pg_constraint
+                    WHERE conrelid = 'bera_state'::regclass
+                      AND contype = 'p';
+                    IF primary_key_name IS NOT NULL THEN
+                        EXECUTE format('ALTER TABLE bera_state DROP CONSTRAINT %I', primary_key_name);
+                    END IF;
+                END $$;
+            `)
             await client.query('ALTER TABLE bera_state ADD CONSTRAINT bera_state_pkey PRIMARY KEY (tenant_id)')
-            await client.query('COMMIT')
-            console.log(`[DB] Migrated bera_state from global id=1 to tenant: ${tenantId}`)
-        } catch (error) {
-            await client.query('ROLLBACK').catch(() => {})
-            throw error
-        } finally {
-            client.release()
         }
+
+        await client.query('COMMIT')
+        if (hasId || hasTenantId) console.log(`[DB] Ensured bera_state tenant schema for: ${tenantId}`)
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => {})
+        throw error
+    } finally {
+        client.release()
     }
 }
 
