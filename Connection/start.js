@@ -22,11 +22,23 @@ const { initDb, saveSession } = require('../Database')
 const { handleMessage, handleGroupEvents, handleAntiDelete, handleAntiEdit } = require('../Handler')
 const config = require('../Config')
 
-const SESSION_DIR = path.resolve(process.env.BERA_SESSION_DIR || config.sessionDir || './session')
-const PHONE_FILE  = path.join(SESSION_DIR, '.phone')
-const logger      = pino({ level: 'silent' })
+let SESSION_DIR = path.resolve(process.env.BERA_SESSION_DIR || config.sessionDir || './session')
+const logger = pino({ level: 'silent' })
 
-if (!fs.existsSync(SESSION_DIR)) fs.mkdirSync(SESSION_DIR, { recursive: true })
+// Some BeraHost runtimes expose /persistent in configuration but mount it
+// read-only or not at all. Prefer the configured directory, then fall back to
+// the deployed working directory instead of crashing before the socket starts.
+try {
+    fs.mkdirSync(SESSION_DIR, { recursive: true })
+} catch (error) {
+    const fallback = path.resolve(process.cwd(), 'session')
+    if (!['EACCES', 'EPERM', 'EROFS'].includes(error?.code)) throw error
+    console.warn(`[SESSION] Cannot use ${SESSION_DIR} (${error.code}); falling back to ${fallback}`)
+    SESSION_DIR = fallback
+    fs.mkdirSync(SESSION_DIR, { recursive: true })
+}
+
+const PHONE_FILE = path.join(SESSION_DIR, '.phone')
 
 // ── Socket lifecycle tracking — prevents dual-socket crypto conflicts ──────
 let _activeConn    = null
