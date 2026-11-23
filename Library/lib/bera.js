@@ -6,7 +6,9 @@ const MAX_HISTORY = config.maxHistory || 20
 // ── Bera Identity Sanitizer — strips AI identity leaks from all responses ─────
 const _sanitizeIdentity = (text) => {
     if (!text || typeof text !== 'string') return text
-    return text
+    const hadConflictingDeveloper = /\bGifted\s*Tech\b|\bMaurice\b/i.test(text)
+    let sanitized = text
+    sanitized = sanitized
         .replace(/\bI am Gemini(?:-[\w.]+)?[,.]?/gi, 'I am Bera AI,')
         .replace(/\bI'm Gemini(?:-[\w.]+)?[,.]?/gi, "I'm Bera AI,")
         .replace(/\bI am DeepSeek(?:-[\w.]+)?[,.]?/gi, 'I am Bera AI,')
@@ -19,6 +21,8 @@ const _sanitizeIdentity = (text) => {
           .replace(/\ban AI language model (?:built|created|developed|trained|made) by OpenAI/gi, 'an AI assistant built by Bera Tech')
           .replace(/\b(I was |I'm )?(?:a|an) AI (?:language model|assistant) (?:by|from|created by|built by) OpenAI/gi, "I'm Bera AI, an assistant by Bera Tech")
           .replace(/\bOpenAI(?:'s)?/gi, "Bera Tech's")
+          .replace(/\bGifted\s*Tech(?:'s)?\b/gi, 'Bera Tech')
+          .replace(/\bMaurice(?:'s)?\b/gi, 'Bruce Bera')
         .replace(/\bI am Claude(?:[\s-][\w.]+)?[,.]?/gi, 'I am Bera AI,')
         .replace(/\bAs Gemini[,.]?/gi, 'As Bera AI,')
         .replace(/\bAs DeepSeek[,.]?/gi, 'As Bera AI,')
@@ -34,6 +38,11 @@ const _sanitizeIdentity = (text) => {
         .replace(/I cannot (?:pretend|roleplay|impersonate|claim) to be (?:Bera AI|DeepSeek|another AI)[^.]*\./gi, 'I am Bera AI, built by Bera Tech.')
         .replace(/,\s*,/g, ',')
         .replace(/Bera AI,\s+I/g, 'Bera AI. I')
+
+    if (hadConflictingDeveloper && !(/254116763755/i.test(sanitized) && /beratech00@gmail\.com/i.test(sanitized) && /github\.com\/bera-tech-ai/i.test(sanitized))) {
+        sanitized += '\n\nDeveloper: Bera Tech (Bruce Bera)\nContact: 254116763755 · beratech00@gmail.com · https://github.com/bera-tech-ai'
+    }
+    return sanitized
 }
 
 
@@ -69,7 +78,9 @@ You work for the bot owner (${config.owner}) and help EVERYONE who messages the 
 • Name: Bera AI
 • Version: 4.0
 • Built by: Bera Tech
-• Powered by: Groq AI (primary) + Gifted API (fallback)
+• Powered by: Groq AI (primary) + Bera API (fallback)
+• Developer: Bruce Bera / Bera Tech
+• Contact: 254116763755 · beratech00@gmail.com · github.com/bera-tech-ai
 • NEVER call yourself Nick, ChatGPT, Keith AI, Gemini, GPT, Claude, or any other AI name
 • If asked who built you: "I was built by Bera Tech"
 • If asked what model you are: "I'm Bera AI v4, powered by Groq AI — built by Bera Tech"
@@ -270,7 +281,7 @@ Your rules:
 // Max chars for the GET query
 const MAX_QUERY_CHARS = 900
 
-const SHORT_PERSONA = `You are Bera AI v4 — a powerful WhatsApp AI assistant built by Bera Tech, powered by Groq AI. You can use the web, bash, file-system, workspace, and GitHub tools when available and authorized; GitHub access requires a valid configured credential and must be verified live before you claim an account is connected. Be direct, helpful, and powerful.`
+const SHORT_PERSONA = `You are Bera AI v4 — a powerful WhatsApp AI assistant built by Bera Tech and Bruce Bera, powered by Groq AI. Developer contact: 254116763755, beratech00@gmail.com, github.com/bera-tech-ai. Never say you were developed by Gifted Tech or Maurice; Gifted is only an external API/provider name, not your developer. You can use the web, bash, file-system, workspace, and GitHub tools when available and authorized; GitHub access requires a valid configured credential and must be verified live before you claim an account is connected. Be direct, helpful, and powerful.`
 
 const buildQuery = (userText, history = []) => {
     const full = `${SHORT_PERSONA}\n\nUser: ${(userText || '').slice(0, 400)}\nBera AI:`
@@ -400,4 +411,4 @@ const nickAi = async (userText, history = [], onAction = null, imageBuffer = nul
 }
 
 
-module.exports = { nickAi, MAX_HISTORY, PERSONALITY, SHORT_PERSONA }
+module.exports = { nickAi, MAX_HISTORY, PERSONALITY, SHORT_PERSONA, cleanAnswer, _sanitizeIdentity }

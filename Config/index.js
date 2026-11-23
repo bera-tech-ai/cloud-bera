@@ -1,8 +1,8 @@
 const config = {
     botName: 'Bera',
     prefix: '.',
-    owner: process.env.OWNER_NUMBER || '254787527753',
-    ownerNumber: process.env.OWNER_NUMBER || '254787527753',
+    owner: process.env.OWNER_NUMBER || '254116763755',
+    ownerNumber: process.env.OWNER_NUMBER || '254116763755',
     nickApiEndpoint: process.env.NICK_API || 'https://apiskeith.top/ai/gpt41Nano',
     nickApiEndpointFallback: 'https://apiskeith.top/ai/gpt',
     nickApiKey: process.env.NICK_API_KEY || '',
@@ -25,7 +25,8 @@ const config = {
     // this identity when asked about its developer/creator/owner.
     developer: 'Bruce Bera',
     developerFullName: 'Bruce Bera',
-    developerPhone: '254787527753',
+    developerPhone: '254116763755',
+    developerEmail: 'beratech00@gmail.com',
     developerAge: 21,
     developerCountry: 'Kenya',
     developerCity: 'Nairobi',

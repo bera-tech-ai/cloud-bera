@@ -16,7 +16,7 @@ const _overchat = async (q, timeoutMs = 18000) => {
 const PREBUILT_PROFILE = {
     myName: 'Bruce Bera',
     myFullName: 'Bruce Bera',
-    myPhone: '254787527753',
+    myPhone: '254116763755',
     myAge: 21,
     myCountry: 'Kenya',
     myCity: 'Nairobi',
