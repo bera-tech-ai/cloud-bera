@@ -79,7 +79,7 @@ const checkNumber = async (conn, number) => {
 
 const execute = async (conn, owner, action) => {
     try {
-        if (!action || !['send', 'story'].includes(action.type)) throw new Error('Unknown WhatsApp action.')
+        if (!action || !['send', 'story', 'groupstory'].includes(action.type)) throw new Error('Unknown WhatsApp action.')
         if (action.type === 'send') {
             const target = await checkNumber(conn, action.number)
             if (target.exists === false) throw new Error(`+${target.number} is not registered on WhatsApp.`)
@@ -91,6 +91,13 @@ const execute = async (conn, owner, action) => {
 
         const text = String(action.text || '').trim()
         if (!text) throw new Error('Story text cannot be empty.')
+        if (action.type === 'groupstory') {
+            const { sendGroupStatus } = require('../actions/gcstatus')
+            await sendGroupStatus(conn, action.groupJid, { text: text.slice(0, 700) })
+            const result = { ok: true, jid: action.groupJid }
+            record(owner, action, result)
+            return result
+        }
         await conn.sendMessage('status@broadcast', {
             text: text.slice(0, 700),
             backgroundColor: action.backgroundColor || '#1DA462',

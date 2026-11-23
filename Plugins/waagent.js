@@ -15,8 +15,9 @@ const HELP = `📱 *Bera WhatsApp Control*
 • *.wact check <number>* — verify a number on WhatsApp
 • *.wact profile <number>* — fetch WhatsApp profile/status
 • *.wact groups* — list groups Bera participates in
-• *.wact send <number> | <message>* — preview a message
+• *.wact send <number|reply|tag|this pm> | <message>* — preview a message
 • *.wact story <text>* — preview a text story
+• *.wact groupstory <text>* — preview a story for the current group
 • *.wact confirm <token>* — execute a pending send/story
 • *.wact cancel <token>* — cancel a pending action
 • *.wact audit* — show recent action results
@@ -29,6 +30,32 @@ const ownerOnly = (isOwner, reply) => {
     return false
 }
 
+const mentionedJids = (m) => m?.mentionedJid
+    || m?.message?.extendedTextMessage?.contextInfo?.mentionedJid
+    || []
+
+const resolveTarget = async (conn, m, spec, sender) => {
+    const target = String(spec || '').trim().toLowerCase()
+    const replyJid = m?.quoted?.sender || m?.quoted?.key?.participant || null
+    const tagJid = mentionedJids(m)[0] || null
+    if (['reply', 'replied', 'quoted', 'this user', 'replied user'].includes(target)) {
+        if (!replyJid) throw new Error('Reply to a user’s message first.')
+        return { jid: replyJid, number: replyJid.split('@')[0].split(':')[0] }
+    }
+    if (['tag', 'tagged', 'mention', 'mentioned', 'tagged user'].includes(target)) {
+        if (!tagJid) throw new Error('Tag a user first.')
+        return { jid: tagJid, number: tagJid.split('@')[0].split(':')[0] }
+    }
+    if (['this pm', 'this chat', 'current pm', 'private chat'].includes(target)) {
+        if (m?.isGroup || !m?.chat || m.chat.endsWith('@g.us')) throw new Error('This is a group chat. Use reply or tag to choose a private recipient.')
+        return { jid: m.chat, number: m.chat.split('@')[0].split(':')[0] }
+    }
+    if (['me', 'myself', 'owner'].includes(target)) return { jid: sender, number: sender.split('@')[0].split(':')[0] }
+    const checked = await checkNumber(conn, spec)
+    if (checked.exists === false) throw new Error(`+${checked.number} is not registered on WhatsApp.`)
+    return checked
+}
+
 const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, isOwner, sender } = {}) => {
     if (!ownerOnly(isOwner, reply)) return
     const alias = String(command || '').toLowerCase()
@@ -37,6 +64,7 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
         wacontacts: 'check',
         wactgroups: 'groups',
         wastory: 'story',
+        wactgroupstory: 'groupstory',
         waconfirm: 'confirm',
     }[alias]
     const sub = aliasSub || String(args[0] || 'help').toLowerCase()
@@ -82,11 +110,10 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
     }
 
     if (sub === 'send' || sub === 'message' || sub === 'text') {
-        const match = rest.match(/^\+?(\d{7,15})\s*\|\s*([\s\S]+)$/)
-        if (!match) return reply('❓ Usage: *.wact send 254712345678 | Hello from Bera*')
+        const match = rest.match(/^(.+?)\s*\|\s*([\s\S]+)$/)
+        if (!match) return reply('❓ Usage: *.wact send 254712345678 | Hello from Bera*\nOr reply/tag a user: *.wact send reply | Hello*')
         try {
-            const target = await checkNumber(conn, match[1])
-            if (target.exists === false) return reply(`❌ +${target.number} is not registered on WhatsApp.`)
+            const target = await resolveTarget(conn, m, match[1], sender)
             const token = stage(sender, { type: 'send', number: target.number, jid: target.jid, text: match[2].trim() })
             return reply(`⚠️ *Message preview*\n\nTo: +${target.number}\nText: _${match[2].trim()}_\n\nReply with *.wact confirm ${token}* within 2 minutes to send it.`)
         } catch (error) { return reply(`❌ ${error.message}`) }
@@ -99,6 +126,14 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
         return reply(`⚠️ *Story preview*\n\n_${story.slice(0, 700)}_\n\nReply with *.wact confirm ${token}* within 2 minutes to post it.`)
     }
 
+    if (sub === 'groupstory' || sub === 'groupstatus') {
+        if (!m?.isGroup || !m?.chat?.endsWith('@g.us')) return reply('❌ Use groupstory inside the group where the story should be posted.')
+        const story = rest.replace(/^(groupstory|groupstatus)\s*/i, '').trim()
+        if (!story) return reply('❓ Usage: *.wact groupstory Hello group*')
+        const token = stage(sender, { type: 'groupstory', groupJid: m.chat, text: story })
+        return reply(`⚠️ *Group story preview*\n\nGroup: ${m.chat}\n_${story.slice(0, 700)}_\n\nReply with *.wact confirm ${token}* within 2 minutes to post it.`)
+    }
+
     if (sub === 'confirm') {
         const action = consume(sender, args[1])
         if (!action) return reply('❌ Token is invalid, expired, or belongs to another owner session.')
@@ -106,6 +141,8 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
         if (!result.ok) return reply(`❌ Action failed: ${result.error}`)
         return reply(action.type === 'story'
             ? '✅ Text story posted to WhatsApp status.'
+            : action.type === 'groupstory'
+            ? '✅ Text story posted to the current group.'
             : `✅ Message sent to +${result.number}.`)
     }
 
@@ -122,6 +159,6 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
     return reply(HELP)
 }
 
-handle.commands = ['wact', 'wacontact', 'wacontacts', 'wactgroups', 'wastory', 'waconfirm']
+handle.commands = ['wact', 'wacontact', 'wacontacts', 'wactgroups', 'wastory', 'waconfirm', 'wactgroupstory']
 handle.tags = ['owner', 'whatsapp']
 module.exports = handle
