@@ -77,14 +77,66 @@ const checkNumber = async (conn, number) => {
     }
 }
 
+const normalizeJid = (value) => {
+    const raw = String(value || '').trim()
+    if (!raw) return null
+    if (raw.includes('@')) return raw.replace(/^\+/, '')
+    return `${normalizeNumber(raw)}@s.whatsapp.net`
+}
+
+const resolveTarget = async (conn, m, spec, options = {}) => {
+    const value = String(spec || '').trim()
+    const lower = value.toLowerCase()
+    const quoted = m?.quoted?.sender || m?.quoted?.key?.participant || m?.quoted?.key?.participantAlt
+    const mentioned = m?.mentionedJid?.[0] || m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
+    let jid = value.includes('@') ? normalizeJid(value) : null
+    if (!jid && ['reply', 'quoted', 'replied', 'this user', 'replied user'].includes(lower)) jid = quoted
+    if (!jid && ['tag', 'tagged', 'mention', 'mentioned', 'tagged user'].includes(lower)) jid = mentioned
+    if (!jid && ['this pm', 'this chat', 'current pm', 'private chat'].includes(lower)) {
+        if (m?.isGroup || !m?.chat || m.chat.endsWith('@g.us')) throw new Error('The current chat is a group, not a private chat.')
+        jid = m.chat
+    }
+    if (!jid && ['me', 'myself', 'owner'].includes(lower)) jid = m?.sender
+    if (!jid && /^\+?[0-9]{7,15}$/.test(value)) jid = normalizeJid(value)
+    if (!jid) throw new Error('No valid WhatsApp recipient was found. Use a number, reply, tag, or current private chat.')
+    if (jid.endsWith('@g.us') || jid.endsWith('@newsletter')) {
+        if (!options.allowSpecial) throw new Error('This action requires a private WhatsApp recipient.')
+        return { jid, number: jid.split('@')[0] }
+    }
+    const number = jid.split('@')[0].split(':')[0]
+    if (typeof conn?.onWhatsApp === 'function' && !jid.endsWith('@lid')) {
+        const checked = await checkNumber(conn, number)
+        if (checked.exists === false) throw new Error(`+${number} is not registered on WhatsApp.`)
+        return { jid: checked.jid || jid, number: checked.number || number }
+    }
+    return { jid, number }
+}
+
 const execute = async (conn, owner, action) => {
     try {
-        if (!action || !['send', 'story', 'groupstory'].includes(action.type)) throw new Error('Unknown WhatsApp action.')
+        if (!action || !['send', 'sendMedia', 'forward', 'story', 'groupstory'].includes(action.type)) throw new Error('Unknown WhatsApp action.')
         if (action.type === 'send') {
-            const target = await checkNumber(conn, action.number)
+            const target = action.jid ? { jid: action.jid, number: action.number || action.jid.split('@')[0], exists: true } : await checkNumber(conn, action.number)
             if (target.exists === false) throw new Error(`+${target.number} is not registered on WhatsApp.`)
             await conn.sendMessage(target.jid, { text: action.text })
             const result = { ok: true, jid: target.jid, number: target.number }
+            record(owner, action, result)
+            return result
+        }
+
+        if (action.type === 'sendMedia') {
+            if (!action.jid || !action.url || !['image', 'video', 'audio', 'document', 'sticker'].includes(action.mediaType)) throw new Error('Invalid media action.')
+            await conn.sendMessage(action.jid, { [action.mediaType]: { url: action.url }, ...(action.caption ? { caption: action.caption } : {}) })
+            const result = { ok: true, jid: action.jid }
+            record(owner, action, result)
+            return result
+        }
+
+        if (action.type === 'forward') {
+            if (!action.jid || !action.message) throw new Error('A recipient and quoted message are required.')
+            if (typeof conn.copyNForward === 'function') await conn.copyNForward(action.jid, action.message, true)
+            else await conn.sendMessage(action.jid, action.message)
+            const result = { ok: true, jid: action.jid }
             record(owner, action, result)
             return result
         }
@@ -117,7 +169,9 @@ const getAudit = (owner) => audit.filter(item => item.owner === String(owner || 
 
 module.exports = {
     normalizeNumber,
+    normalizeJid,
     checkNumber,
+    resolveTarget,
     stage,
     consume,
     cancel,

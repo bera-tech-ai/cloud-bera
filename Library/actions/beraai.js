@@ -970,6 +970,15 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     const ownerOnlyMessage = '⛔ This GitHub/publishing/deployment action requires the bot owner.'
     const t = tc.tool
     const axios2 = require('axios')
+    const waActions = require('../lib/wa-actions')
+    const stageWhatsAppAction = async (action, targetSpec) => {
+        if (!conn || !m) return 'ERROR: no WhatsApp connection context'
+        const target = targetSpec ? await waActions.resolveTarget(conn, m, targetSpec, { allowSpecial: true }) : { jid: chatId, number: String(chatId || '').split('@')[0] }
+        action.jid = target.jid
+        action.number = target.number
+        const token = waActions.stage(m.sender || m.key?.participant || chatId, action)
+        return `⏳ Preview only — nothing was sent.\nTarget: ${target.jid}\nAction: ${action.type}\nToken: ${token}\nReply with .wact confirm ${token} to execute, or .wact cancel ${token}.`
+    }
 
     if (['bash', 'multi_bash', 'runcode'].includes(t) && !isTrustedBotOwner()) {
         return '⛔ Shell/code execution is restricted to the bot owner.'
@@ -1484,8 +1493,8 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         const url = tc.url || ''
         const caption = tc.caption || ''
         const type = t === 'send_video' ? 'video' : t === 'send_audio' ? 'audio' : (tc.type || 'image')
-        await conn.sendMessage(chatId, { [type]: { url }, caption }, { quoted: m }).catch(() => {})
-        return `sent ${type}`
+        if (!url) return 'ERROR: no media URL'
+        return stageWhatsAppAction({ type: 'sendMedia', url, caption, mediaType: type }, tc.to || tc.number || tc.target || chatId)
     }
 
     // ── system ────────────────────────────────────────────────────────────────
@@ -2034,16 +2043,18 @@ try {
     // ── wa_send ───────────────────────────────────────────────────────────────
     if (t === 'wa_send') {
         if (!conn) return 'ERROR: no connection'
-        const to = tc.number || tc.to || chatId
-        try { await conn.sendMessage(to, { text: tc.message || '' }); return `sent to ${to}` }
-        catch (e) { return `send failed: ${e.message}` }
+        const text = tc.message || tc.text || tc.content || ''
+        if (!text) return 'ERROR: no message text'
+        try { return await stageWhatsAppAction({ type: 'send', text }, tc.number || tc.to || tc.target || chatId) }
+        catch (e) { return `send preview failed: ${e.message}` }
     }
 
     // ── wa_react ──────────────────────────────────────────────────────────────
     if (t === 'wa_react') {
         if (!conn || !m) return 'ERROR: no connection'
         try {
-            await conn.sendMessage(chatId, { react: { text: tc.emoji || '👍', key: m.key } })
+            const targetKey = m.quoted?.key || m.quoted?.message?.key || m.key
+            await conn.sendMessage(chatId, { react: { text: tc.emoji || '👍', key: targetKey } })
             return `reacted: ${tc.emoji}`
         } catch (e) { return `react failed: ${e.message}` }
     }
@@ -2889,15 +2900,13 @@ ${r.output.trim().slice(0, maxLen)}`
     // ── send_whatsapp — send message to another WA number ────────────────────
     if (t === 'send_whatsapp' || t === 'send_message' || t === 'whatsapp_send') {
         if (!conn) return 'ERROR: no WhatsApp connection context'
-        const rawNum = (tc.to || tc.number || tc.phone || '').replace(/[^0-9]/g, '')
+        const rawNum = tc.to || tc.number || tc.phone || tc.target || ''
         const msgText = tc.text || tc.message || tc.content || ''
         if (!rawNum) return 'ERROR: no recipient number (to field)'
         if (!msgText) return 'ERROR: no message text'
-        const jid = rawNum.includes('@') ? rawNum : `${rawNum}@s.whatsapp.net`
         try {
-            await conn.sendMessage(jid, { text: msgText })
-            return `✅ Message sent to +${rawNum}`
-        } catch (e) { return `send_whatsapp error: ${e.message}` }
+            return await stageWhatsAppAction({ type: 'send', text: msgText }, rawNum)
+        } catch (e) { return `send_whatsapp preview error: ${e.message}` }
     }
 
     // ── diff_text — compare two texts ─────────────────────────────────────────

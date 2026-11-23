@@ -196,6 +196,15 @@ const detectIntent = (text) => {
     if (/\b(analyze|analyse|check|read|scan)\b.{0,20}\b(logs?|log file|error log|crash log)\b/.test(t) ||
         /\b(what('s| is) (in|wrong with))\b.{0,15}\b(log|error log|crash)\b/.test(t)) return 'log_analyze'
 
+    // ── Context-aware WhatsApp messaging ──────────────────────────────────────
+    if (/\b(send|message|msg|text|tell|forward)\b.{0,70}\b(reply|quoted|replied|tagged|mentioned|this\s+(pm|chat)|current\s+(pm|chat))\b/.test(t) ||
+        /\b(reply|quoted|replied|tagged|mentioned)\b.{0,50}\b(send|message|text|forward)\b/.test(t)) return /\bforward\b/.test(t) ? 'forward_msg' : 'send_pm'
+
+    if (/\b(unpin|remove\s+pin|un-pin)\b/.test(t)) return 'unpin_msg'
+    if (/\b(pin|attach)\b.{0,25}\b(message|this|that)\b/.test(t)) return 'pin_msg'
+    if (/\b(edit|change|correct|update)\b.{0,35}\b(message|text|what\s+i\s+sent)\b/.test(t)) return 'edit_msg'
+    if (/\b(react|reaction|reply with)\b.{0,30}(👍|❤️|❤|😂|😮|😢|🙏|🤣|like|love|laugh|emoji)/u.test(t)) return 'react_msg'
+
     // ── Send PM / private message to a phone number ──────────────────────────
     if (/\b(send|message|msg|text|forward|tell)\b.{1,50}\b(to\s+)?\+?\d{7,15}\b/.test(t) ||
         /\bpm\s+\+?\d{7,15}\b/.test(t) ||

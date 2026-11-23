@@ -6,6 +6,7 @@ const fs = require('fs')
 const path = require('path')
 const { sendGroupReply } = require('../Library/lib/group-mentions')
 const { getInteractiveReply } = require('../Library/lib/interactive-replies')
+const waActions = require('../Library/lib/wa-actions')
 
 // Pre-warm library modules so first command has zero load delay
 try { require('../Library/actions/music') } catch {}
@@ -1526,6 +1527,9 @@ const handleMessage = async (conn, rawMsg) => {
                 if (intent === 'delete_msg') {
                     const quoted = m.quoted
                     if (!quoted) { await reply('❓ Quote the message you want me to delete.'); return }
+                    let senderAdmin = false; let botAdmin = false
+                    try { const gm = await conn.groupMetadata(chat); senderAdmin = (gm.participants || []).some(p => p.id === sender && p.admin); botAdmin = (gm.participants || []).some(p => p.id === conn.user?.id && p.admin) } catch {}
+                    if (!quoted.key?.fromMe && !(m.isGroup && botAdmin && (senderAdmin || isOwner))) { await reply('❌ I can delete my own message, or a group admin can authorize deletion.'); return }
                     try {
                         await conn.sendMessage(chat, { delete: quoted.key })
                         await react('🗑️')
@@ -2454,7 +2458,8 @@ const handleMessage = async (conn, rawMsg) => {
                     if (!isOwner) { await reply('❌ Owner only — sending PMs to numbers.'); return }
                     const numM = text.match(/\b(\+?(\d{7,15}))\b/)
                     const num  = numM ? numM[2] : null
-                    if (!num) { await reply('❓ Include a phone number.\nExample: *Bera send hello to 254712345678*'); return }
+                    const targetSpec = num || (/\b(tag|tagged|mention|mentioned)\b/i.test(text) ? 'tag' : /\b(reply|quoted|replied)\b/i.test(text) ? 'reply' : /\b(this\s+(pm|chat)|current\s+(pm|chat))\b/i.test(text) ? 'this pm' : null)
+                    if (!targetSpec) { await reply('❓ Specify a number, reply, tag, or current private chat.\nExample: *Agent send hello to this chat*'); return }
                     // Extract the message part — what comes between "send/message/text" and "to NUMBER" or after "pm NUMBER"
                     let msg = ''
                     const withTo = text.match(/(?:send|message|text|tell|forward)\s+(.+?)\s+to\s+\+?\d{7,15}/i)
@@ -2469,11 +2474,9 @@ const handleMessage = async (conn, rawMsg) => {
                     msg = msg.replace(/^["'](.+)["']$/, '$1').trim()
                     if (!msg || msg.length < 1) { await reply('❓ What message should I send?\nExample: *Bera send "hello brother" to 254712345678*'); return }
                     try {
-                        await react('📨')
-                        const jid = num.replace(/\D/g,'') + '@s.whatsapp.net'
-                        await conn.sendMessage(jid, { text: msg })
-                        await react('✅')
-                        await reply('✅ *Message sent* to *+' + num.replace(/\D/g,'') + '*\n📨 _' + msg + '_')
+                        const target = await waActions.resolveTarget(conn, m, targetSpec, { allowSpecial: true })
+                        const token = waActions.stage(sender, { type: 'send', jid: target.jid, number: target.number, text: msg })
+                        await reply(`⏳ Preview only — nothing was sent.\nTarget: ${target.jid}\nMessage: ${msg}\nToken: ${token}\nReply: .wact confirm ${token}`)
                     } catch(e) { await react('❌'); await reply('❌ Failed to send: ' + e.message) }
                     return
                 }
@@ -2483,17 +2486,14 @@ const handleMessage = async (conn, rawMsg) => {
                     if (!isOwner) { await reply('❌ Owner only — forwarding messages to numbers.'); return }
                     const numM = text.match(/\b(\d{7,15})\b/)
                     const num  = numM ? numM[1] : null
-                    if (!num) { await reply('❓ Include a phone number.\nExample: *agent forward this to 254712345678*'); return }
+                    const targetSpec = num || (/\b(tag|tagged|mention|mentioned)\b/i.test(text) ? 'tag' : /\b(this\s+(pm|chat)|current\s+(pm|chat))\b/i.test(text) ? 'this pm' : null)
+                    if (!targetSpec) { await reply('❓ Specify a number, tag, or current private chat.'); return }
                     const qMsg = m.quoted && m.quoted.message ? m.quoted.message : null
                     if (!qMsg) { await reply('❓ Quote the message you want me to forward, then say:\n*agent forward this to 254712345678*'); return }
                     try {
-                        await react('📤')
-                        const jid = num + '@s.whatsapp.net'
-                        await conn.copyNForward(jid, m.quoted, true).catch(async () => {
-                            await conn.sendMessage(jid, qMsg)
-                        })
-                        await react('✅')
-                        await reply('✅ Message forwarded to *+' + num + '*')
+                        const target = await waActions.resolveTarget(conn, m, targetSpec, { allowSpecial: true })
+                        const token = waActions.stage(sender, { type: 'forward', jid: target.jid, number: target.number, message: m.quoted })
+                        await reply(`⏳ Preview only — nothing was forwarded.\nTarget: ${target.jid}\nToken: ${token}\nReply: .wact confirm ${token}`)
                     } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
                     return
                 }
@@ -2502,12 +2502,44 @@ const handleMessage = async (conn, rawMsg) => {
                 if (intent === 'pin_msg') {
                     if (!m.isGroup) { await reply('❌ This only works in groups.'); return }
                     const targetKey = m.quoted ? m.quoted.key : m.key
+                    let senderAdmin = false
+                    try { const gm = await conn.groupMetadata(chat); senderAdmin = (gm.participants || []).some(p => p.id === sender && p.admin) } catch {}
+                    if (!isAdmin || (!senderAdmin && !isOwner)) { await reply('❌ The bot and requesting user must have group admin rights.'); return }
                     try {
                         await react('📌')
                         await conn.sendMessage(chat, { pin: { type: 1, time: 604800, key: targetKey } })
                         await react('✅')
                         await reply('📌 Message pinned for 7 days.')
                     } catch(e) { await react('❌'); await reply('❌ Failed to pin: ' + e.message) }
+                    return
+                }
+
+                if (intent === 'unpin_msg') {
+                    if (!m.isGroup) { await reply('❌ This only works in groups.'); return }
+                    const targetKey = m.quoted ? m.quoted.key : m.key
+                    let senderAdmin = false
+                    try { const gm = await conn.groupMetadata(chat); senderAdmin = (gm.participants || []).some(p => p.id === sender && p.admin) } catch {}
+                    if (!isAdmin || (!senderAdmin && !isOwner)) { await reply('❌ The bot and requesting user must have group admin rights.'); return }
+                    try { await conn.sendMessage(chat, { pin: { type: 0, time: 0, key: targetKey } }); await reply('✅ Message unpinned.') }
+                    catch (e) { await reply('❌ Failed to unpin: ' + e.message) }
+                    return
+                }
+
+                if (intent === 'edit_msg') {
+                    const target = m.quoted
+                    const replacement = text.replace(/^\s*(edit|change|correct|update)\b/i, '').replace(/^\s*(this|that)\s*(message|text)?\s*(to)?\s*/i, '').trim()
+                    if (!target?.key?.fromMe) { await reply('❌ For safety, I can edit only a recent message sent by this bot. Quote that message and provide the replacement text.'); return }
+                    if (!replacement) { await reply('❓ Provide the replacement text.'); return }
+                    try { await conn.sendMessage(chat, { text: replacement, edit: target.key }); await reply('✅ Bot message edited.') }
+                    catch (e) { await reply('❌ Edit failed: ' + e.message) }
+                    return
+                }
+
+                if (intent === 'react_msg') {
+                    const key = m.quoted?.key || m.key
+                    const emoji = (text.match(/[\u{1F300}-\u{1FAFF}]|❤️|❤/u) || [])[0] || '👍'
+                    try { await conn.sendMessage(chat, { react: { text: emoji, key } }); await reply(`✅ Reacted ${emoji}`) }
+                    catch (e) { await reply('❌ Reaction failed: ' + e.message) }
                     return
                 }
 
@@ -2658,6 +2690,9 @@ const handleMessage = async (conn, rawMsg) => {
                 // ══ DELETE QUOTED/THIS MESSAGE ═════════════════════════════════
                 if (intent === 'delete_this') {
                     const delKey = m.quoted ? m.quoted.key : m.key
+                    let senderAdmin = false; let botAdmin = false
+                    if (m.isGroup) { try { const gm = await conn.groupMetadata(chat); senderAdmin = (gm.participants || []).some(p => p.id === sender && p.admin); botAdmin = (gm.participants || []).some(p => p.id === conn.user?.id && p.admin) } catch {} }
+                    if (m.quoted && !delKey?.fromMe && !(m.isGroup && botAdmin && (senderAdmin || isOwner))) { await reply('❌ I can delete my own message, or a group admin can authorize deletion.'); return }
                     try {
                         await conn.sendMessage(chat, { delete: delKey })
                         await react('🗑️')
