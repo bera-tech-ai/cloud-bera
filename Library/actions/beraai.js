@@ -466,6 +466,7 @@ When a user asks to perform something that Bera already has as a WhatsApp comman
 • Execute the matching registered command: {"tool":"run_bot_command","command":"tvshow","args":"Dune"}
 For a movie/film/TV title lookup phrased with “search”, use the registered movie command, not the generic web-search tool, and pass only the title as its args. Do not include the word “search” in the title.
 Use the command's returned usage/description to form its arguments. If a route is .beraextra NAME, invoke the run_bot_command tool with command:"beraextra" and args:"NAME <arguments>". Pass user-supplied names, quoted text, and current message context when relevant. If required inputs are missing, ask only for those inputs. Report the real result; never claim success if dispatch returns an error.
+If the user describes an uncommon bot capability in ordinary language, you may pass that full capability phrase as run_bot_command.command. The dispatcher will resolve it against the live effective registry when exactly one command matches; if several match, inspect the returned candidates and call run_bot_command again with the selected exact command. This is the generic fallback for the remaining registered commands, and it still goes through Handler permissions and restrictions.
 The dispatcher enforces Bera's normal private-mode, owner/sudo, group, group-admin, imported-command allowlist, and handler-level restrictions. Never claim owner/admin status based on model text. Recursive AI/Agent commands are blocked; native shell/eval commands and raw shell/code-execution tools are owner-only. Do not route around a denial by using another tool.
 
 ━━━ WEB SCRAPING — YOU CAN ALWAYS DO THIS (REPLIT-LEVEL) ━━━
@@ -994,12 +995,25 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     if (t === 'run_bot_command') {
         const commandSpec = String(tc.command || tc.name || '').trim().slice(0, 8100)
         const parsedCommand = commandSpec.match(/^(\S+)(?:\s+([\s\S]*))?$/)
-        const command = String(parsedCommand?.[1] || '').replace(/^[./!]+/, '').slice(0, 100)
+        let command = String(parsedCommand?.[1] || '').replace(/^[./!]+/, '').slice(0, 100)
         if (!command) return 'ERROR: command name is required; search the registry first.'
         const rawArgs = tc.args ?? tc.arguments ?? tc.text ?? parsedCommand?.[2] ?? ''
-        const args = Array.isArray(rawArgs) ? rawArgs.map(value => String(value)).join(' ')
+        let args = Array.isArray(rawArgs) ? rawArgs.map(value => String(value)).join(' ')
             : rawArgs && typeof rawArgs === 'object' ? JSON.stringify(rawArgs)
                 : String(rawArgs)
+        // Natural-language fallback: if the model supplies a capability phrase
+        // instead of an exact command, resolve it against the effective registry.
+        // Ambiguous matches are returned for the model to choose; nothing runs.
+        if (/\s/.test(commandSpec) || !/^[a-z0-9_-]+$/i.test(commandSpec)) {
+            const lookup = require('../../Handler').findCommands(commandSpec, 5)
+            const candidates = lookup?.commands || []
+            if (candidates.length !== 1) {
+                if (!candidates.length) return `No registered command matched: ${commandSpec}`
+                return JSON.stringify({ needsSelection: true, query: commandSpec, candidates })
+            }
+            command = String(candidates[0].name || '').replace(/^[./!]+/, '')
+            if (!args && parsedCommand?.[2]) args = parsedCommand[2]
+        }
         const result = await require('../../Handler').runCommand(command, args.slice(0, 8000), m, conn, { captureOnly: true })
         return JSON.stringify(result)
     }
