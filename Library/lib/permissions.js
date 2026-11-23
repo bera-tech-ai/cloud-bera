@@ -29,6 +29,15 @@ const GROUP_ONLY = new Set([
 
 const normalize = jid => String(jid || '').replace(/:\d+(?=@)/, '').toLowerCase()
 const phone = jid => normalize(jid).split('@')[0]
+const identityCandidates = value => {
+    if (!value) return []
+    if (typeof value === 'string') return [value]
+    return [value.id, value.jid, value.lid, value.phoneNumber, value.participantAlt, value.remoteJidAlt].filter(Boolean)
+}
+const identityMatches = (left, right) => {
+    const a = identityCandidates(left), b = identityCandidates(right)
+    return a.some(x => b.some(y => normalize(x) === normalize(y) || phone(x) === phone(y)))
+}
 const listHas = (list, jid) => {
     const n = normalize(jid), p = phone(jid)
     return (Array.isArray(list) ? list : []).some(x => normalize(x) === n || phone(x) === p)
@@ -46,9 +55,10 @@ const getAccessContext = async ({ conn, chat, sender, isOwner = false, authorize
         try {
             metadata = await conn.groupMetadata(chat)
             const participants = metadata?.participants || []
-            const find = jid => participants.find(p => normalize(p.id || p.jid) === normalize(jid))
-            const senderParticipant = find(sender)
-            const botParticipant = find(conn.user?.id)
+            const senderIds = [sender]
+            const botIds = [conn.user?.id]
+            const senderParticipant = participants.find(p => identityMatches(p, senderIds) || identityMatches(p, { id: sender, participantAlt: sender?.participantAlt }))
+            const botParticipant = participants.find(p => identityMatches(p, botIds) || identityMatches(p, { id: conn.user?.id, participantAlt: conn.user?.lid }))
             isSenderAdmin = Boolean(senderParticipant?.admin === 'admin' || senderParticipant?.admin === 'superadmin' || senderParticipant?.isAdmin)
             isBotAdmin = Boolean(botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin' || botParticipant?.isAdmin)
         } catch {}
@@ -91,4 +101,4 @@ const authorizeCommand = (command, access, options = {}) => {
     return { allowed: true, policy }
 }
 
-module.exports = { OWNER_ONLY, GROUP_ADMIN_ONLY, GROUP_ONLY, normalize, phone, getAccessContext, policyFor, authorizeCommand }
+module.exports = { OWNER_ONLY, GROUP_ADMIN_ONLY, GROUP_ONLY, normalize, phone, identityCandidates, identityMatches, getAccessContext, policyFor, authorizeCommand }

@@ -1056,10 +1056,12 @@ const handleMessage = async (conn, rawMsg) => {
                 // Without this, every group command returns "❌ I need admin rights"
                 // even when the bot IS actually an admin.
                 let isAdmin = false
+                let isSenderAdmin = false
                 if (m.isGroup) {
                     try {
-                        const _gm = await conn.groupMetadata(chat)
-                        isAdmin = (_gm.participants || []).some(p => p.id === conn.user?.id && p.admin)
+                        const _access = await getAccessContext({ conn, chat, sender, isOwner, authorized })
+                        isAdmin = _access.isBotAdmin
+                        isSenderAdmin = _access.isSenderAdmin
                     } catch (_e) {}
                 }
 
@@ -2500,11 +2502,8 @@ const handleMessage = async (conn, rawMsg) => {
 
                 // ══ PIN MESSAGE ════════════════════════════════════════════════
                 if (intent === 'pin_msg') {
-                    if (!m.isGroup) { await reply('❌ This only works in groups.'); return }
                     const targetKey = m.quoted ? m.quoted.key : m.key
-                    let senderAdmin = false
-                    try { const gm = await conn.groupMetadata(chat); senderAdmin = (gm.participants || []).some(p => p.id === sender && p.admin) } catch {}
-                    if (!isAdmin || (!senderAdmin && !isOwner)) { await reply('❌ The bot and requesting user must have group admin rights.'); return }
+                    if (m.isGroup && (!isAdmin || (!isSenderAdmin && !isOwner))) { await reply('❌ The bot and requesting user must have group admin rights.'); return }
                     try {
                         await react('📌')
                         await conn.sendMessage(chat, { pin: { type: 1, time: 604800, key: targetKey } })
@@ -2515,11 +2514,8 @@ const handleMessage = async (conn, rawMsg) => {
                 }
 
                 if (intent === 'unpin_msg') {
-                    if (!m.isGroup) { await reply('❌ This only works in groups.'); return }
                     const targetKey = m.quoted ? m.quoted.key : m.key
-                    let senderAdmin = false
-                    try { const gm = await conn.groupMetadata(chat); senderAdmin = (gm.participants || []).some(p => p.id === sender && p.admin) } catch {}
-                    if (!isAdmin || (!senderAdmin && !isOwner)) { await reply('❌ The bot and requesting user must have group admin rights.'); return }
+                    if (m.isGroup && (!isAdmin || (!isSenderAdmin && !isOwner))) { await reply('❌ The bot and requesting user must have group admin rights.'); return }
                     try { await conn.sendMessage(chat, { pin: { type: 0, time: 0, key: targetKey } }); await reply('✅ Message unpinned.') }
                     catch (e) { await reply('❌ Failed to unpin: ' + e.message) }
                     return
