@@ -5,11 +5,12 @@
 const axios = require('axios')
 const xcasper = require('./xcasper')
 const config = require('../../Config')
+const { _sanitizeIdentity } = require('../lib/bera')
 
 // Xcasper is the sole conversational provider for ChatBera.
 const _overchat = async (q, timeoutMs = 18000) => {
     const r = await xcasper.chat([{ role: 'user', content: q }], { timeout: timeoutMs })
-    return r.success ? r.text : null
+    return r.success ? _sanitizeIdentity(r.text) : null
 }
 
 // ── Pre-built style profile (trained on real chat exports) ────────────────────
