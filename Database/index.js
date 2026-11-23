@@ -9,6 +9,15 @@ const dbDir = path.resolve('./Database')
 const dbPath = path.join(dbDir, 'db.json')
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true })
 
+// Every bot must have its own tenant. BERA_AUTH_SESSION_ID is used as a
+// fallback so existing deployments can opt into isolation by setting the auth
+// session ID, while BERA_TENANT_ID remains the explicit application-data ID.
+const tenantId = String(
+    process.env.BERA_TENANT_ID ||
+    process.env.BERA_AUTH_SESSION_ID ||
+    'default'
+).trim() || 'default'
+
 const defaultData = {
     users: {},
     groups: {},
@@ -56,16 +65,63 @@ const persistPostgres = () => {
     if (!_pool || !_db) return Promise.resolve()
     const snapshot = JSON.stringify(_db.getState())
     _persistQueue = _persistQueue.then(() => _pool.query(
-        `INSERT INTO bera_state (id, data, updated_at) VALUES (1, $1::jsonb, NOW())
-         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
-        [snapshot]
+        `INSERT INTO bera_state (tenant_id, data, updated_at)
+         VALUES ($1, $2::jsonb, NOW())
+         ON CONFLICT (tenant_id)
+         DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+        [tenantId, snapshot]
     )).catch(error => console.error('[DB] PostgreSQL write failed:', error.message))
     return _persistQueue
 }
 
-const writeState = () => {
-    _db.write()
-    return persistPostgres()
+const migrateStateTable = async () => {
+    // New installations use tenant_id as the primary key. IF NOT EXISTS keeps
+    // this safe for deployments that already have the old id-based table.
+    await _pool.query(`
+        CREATE TABLE IF NOT EXISTS bera_state (
+            tenant_id TEXT PRIMARY KEY,
+            data JSONB NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+
+    const columns = await _pool.query(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'bera_state'
+    `)
+    const names = new Set(columns.rows.map(row => row.column_name))
+
+    // Migrate the original schema:
+    //   id INTEGER PRIMARY KEY, data JSONB, updated_at TIMESTAMPTZ
+    // The existing global row is assigned to the current tenant so its data is
+    // preserved for the bot performing the first migration.
+    if (names.has('id') && !names.has('tenant_id')) {
+        const client = await _pool.connect()
+        try {
+            await client.query('BEGIN')
+            await client.query('ALTER TABLE bera_state ADD COLUMN tenant_id TEXT')
+            await client.query(
+                'UPDATE bera_state SET tenant_id = $1 WHERE id = 1 AND tenant_id IS NULL',
+                [tenantId]
+            )
+            await client.query(
+                "UPDATE bera_state SET tenant_id = $1 WHERE tenant_id IS NULL",
+                [tenantId]
+            )
+            await client.query('ALTER TABLE bera_state ALTER COLUMN tenant_id SET NOT NULL')
+            await client.query('ALTER TABLE bera_state DROP CONSTRAINT IF EXISTS bera_state_pkey')
+            await client.query('ALTER TABLE bera_state ADD CONSTRAINT bera_state_pkey PRIMARY KEY (tenant_id)')
+            await client.query('COMMIT')
+            console.log(`[DB] Migrated bera_state from global id=1 to tenant: ${tenantId}`)
+        } catch (error) {
+            await client.query('ROLLBACK').catch(() => {})
+            throw error
+        } finally {
+            client.release()
+        }
+    }
 }
 
 const initPostgres = async () => {
@@ -83,18 +139,16 @@ const initPostgres = async () => {
             connectionTimeoutMillis: 15000,
             ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false }
         })
-        await _pool.query(`
-            CREATE TABLE IF NOT EXISTS bera_state (
-                id INTEGER PRIMARY KEY,
-                data JSONB NOT NULL,
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-        `)
-        const result = await _pool.query('SELECT data FROM bera_state WHERE id = 1')
+
+        await migrateStateTable()
+        const result = await _pool.query(
+            'SELECT data FROM bera_state WHERE tenant_id = $1',
+            [tenantId]
+        )
         if (result.rows[0]?.data) _db.setState(mergeDefaults(defaultData, result.rows[0].data)).write()
         await persistPostgres()
         _provider = 'postgresql'
-        console.log('[DB] PostgreSQL persistence enabled')
+        console.log(`[DB] PostgreSQL persistence enabled for tenant: ${tenantId}`)
         return true
     } catch (error) {
         console.error('[DB] PostgreSQL unavailable; using JSON fallback:', error.message)
@@ -118,11 +172,17 @@ const initDb = async () => {
         get data() { return _db.getState() },
         write: () => writeState(),
         get provider() { return _provider },
+        get tenantId() { return tenantId },
         get ready() { return Boolean(_db) },
         get pool() { return _pool }
     }
-    console.log('[DB] Database initialized using', _provider, _provider === 'json' ? `at ${dbPath}` : 'with local JSON cache')
+    console.log('[DB] Database initialized using', _provider, _provider === 'json' ? `at ${dbPath}` : `with tenant ${tenantId} and local JSON cache`)
     return global.db
+}
+
+const writeState = () => {
+    _db.write()
+    return persistPostgres()
 }
 
 const getUser = sender => {
