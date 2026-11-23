@@ -23,8 +23,10 @@ const config = {
     // ── Developer Identity (Bruce Bera) ─────────────────────────────────────
     // This is the real person behind Bera AI. The bot always knows and reveals
     // this identity when asked about its developer/creator/owner.
+    developerOrganization: 'Bera Tech',
     developer: 'Bruce Bera',
     developerFullName: 'Bruce Bera',
+    developerRole: 'Kenyan software engineer and GitHub developer',
     developerPhone: '254116763755',
     developerEmail: 'beratech00@gmail.com',
     developerAge: 21,

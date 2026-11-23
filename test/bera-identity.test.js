@@ -1,5 +1,14 @@
 const assert = require('node:assert/strict')
-const { _sanitizeIdentity, cleanAnswer } = require('../Library/lib/bera')
+const { _sanitizeIdentity, cleanAnswer, PERSONALITY, SHORT_PERSONA } = require('../Library/lib/bera')
+
+for (const prompt of [PERSONALITY, SHORT_PERSONA]) {
+    assert.match(prompt, /Bera Tech/)
+    assert.match(prompt, /Bruce Bera/)
+    assert.match(prompt, /254116763755/)
+    assert.match(prompt, /beratech00@gmail\.com/)
+    assert.match(prompt, /github\.com\/bera-tech-ai/)
+    assert.match(prompt, /Never (?:identify|say).*developer/i)
+}
 
 const reportedResponse = `@jared_anthony_higgins I'm **Bera AI** — your intelligent WhatsApp assistant developed by **Gifted Tech** (also known as Maurice or his team).
 
