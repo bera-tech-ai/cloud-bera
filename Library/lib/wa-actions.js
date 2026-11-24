@@ -116,6 +116,22 @@ const resolveTarget = async (conn, m, spec, options = {}) => {
             // Referent lookup is best-effort; fall through to the generic error.
         }
     }
+    if (!jid && lower.startsWith('name:')) {
+        // Named recipient ("forward this to babe"): resolve against the name
+        // directory — pushNames the bot has seen plus aliases the user taught
+        // with "remember <name> is <number>". The bot cannot read the user's
+        // phone contacts, so an unknown name is an error, never a guess.
+        const name = value.slice(5).trim()
+        try {
+            const referents = require('./referents')
+            const resolved = referents.resolveName(name)
+            if (resolved?.ambiguous) throw new Error(referents.clarificationReply(resolved.candidates.map(c => c.jid)))
+            if (resolved?.jid) jid = resolved.jid
+            else throw new Error(`I don't know who "${name}" is yet. I can't see your phone contacts — tag them, reply to one of their messages, or give me their number (e.g. forward this to 254712345678). To teach me, say: remember ${name} is 254712345678`)
+        } catch (error) {
+            if (error?.message?.includes('Which person did you mean') || error?.message?.includes("don't know who")) throw error
+        }
+    }
     if (!jid) throw new Error('No valid WhatsApp recipient was found. Use a number, reply, tag, or current private chat.')
     if (jid.endsWith('@g.us') || jid.endsWith('@newsletter')) {
         if (!options.allowSpecial) throw new Error('This action requires a private WhatsApp recipient.')

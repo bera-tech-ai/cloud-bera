@@ -15,6 +15,63 @@ const REFERENT_TTL_MS = 10 * 60 * 1000
 const MAX_PERSONS = 5
 const MAX_CHATS = 500
 
+// ── Name directory (forward/send to a named person) ──────────────────────
+// The bot cannot read the user's phone contacts, so names come from two
+// sources only: (1) pushNames seen on inbound messages (the sender's own
+// WhatsApp display name — NOT the user's saved contact name), learned in
+// recordInbound; (2) aliases the user teaches with "remember <name> is
+// <number>", persisted in db.data.nameAliases. Never guess a recipient:
+// resolveName returns null / ambiguous and callers must ask instead.
+const names = new Map() // normalized name -> { jid, name, source, at }
+const MAX_NAMES = 2000
+const normalizeName = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
+const learnName = (jid, name) => {
+    const key = normalizeName(name)
+    const id = normalizeJid(jid)
+    if (!key || key.length < 2 || !id) return
+    if (!names.has(key)) names.set(key, { jid: id, name: String(name).trim(), source: 'pushName', at: Date.now() })
+    while (names.size > MAX_NAMES) names.delete(names.keys().next().value)
+}
+const loadAliases = () => {
+    try {
+        const saved = global.db?.data?.nameAliases
+        if (saved && typeof saved === 'object') {
+            for (const [name, jid] of Object.entries(saved)) {
+                const key = normalizeName(name)
+                if (key && jid) names.set(key, { jid: normalizeJid(jid), name: String(name).trim(), source: 'alias', at: Date.now() })
+            }
+        }
+    } catch {}
+}
+const rememberAlias = (name, jid) => {
+    const key = normalizeName(name)
+    const id = normalizeJid(jid)
+    if (!key || key.length < 2 || !id) return false
+    loadAliases()
+    names.set(key, { jid: id, name: String(name).trim(), source: 'alias', at: Date.now() })
+    try {
+        if (global.db?.data) {
+            global.db.data.nameAliases = global.db.data.nameAliases || {}
+            global.db.data.nameAliases[String(name).trim()] = id
+            if (typeof global.db.write === 'function') global.db.write().catch(() => {})
+        }
+    } catch {}
+    return true
+}
+// Resolve a person's name. Returns {jid} | {ambiguous:true, candidates:[{jid,name}]}
+// | null when unknown. Matching is exact, then prefix/substring on known names.
+const resolveName = (name) => {
+    const key = normalizeName(name)
+    if (!key) return null
+    loadAliases()
+    if (names.has(key)) return { jid: names.get(key).jid }
+    const pool = [...names.values()].filter(n => n.jid && (n.jid && (normalizeName(n.name).startsWith(key) || key.startsWith(normalizeName(n.name)) || normalizeName(n.name).includes(key))))
+    const deduped = [...new Map(pool.map(n => [n.jid, n])).values()]
+    if (deduped.length === 1) return { jid: deduped[0].jid }
+    if (deduped.length > 1) return { ambiguous: true, candidates: deduped.slice(0, MAX_PERSONS) }
+    return null
+}
+
 // chatJid -> { persons: [{jid, at, kind}], lastBotMessageKey, lastUserMessageKey,
 //              lastMessageKey, lastQuotedPerson, lastMentionedPerson, updatedAt }
 const store = new Map()
@@ -67,6 +124,9 @@ const recordInbound = (m) => {
     if (!chat || !m?.key) return null
     const entry = ensureEntry(chat)
     if (m.sender) rememberPerson(entry, m.sender, 'sender')
+    // Learn the sender's own WhatsApp display name for name resolution.
+    // This is their pushName, not the user's saved contact name.
+    if (m.sender && m.pushName) learnName(m.sender, m.pushName)
     const quotedSender = m?.quoted?.sender || m?.quoted?.key?.participant || m?.quoted?.key?.participantAlt
     if (quotedSender) {
         entry.lastQuotedPerson = normalizeJid(quotedSender)
@@ -167,5 +227,10 @@ module.exports = {
     clarificationReply,
     clearChat,
     getEntry,
+    learnName,
+    rememberAlias,
+    resolveName,
+    normalizeName,
     _store: store,
+    _names: names,
 }

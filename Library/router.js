@@ -204,12 +204,26 @@ const detectIntent = (text) => {
     if (/\b(pin|attach)\b.{0,25}\b(message|this|that)\b/.test(t)) return 'pin_msg'
     if (/\b(edit|change|correct|update)\b.{0,35}\b(message|text|what\s+i\s+sent)\b/.test(t)) return 'edit_msg'
     if (/\b(remove|clear|take off|delete)\b.{0,20}\b(my\s+)?(reaction|react)\b/.test(t) || /\bremove\s+(my\s+)?reaction\b/.test(t)) return 'remove_reaction'
-    if (/\b(react|reaction|reply with)\b.{0,30}(👍|❤️|❤|😂|😮|😢|🙏|🤣|like|love|laugh|emoji)/u.test(t)) return 'react_msg'
+    if (/\b(react|reaction|reply with)\b.{0,30}([\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]|❤️|❤|like|love|laugh|broken heart|emoji)/u.test(t)) return 'react_msg'
 
     // ── Send PM / private message to a phone number ──────────────────────────
-    if (/\b(send|message|msg|text|forward|tell)\b.{1,50}\b(to\s+)?\+?\d{7,15}\b/.test(t) ||
+    // NOTE: "forward" is deliberately NOT in this verb list — forward-to-a-
+    // number is handled by the forward_msg patterns below. It used to be here
+    // and shadowed them, so "forward this to 2547..." staged a new send.
+    if (/\b(send|message|msg|text|tell)\b.{1,50}\b(to\s+)?\+?\d{7,15}\b/.test(t) ||
         /\bpm\s+\+?\d{7,15}\b/.test(t) ||
         /\b(send|message)\s+(him|her|them|this\s+number|that\s+number)\b/.test(t)) return 'send_pm'
+
+    // ── Teach a contact name ("remember babe is 254712345678") ─────────────
+    if (/\bremember\s+[a-z][a-z' -]{1,30}\s+(is|=|as)\s+\+?\d{7,15}\b/i.test(t)) return 'remember_name'
+
+    // ── Send to a named person ("send hello to babe") ───────────────────────
+    // Names carry no digits, so the number patterns above never match them.
+    // Guard: "remind me to send ..." is a reminder, not a send; and any
+    // forward verb belongs to forward_msg, not send_pm ("forward this
+    // message to babe" contains the word "message").
+    if (!/^\s*remind\b/i.test(t) && !/\b(forward|relay|resend)\b/i.test(t) &&
+        /\b(send|message|msg|text|tell)\b.{0,50}\bto\s+[a-z][a-z' -]{1,30}/i.test(t)) return 'send_pm'
 
     // ── Schedule message ─────────────────────────────────────────────────────
     if (/\b(schedule|send|remind|remind me|set reminder|remind (me|them)|send at|send in)\b.{0,30}\b(message|msg|text|reminder)\b/.test(t) ||
@@ -689,6 +703,13 @@ const detectIntent = (text) => {
     // ── Forward quoted message to a number ───────────────────────────────────
     if (/\b(forward|relay|resend|send)\b.{0,30}\b(this|quoted|message|msg)\b.{0,30}\b(to\s+)?\+?\d{7,15}\b/i.test(t) ||
         /\b(forward|relay)\b.{0,20}\b(to\s+)?\+?\d{7,15}\b/i.test(t)) return 'forward_msg'
+
+    // ── Forward quoted message to a named person ("forward this to babe") ───
+    // Names carry no digits, so the number patterns above never match them.
+    // Without this, the request falls through to the chat loop, which has no
+    // forward tool and invents "I don't have access to forward".
+    if (!/^\s*remind\b/i.test(t) &&
+        /\b(forward|relay|resend)\b.{0,40}\bto\s+[a-z][a-z' -]{1,30}/i.test(t)) return 'forward_msg'
 
     // ── Pin a message ────────────────────────────────────────────────────────
     if (/\b(pin|pin\s+this|pin\s+(this\s+)?(message|msg))\b/i.test(t)) return 'pin_msg'
