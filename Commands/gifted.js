@@ -18,8 +18,10 @@ const {
     gtGoogleImages, gtUnsplash, gtTikTokSearch, gtStickerSearch,
     gtLyricsV2, gtSpotifyLyrics, gtSpotifyPlaylist, gtSoundCloud, gtHearthis, gtHearthisSet, gtChord,
     gtDefine, gtWikimedia, gtPlaystore, gtHappyMod, gtApkMirror, gtNpmSearch, gtWattpad,
-    GT, KEY
+    GT, KEY, unavailableReason, VISION_UNAVAILABLE_MESSAGE
 } = require('../Library/actions/giftedapi')
+const { formatMovieCard, formatSearchCard } = require('../Library/lib/bera-card')
+const { IMAGE_GENERATION_UNAVAILABLE } = require('../Library/actions/imagegen')
 
 const react = (conn, m, emoji) =>
     conn.sendMessage(m.chat, { react: { text: emoji, key: m.key } }).catch(() => {})
@@ -192,11 +194,9 @@ const handle = async (m, { conn, command, args, reply, prefix, text }) => {
         if (!text) return reply(`Usage: *${prefix}google <query>*`)
         await react(conn, m, '🔍')
         const results = await gtGoogle(text)
-        if (!results?.length) { await react(conn, m, '❌'); return reply(`❌ No results for: *${text}*`) }
+        if (!results?.length) { await react(conn, m, '❌'); return reply(`❌ No results for: *${text}*\n\n${unavailableReason('Web search')}`) }
         await react(conn, m, '✅')
-        const lines = results.slice(0, 5).map((x, i) =>
-            `*${i + 1}. ${x.title}*\n${x.snippet ? x.snippet.slice(0, 120) + '\n' : ''}🔗 ${x.link}`)
-        return reply(`🔍 *Google: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
+        return reply(formatSearchCard(text, results))
     }
 
     // ── WIKIPEDIA ─────────────────────────────────────────────────────────────
@@ -296,26 +296,14 @@ const handle = async (m, { conn, command, args, reply, prefix, text }) => {
         )
     }
 
-    // ── MOVIE INFO (NEW) ──────────────────────────────────────────────────────
+    // ── MOVIE INFO — TVMaze, spec §17 movie card ───────────────────────────────
     if (['movie','film','imdb'].includes(command)) {
         if (!text) return reply(`Usage: *${prefix}movie <title>*\n_Example: ${prefix}movie Inception_`)
         await react(conn, m, '🎬')
         const d = await gtMovie(text)
         if (!d || d.Response === 'False') { await react(conn, m, '❌'); return reply(`❌ Movie not found: *${text}*`) }
         await react(conn, m, '✅')
-        let out = `🎬 *${d.Title}* (${d.Year})\n${'─'.repeat(28)}\n`
-        if (d.Genre) out += `🎭 Genre: ${d.Genre}\n`
-        if (d.Director) out += `🎥 Director: ${d.Director}\n`
-        if (d.Actors) out += `👥 Cast: ${d.Actors}\n`
-        if (d.Runtime) out += `⏱ Runtime: ${d.Runtime}\n`
-        if (d.imdbRating) out += `⭐ IMDB: *${d.imdbRating}/10* (${d.imdbVotes} votes)\n`
-        if (d.Rated) out += `🔞 Rating: ${d.Rated}\n`
-        if (d.Language) out += `🌐 Language: ${d.Language}\n`
-        if (d.Plot) out += `\n📝 *Plot:*\n${d.Plot}`
-        if (d.Poster && d.Poster !== 'N/A') {
-            await conn.sendMessage(m.chat, { image: { url: d.Poster }, caption: out }, { quoted: m })
-        } else return reply(out)
-        return
+        return reply(formatMovieCard(d))
     }
 
     // ── ANIME SEARCH (NEW) ────────────────────────────────────────────────────
@@ -323,7 +311,7 @@ const handle = async (m, { conn, command, args, reply, prefix, text }) => {
         if (!text) return reply(`Usage: *${prefix}anime <name>*\n_Example: ${prefix}anime Naruto_`)
         await react(conn, m, '🎌')
         const data = await gtAnime(text)
-        if (!data?.length) { await react(conn, m, '❌'); return reply(`❌ No anime found: *${text}*`) }
+        if (!data?.length) { await react(conn, m, '❌'); return reply(`❌ ${unavailableReason('Anime lookup')}`) }
         await react(conn, m, '✅')
         const top = data[0]
         let out = `🎌 *${top.title}*`
@@ -443,12 +431,12 @@ const handle = async (m, { conn, command, args, reply, prefix, text }) => {
         return reply(`🎵 *Spotify: "${text}"*\n${'─'.repeat(28)}\n\n${lines.join('\n\n')}`)
     }
 
-    // ── AI IMAGE GENERATE ─────────────────────────────────────────────────────
+    // ── AI IMAGE GENERATE — explicitly disabled (see Library/actions/imagegen.js) ─
     if (['imagine','gen','aigen','flux','ai4k'].includes(command)) {
         if (!text) return reply(`Usage: *${prefix}imagine <prompt>*\n_Example: ${prefix}imagine a cyberpunk city at night_`)
         await react(conn, m, '🎨')
         const imgUrl = await gtImage(text)
-        if (!imgUrl) { await react(conn, m, '❌'); return reply('❌ Image generation failed. Try a different prompt.') }
+        if (!imgUrl) { await react(conn, m, '❌'); return reply(`❌ ${IMAGE_GENERATION_UNAVAILABLE}`) }
         await react(conn, m, '✅')
         return conn.sendMessage(m.chat, { image: { url: imgUrl }, caption: `🎨 *${text}*` }, { quoted: m })
     }
@@ -465,7 +453,7 @@ const handle = async (m, { conn, command, args, reply, prefix, text }) => {
             imageUrl = 'data:image/jpeg;base64,' + buf.toString('base64')
         }
         const description = await gtVision(imageUrl, text || 'Describe this image in detail. What do you see?')
-        if (!description) { await react(conn, m, '❌'); return reply('❌ Could not analyze image.') }
+        if (!description) { await react(conn, m, '❌'); return reply(`❌ ${VISION_UNAVAILABLE_MESSAGE}`) }
         await react(conn, m, '✅')
         return reply(`👁️ *Image Analysis*\n${'─'.repeat(28)}\n\n${description}`)
     }

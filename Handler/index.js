@@ -322,8 +322,10 @@ const handleReaction = async (conn, reactionMsg) => {
             } else if (orig.text && emoji === '🔍') {
                 await react('⏳')
                 const res = await webSearch(orig.text.slice(0, 200))
-                if (res.success) {
-                    await conn.sendMessage(chat, { text: `🔍 *${orig.text.slice(0, 60)}*\n\n${res.result}` }, { quoted: reactionMsg })
+                if (res.success && res.results?.length) {
+                    // web-search returns { results } (not `result`); format it.
+                    const { formatSearchResults } = require('../Library/actions/web-search')
+                    await conn.sendMessage(chat, { text: formatSearchResults(orig.text.slice(0, 200), res) }, { quoted: reactionMsg })
                     await react('✅')
                 } else await react('❌')
             }
@@ -1993,14 +1995,16 @@ const handleMessage = async (conn, rawMsg) => {
                     const query  = queryM ? queryM[1].trim() : text
                     try {
                         await react('🔍')
-                        const agent = require('../Library/actions/agent')
-                        const r = await agent.webScrape('https://duckduckgo.com/html/?q=' + encodeURIComponent(query))
-                        const snippets = (r.text||'').match(/class="result__snippet">([^<]+)</g)
-                        if (snippets && snippets.length) {
-                            const results = snippets.slice(0,4).map((s,i) => (i+1)+'. ' + s.replace(/class="[^"]+">|<\/[^>]+>/g,'').trim()).join('\n')
-                            await reply('╭══〘 *🔍 SEARCH: ' + query.slice(0,30) + '* 〙═⊷\n' + results.split('\n').map(l=>'┃ '+l).join('\n') + '\n╰══════════════════⊷')
+                        // Real provider chain (SearxNG → Brave → DuckDuckGo
+                        // Instant Answer) with the central search card (§17/§21),
+                        // instead of scraping DuckDuckGo HTML into a custom card.
+                        const { webSearch } = require('../Library/actions/web-search')
+                        const { formatSearchCard } = require('../Library/lib/bera-card')
+                        const res = await webSearch(query)
+                        if (res.success && res.results?.length) {
+                            await reply(formatSearchCard(query, res.results))
                         } else {
-                            await reply('❌ No results found for *' + query + '*')
+                            await reply(`❌ No results found for *${query}*${res.error ? `\n${res.error}` : ''}`)
                         }
                     } catch(e) { await reply('❌ Search failed: ' + e.message) }
                     return
@@ -4500,7 +4504,7 @@ const handleMessage = async (conn, rawMsg) => {
         const access = await getAccessContext({ conn, chat, sender, isOwner, authorized })
         const policy = authorizeCommand(command, access)
         if (!policy.allowed) {
-            return sendGroupReply(conn, m, `⛔ ${policy.reason}`, { cardTitle: command.toUpperCase(), cardSubtitle: 'BOT PERMISSION' })
+            return sendGroupReply(conn, m, `⛔ ${policy.reason}`, { cardTitle: command.toUpperCase(), cardSubtitle: 'BOT PERMISSION', cardType: 'permission' })
         }
         const isGroup = access.isGroup
         const isAdmin = access.isAdmin

@@ -1,5 +1,5 @@
 const config = {
-    botName: 'Bera',
+    botName: 'Bera AI',
     prefix: '.',
     owner: process.env.OWNER_NUMBER || '254116763755',
     ownerNumber: process.env.OWNER_NUMBER || '254116763755',
@@ -18,7 +18,7 @@ const config = {
     pterodactylAppKey: process.env.PTERODACTYL_APP_KEY || '',
     berahostApiKey: process.env.BERAHOST_API_KEY || '',
     berahostApiUrl: process.env.BERAHOST_API_URL || '',
-    version: '2.0.0',
+    version: '3.0.0',
 
     // ── Developer Identity (Bruce Bera) ─────────────────────────────────────
     // This is the real person behind Bera AI. The bot always knows and reveals

@@ -59,7 +59,10 @@ const fetchTts = async (text, lang = 'en') => {
         const listFile = path.join(tempDir, 'concat.txt')
         fs.writeFileSync(listFile, inputFiles.map(file => `file '${file}'`).join('\n'))
         const outputFile = path.join(tempDir, 'voice.ogg')
-        await execFileAsync('ffmpeg', [
+        // Prefer the bundled ffmpeg-static binary; fall back to a system ffmpeg.
+        let ffmpegBin = 'ffmpeg'
+        try { ffmpegBin = require('ffmpeg-static') || 'ffmpeg' } catch {}
+        await execFileAsync(ffmpegBin, [
             '-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', listFile,
             '-vn', '-c:a', 'libopus', '-b:a', '32k', '-ar', '48000', '-ac', '1', '-application', 'voip', outputFile
         ], { timeout: 30000, maxBuffer: 1024 * 1024 })

@@ -78,6 +78,30 @@
       } catch(e) { return { success: false, error: e.message } }
   }
 
+  // ── Stock quote (Yahoo Finance chart API, no key; verified live 2026-11-24) ─
+  const stockQuote = async (symbol) => {
+      try {
+          const sym = String(symbol || '').trim().toUpperCase()
+          if (!sym) return { success: false, error: 'A stock symbol is required.' }
+          const d = await _get('https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?interval=1d&range=1d', { headers: { 'User-Agent': 'Mozilla/5.0' } })
+          const meta = d?.chart?.result?.[0]?.meta
+          if (!meta || meta.regularMarketPrice == null) return { success: false, error: 'No data for symbol: ' + sym }
+          const prev = meta.chartPreviousClose ?? meta.previousClose
+          const change = prev ? ((meta.regularMarketPrice - prev) / prev * 100) : 0
+          return {
+              success: true,
+              name: meta.longName || meta.shortName || sym,
+              symbol: meta.symbol || sym,
+              currency: meta.currency || 'USD',
+              price: meta.regularMarketPrice,
+              change: Number(change.toFixed(2)),
+              prevClose: prev,
+              exchange: meta.fullExchangeName || meta.exchangeName || '',
+              volume: meta.regularMarketVolume || null
+          }
+      } catch(e) { return { success: false, error: e.message } }
+  }
+
   // ── Currency conversion ────────────────────────────────────────────────────────
   const currency = async (amount, from, to) => {
       try {
@@ -98,21 +122,41 @@
       }
   }
 
-  // ── News ───────────────────────────────────────────────────────────────────────
+  // ── News ────────────────────────────────────────────────────────────────────
+  // Primary: Google News RSS via rss2json (free tier, no key — but it
+  // rate-limits the shared tier, so it can fail transiently). Fallback:
+  // web search (DuckDuckGo RelatedTopics), so `.news` still returns
+  // something instead of "No news found" when rss2json is throttled.
   const news = async (topic) => {
       try {
           const d = await _get('https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3D' + encodeURIComponent(topic) + '%26hl%3Den%26gl%3DUS%26ceid%3DUS%3Aen&api_key=public')
-          if (!d.items?.length) throw new Error('No items')
-          return {
-              success: true,
-              articles: d.items.slice(0, 6).map(a => ({
-                  title:   a.title?.replace(/<[^>]+>/g,'').replace(/\s+-.*$/,'').trim(),
-                  source:  a.author || a.source || 'News',
-                  url:     a.link,
-                  pubDate: a.pubDate?.slice(0,10) || '',
-              }))
+          if (d.items?.length) {
+              return {
+                  success: true,
+                  articles: d.items.slice(0, 6).map(a => ({
+                      title:   a.title?.replace(/<[^>]+>/g,'').replace(/\s+-.*$/,'').trim(),
+                      source:  a.author || a.source || 'News',
+                      url:     a.link,
+                      pubDate: a.pubDate?.slice(0,10) || '',
+                  }))
+              }
           }
-      } catch(e) { return { success: false, error: e.message } }
+          throw new Error('No items')
+      } catch(e) {
+          try {
+              const { webSearch } = require('./web-search')
+              const res = await webSearch(`${topic} news`)
+              if (res?.success && res.results?.length) {
+                  return {
+                      success: true, fallback: 'web-search',
+                      articles: res.results.slice(0, 6).map(r => ({
+                          title: r.title, source: 'Web', url: r.url, pubDate: ''
+                      }))
+                  }
+              }
+              return { success: false, error: e.message }
+          } catch(_) { return { success: false, error: e.message } }
+      }
   }
 
   // ── Movie info ─────────────────────────────────────────────────────────────────
@@ -360,7 +404,7 @@
   }
 
   module.exports = {
-      weather, crypto_price, currency, news, movie_info, ip_info,
+      weather, crypto_price, stockQuote, currency, news, movie_info, ip_info,
       speedtest, encode, decode, hash, tts,
       get_joke, get_trivia, truth, dare, word_of_day, horoscope,
       get_riddle, get_quote, analyze_group
