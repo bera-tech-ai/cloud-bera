@@ -327,8 +327,11 @@ async function handle(sock, raw) {
       } catch {}
 
       // 5 · autovv (.autovv) — rescue every incoming view-once to the owner DM
+      // Phase 4 (spec §25): gated — only runs when view-once recovery is
+      // explicitly opted in. A stale `autovv` flag must not forward anything.
       try {
-        if (vdb.get('autovv', false) && !isPriv) {
+        const { isViewOnceRecoveryAllowed } = require('../../lib/recovery-gate');
+        if (isViewOnceRecoveryAllowed() && vdb.get('autovv', false) && !isPriv) {
           const rawStr = (() => { try { return JSON.stringify(raw.message || ''); } catch { return ''; } })();
           if (/viewOnce/i.test(rawStr)) {
             try {

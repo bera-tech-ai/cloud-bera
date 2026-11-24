@@ -203,6 +203,7 @@ const detectIntent = (text) => {
     if (/\b(unpin|remove\s+pin|un-pin)\b/.test(t)) return 'unpin_msg'
     if (/\b(pin|attach)\b.{0,25}\b(message|this|that)\b/.test(t)) return 'pin_msg'
     if (/\b(edit|change|correct|update)\b.{0,35}\b(message|text|what\s+i\s+sent)\b/.test(t)) return 'edit_msg'
+    if (/\b(remove|clear|take off|delete)\b.{0,20}\b(my\s+)?(reaction|react)\b/.test(t) || /\bremove\s+(my\s+)?reaction\b/.test(t)) return 'remove_reaction'
     if (/\b(react|reaction|reply with)\b.{0,30}(👍|❤️|❤|😂|😮|😢|🙏|🤣|like|love|laugh|emoji)/u.test(t)) return 'react_msg'
 
     // ── Send PM / private message to a phone number ──────────────────────────

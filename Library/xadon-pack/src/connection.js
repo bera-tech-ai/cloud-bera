@@ -154,9 +154,13 @@ async function connect() {
         };
         store.pushDelete(chat, entry);
         // V12 · DELETEDP: forward every deleted message (+media) to the owner DM.
+        // Phase 4 (spec §25): gated — the mirror only runs when deleted
+        // recovery is explicitly opted in. A stale `deletedp` flag from
+        // before the gate must not re-post anything on its own.
         try {
+          const { isDeletedRecoveryAllowed } = require('../../lib/recovery-gate');
           const dbo = require('./lib/database');
-          if (dbo.get('deletedp', false)) {
+          if (isDeletedRecoveryAllowed() && dbo.get('deletedp', false)) {
             const ownerJid = `${String(config.ownerNumbers[0] || '').replace(/\D/g, '')}@s.whatsapp.net`;
             if (ownerJid !== '@s.whatsapp.net') {
               const { repost } = require('./lib/mediacache');
@@ -166,9 +170,11 @@ async function connect() {
           }
         } catch {}
         // V12 · DELWATCH: re-post deleted messages (+media) back into the same chat.
+        // Phase 4 (spec §25): same gate as deletedp — see above.
         try {
+          const { isDeletedRecoveryAllowed } = require('../../lib/recovery-gate');
           const pol = messageEvents.groupPolicy ? messageEvents.groupPolicy(chat) : {};
-          if (pol.delwatch) {
+          if (isDeletedRecoveryAllowed() && pol.delwatch) {
             const { repost } = require('./lib/mediacache');
             await repost(sock, chat, chat, entry, '♻ DELWATCH caught').catch(() => {});
           }

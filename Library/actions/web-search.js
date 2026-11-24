@@ -38,8 +38,8 @@ const webSearch = async (query) => {
             const endpoint = /\/search$/i.test(configuredSearx) ? configuredSearx : `${configuredSearx}/search`
             const response = await axios.get(endpoint, {
                 params: { q, format: 'json', language: 'en' },
-                headers: { Accept: 'application/json', 'User-Agent': 'BeraBot/2.0' },
-                timeout: 12000
+                headers: { Accept: 'application/json', 'User-Agent': 'BeraBot/3.0' },
+                timeout: 12000, proxy: false
             })
             const results = normalizeSearx(response.data)
             if (results.length) return { success: true, results, provider: 'searxng' }
@@ -52,7 +52,7 @@ const webSearch = async (query) => {
             const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
                 params: { q, count: 5 },
                 headers: { Accept: 'application/json', 'X-Subscription-Token': braveKey },
-                timeout: 15000
+                timeout: 15000, proxy: false
             })
             const results = cleanResults(response.data?.web?.results || [])
             if (results.length) return { success: true, results, provider: 'brave' }
@@ -64,8 +64,8 @@ const webSearch = async (query) => {
     try {
         const response = await axios.get('https://api.duckduckgo.com/', {
             params: { q, format: 'json', no_html: 1, skip_disambig: 1 },
-            headers: { Accept: 'application/json', 'User-Agent': 'BeraBot/2.0' },
-            timeout: 15000
+            headers: { Accept: 'application/json', 'User-Agent': 'BeraBot/3.0' },
+            timeout: 15000, proxy: false
         })
         const data = response.data || {}
         const results = cleanResults([
@@ -84,6 +84,13 @@ const webSearch = async (query) => {
     }
 }
 
+const searchProviderStatus = () => ({
+    // Presence only — never returns key material.
+    searxng: Boolean(String(process.env.BERA_WEB_SEARCH_URL || '').trim()),
+    brave: Boolean(String(process.env.BRAVE_SEARCH_API_KEY || '').trim()),
+    duckduckgo: 'instant-answer fallback (no key required; full web results need BRAVE_SEARCH_API_KEY or BERA_WEB_SEARCH_URL)'
+})
+
 const formatSearchResults = (query, response) => {
     if (!response?.success || !response.results?.length) return `⚠️ ${response?.error || 'No search results found.'}`
     const results = response.results.slice(0, 5).map((item, index) =>
@@ -92,4 +99,4 @@ const formatSearchResults = (query, response) => {
     return `🔎 *Search results for: ${query}*\n\n${results}`
 }
 
-module.exports = { webSearch, formatSearchResults, cleanResults }
+module.exports = { webSearch, formatSearchResults, cleanResults, searchProviderStatus }

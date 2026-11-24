@@ -3,6 +3,8 @@ session/
 Database/db.json
 Database/agent_os.json
 Database/project_lifecycle.json
+Database/.tenant-id
+backups/
 .env
 *.log
 .phone

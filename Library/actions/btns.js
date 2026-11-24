@@ -1,9 +1,13 @@
 // Library/actions/btns.js — Button sender for Bera AI (@whiskeysockets/baileys)
 //
-// gifted-btns internally requires('@whiskeysockets/baileys') for its helpers.
-// We redirect that to gifted-baileys (same ecosystem, same author as gifted-btns).
-// @whiskeysockets/baileys is kept exclusively for the WhatsApp connection (Connection/start.js).
-// gifted-baileys provides the button message-building internals gifted-btns needs.
+// gifted-btns provides sendButtons / sendInteractiveMessage, including the
+// `aimode` biz_bot node needed for interactive rendering in private chats.
+// It declares no dependencies of its own and requires
+// '@whiskeysockets/baileys' at runtime; it does NOT use gifted-baileys.
+// gifted-baileys is not required anywhere in this repo and was removed as a
+// dependency (see package.json). Keep gifted-btns: there is no equivalent
+// sendButtons helper in Baileys itself, and reimplementing the interactive
+// message construction would need live WhatsApp verification.
 //
 // Calling conventions — both are accepted:
 //   Modern (3-arg):  sendBtn(conn, jid, { text, buttons, title, footer })

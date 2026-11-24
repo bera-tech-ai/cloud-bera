@@ -7,6 +7,7 @@
  */
 const { takeScreenshot } = require('../Library/actions/browser')
 const { gtOcr, gtScreenshot } = require('../Library/actions/giftedapi')
+const { fetchTts: fetchTtsReal } = require('../Library/actions/tts')
 
 const react = (conn, m, e) => conn.sendMessage(m.chat, { react: { text: e, key: m.key } }).catch(() => {})
 
@@ -28,7 +29,11 @@ const VOICE_MAP = {
     it: 'it-IT-ElsaNeural', nl: 'nl-NL-ColetteNeural',
 }
 
-const fetchTts = async () => null
+// Text-to-speech via Library/actions/tts.js (Google TTS audio + FFmpeg to
+// Opus voice note). Previously this was a stub returning null, so .tts
+// ALWAYS failed. The real implementation can still fail (network, FFmpeg);
+// the handler below reports the real error instead of a generic failure.
+const fetchTts = fetchTtsReal
 
 const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isOwner, args }) => {
 
@@ -59,10 +64,14 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
 
         await react(conn, m, '🔊')
 
-        const buf = await fetchTts(content, lang)
+        let buf = null
+        let ttsError = ''
+        try {
+            buf = await fetchTts(content, lang)
+        } catch (e) { ttsError = e?.message || String(e) }
         if (!buf) {
             await react(conn, m, '❌')
-            return reply(`❌ TTS failed — all voice providers are unavailable. Try again shortly.`)
+            return reply(`❌ TTS failed — all voice providers are unavailable. Try again shortly.${ttsError ? `\n${ttsError}` : ''}`)
         }
 
         await conn.sendMessage(chat, {

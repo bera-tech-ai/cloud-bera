@@ -1,10 +1,24 @@
 'use strict';
 
+// ── Voice transcription (spec §16) ──────────────────────────────────────────
+// Previously this command replied with a fabricated "Voice Message Info"
+// card (duration, file size, ESTIMATED word count) instead of a transcript
+// — it never transcribed anything. Now it transcribes for real when a
+// transcription backend is configured, and says so honestly when none is:
+//   1. OPENAI_API_KEY set → OpenAI Whisper (via
+//      Library/actions/project-support.js transcribeExplicitVoice).
+//   2. Otherwise → explicit unavailable message (no verified Xcasper STT
+//      endpoint exists), with what to configure. Never an estimated transcript.
+
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+
+const TRANSCRIPTION_UNAVAILABLE =
+    'Voice transcription is currently unavailable: no verified speech-to-text endpoint is configured. ' +
+    'The owner can enable it by setting OPENAI_API_KEY (OpenAI Whisper) and trying again.';
 
 module.exports = {
     commands: ['transcribe', 'voicetotext', 'vtt', 'speech'],
-    description: 'Transcribe voice messages to text (reply to a voice note)',
+    description: 'Transcribe voice messages to text (reply to a voice note). Requires OPENAI_API_KEY; otherwise reports unavailable.',
     usage: '.transcribe (reply to a voice message)',
     permission: 'public',
     group: true,
@@ -25,6 +39,12 @@ module.exports = {
 
         await sock.sendMessage(jid, { text: '🎤 Transcribing voice message...', contextInfo }, { quoted: message });
 
+        // No verified Xcasper STT endpoint exists; Whisper is the only
+        // configured backend. Say so before downloading anything.
+        if (!process.env.OPENAI_API_KEY) {
+            return reply(`❌ ${TRANSCRIPTION_UNAVAILABLE}`)
+        }
+
         try {
             const quotedMsg = {
                 key: {
@@ -37,16 +57,22 @@ module.exports = {
             };
 
             const buffer = await downloadMediaMessage(quotedMsg, 'buffer', {});
-            const durationSec = isAudio.seconds || 0;
-            const fileSize = buffer.length;
+            const mime = isAudio.mimetype || 'audio/ogg'
 
-            const estimatedWords = Math.max(10, Math.round(durationSec * 2.5));
-            const durationStr = durationSec > 60
-                ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
-                : `${durationSec}s`;
+            let transcribed = null
+            try {
+                const { transcribeExplicitVoice } = require('../Library/actions/project-support')
+                transcribed = await transcribeExplicitVoice(buffer, mime)
+            } catch (e) {
+                transcribed = { success: false, error: TRANSCRIPTION_UNAVAILABLE }
+            }
 
-            await sock.sendMessage(jid, {
-                text: `🎤 *Voice Message Info*\n\n⏱️ *Duration:* ${durationStr}\n📦 *Size:* ${(fileSize / 1024).toFixed(1)} KB\n💬 *Est. words:* ~${estimatedWords}\n\n_Full speech-to-text requires a cloud STT API. Set up SPEECH_API_KEY in config for full transcription._\n\n💡 *Tip:* Use \`.voice <text>\` to convert text back to voice!`,
+            if (!transcribed?.success || !(transcribed.text || transcribed.transcript)) {
+                return reply(`❌ ${transcribed?.error || TRANSCRIPTION_UNAVAILABLE}`)
+            }
+
+            return sock.sendMessage(jid, {
+                text: `🎤 *Voice Transcription*\n\n${String(transcribed.text || transcribed.transcript).trim()}`,
                 contextInfo
             }, { quoted: message });
 

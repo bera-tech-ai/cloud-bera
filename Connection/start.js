@@ -290,45 +290,48 @@ const startBioLoop = (conn) => {
 
 let reminderLoopStarted = false
 
+// Persistent reminders live in global.db.data.reminders and are delivered by
+// Library/actions/reminders.js. The old inline loop only fired one-time
+// reminders and deleted them on fire; the new loop also reschedules repeats
+// and sends one follow-up nudge if a reminder is not done/snoozed in 10 min.
+// Cron job definitions saved in global.db.data.cronJobs are re-registered
+// here so they survive a restart (see Library/actions/scheduler.js).
 const startReminderLoop = (conn) => {
     if (reminderLoopStarted) return
     reminderLoopStarted = true
     console.log(chalk.gray('[BOT] Reminder loop started'))
 
-    setInterval(async () => {
-        try {
-            if (!global.db?.data?.reminders?.length) return
-            const now = Date.now()
-            const due = global.db.data.reminders.filter(r => r.fireAt <= now)
-            if (!due.length) return
+    try {
+        const { restoreCronJobs } = require('../Library/actions/scheduler')
+        const restored = restoreCronJobs(conn)
+        if (restored.restored) console.log(chalk.gray(`[BOT] Restored ${restored.restored} cron job(s)`))
+        if (restored.skipped) console.log(chalk.yellow(`[BOT] Skipped ${restored.skipped} saved cron job(s) (invalid expression)`))
+    } catch (e) { console.error('[REMINDER] Could not restore cron jobs:', e.message) }
 
-            global.db.data.reminders = global.db.data.reminders.filter(r => r.fireAt > now)
-            await global.db.write()
-
-            for (const r of due) {
-                try {
-                    await conn.sendMessage(r.chat, {
-                        text: `⏰ *Reminder!*\n\n_${r.msg}_\n\n_(set by @${r.jid.split('@')[0]})_`,
-                        mentions: [r.jid]
-                    })
-                } catch (e) {
-                    console.error('[REMINDER]', e.message)
-                }
-            }
-        } catch {}
-    }, 30000) // check every 30 seconds
+    try {
+        const { startPersistentReminderLoop } = require('../Library/actions/reminders')
+        startPersistentReminderLoop(conn)
+    } catch (e) { console.error('[REMINDER] Reminder loop failed to start:', e.message) }
 }
 
 const startBot = async () => {
     if (!_bannerShown) { printBanner(); _bannerShown = true }
     await initDb()
 
+    // Restore confirmation tokens staged before a restart. Expired entries
+    // are pruned on load, so a token never comes back to life after its TTL.
+    try {
+        const { loadPendingFromDb } = require('../Library/lib/wa-actions')
+        const restored = loadPendingFromDb()
+        if (restored) console.log(`[DB] Restored ${restored} pending confirmation token(s)`)
+    } catch (error) { console.error('[DB] Could not restore pending confirmations:', error.message) }
+
     const authSessionId = process.env.BERA_AUTH_SESSION_ID || global.db.tenantId || 'whatsapp'
     if (global.db.provider === 'postgresql' && databaseLeaseEnabled()) {
         const lease = await acquireSessionLease(authSessionId)
         if (!lease.acquired) {
             beraLog.err(`Duplicate WhatsApp session blocked: ${authSessionId} is already active in another Bera process.`)
-            beraLog.warn('Stop the other deployment or use a different BERA_BOT_ID before starting this bot.')
+            beraLog.warn('Stop the other deployment or use a different BERA_TENANT_ID (or BERA_AUTH_SESSION_ID) before starting this bot.')
             process.exitCode = 1
             setTimeout(() => process.exit(1), 250)
             return null
@@ -368,6 +371,9 @@ const startBot = async () => {
             pool: global.db.pool,
             sessionId: process.env.BERA_AUTH_SESSION_ID || 'whatsapp',
             encryptionKey: process.env.BERA_SESSION_ENCRYPTION_KEY,
+            // Phase 4: same explicit schema as bera_state — the auth table
+            // must live next to the tenant rows, not in public.
+            schema: global.db.dbSchema,
             legacyState: {
                 creds: state.creds,
                 keys: state.keys,

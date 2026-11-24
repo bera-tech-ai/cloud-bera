@@ -1,10 +1,21 @@
 const config = {
-    botName: 'Bera',
+    botName: 'Bera AI',
     prefix: '.',
     owner: process.env.OWNER_NUMBER || '254116763755',
     ownerNumber: process.env.OWNER_NUMBER || '254116763755',
-    nickApiEndpoint: process.env.NICK_API || 'https://apiskeith.top/ai/gpt41Nano',
-    nickApiEndpointFallback: 'https://apiskeith.top/ai/gpt',
+    // ── AI endpoint ─────────────────────────────────────────────────────────
+    // AI is served by the Xcasper client (Library/actions/xcasper.js, base URL
+    // https://apiz.xcasper.space, override with XCASPER_BASE_URL). There is no
+    // hardcoded legacy-provider default: NICK_API may still override the
+    // endpoint for legacy callers, but when it is unset no AI endpoint is
+    // configured here and getAiEndpoint() throws instead of silently falling
+    // back to a legacy provider.
+    nickApiEndpoint: process.env.NICK_API || '',
+    nickApiEndpointFallback: '',
+    getAiEndpoint() {
+        if (!config.nickApiEndpoint) throw new Error('No AI endpoint is configured. Set NICK_API or configure the Xcasper client (XCASPER_BASE_URL).')
+        return config.nickApiEndpoint
+    },
     nickApiKey: process.env.NICK_API_KEY || '',
     sessionDir: './session',
     dbPath: './Database/db.json',
@@ -18,7 +29,7 @@ const config = {
     pterodactylAppKey: process.env.PTERODACTYL_APP_KEY || '',
     berahostApiKey: process.env.BERAHOST_API_KEY || '',
     berahostApiUrl: process.env.BERAHOST_API_URL || '',
-    version: '2.0.0',
+    version: '3.0.0',
 
     // ── Developer Identity (Bruce Bera) ─────────────────────────────────────
     // This is the real person behind Bera AI. The bot always knows and reveals

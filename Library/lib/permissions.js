@@ -4,11 +4,13 @@ const { isAuthorized } = require('../../Auth')
 
 const OWNER_ONLY = new Set([
     'dbstatus', 'eval', 'exec', 'shell', 'sh', 'update', 'updatenow', 'reload', 'hotreload',
-    'resetdb', 'cleandb', 'broadcast', 'join', 'left', 'forward', 'tostatus',
+    'resetdb', 'cleandb', 'broadcast', 'join', 'left', 'tostatus',
     'genkey', 'revokekey', 'extendkey', 'listkeys', 'sudo', 'delsudo', 'resetsudo',
     'block', 'unblock', 'blocklist', 'resetlimit', 'listusers', 'mode', 'noprefix',
     'berahost', 'berahost_deploy', 'pterodactyl', 'pt', 'project_lifecycle',
-    'deploy', 'deployweb', 'delete_deployment'
+    'deploy', 'deployweb', 'delete_deployment',
+    // Phase 4: tenant operations and channel operations are owner-only.
+    'tenant', 'tenants', 'channel', 'channels'
 ])
 
 const GROUP_ADMIN_ONLY = new Set([
@@ -96,7 +98,17 @@ const authorizeCommand = (command, access, options = {}) => {
     if (policy.scope === 'owner' && !access.canUseOwnerTools) return { allowed: false, reason: 'Only the owner or an approved sudo user can use this command.', policy }
     if (policy.scope === 'group' && !access.isGroup) return { allowed: false, reason: 'This command is available in WhatsApp groups only.', policy }
     if (policy.scope === 'group_admin' && !access.isGroup) return { allowed: false, reason: 'This command is available in groups only.', policy }
-    if (policy.scope === 'group_admin' && !access.canManageGroup) return { allowed: false, reason: 'Only a group admin or the bot owner can use this command.', policy }
+    if (policy.scope === 'group_admin' && !access.canManageGroup) {
+        // Spec §13 rule 8: say whether the *user* or the *bot* lacked permission.
+        const userLacks = !access.isOwner && !access.isSenderAdmin
+        const botLacks = !access.isBotAdmin
+        const reason = userLacks && botLacks
+            ? 'You are not a group admin, and Bera is not a group admin either.'
+            : userLacks
+            ? 'You are not a group admin. Only a group admin or the bot owner can use this command.'
+            : 'Bera is not a group admin. WhatsApp requires the bot itself to be an admin for this command.'
+        return { allowed: false, reason, policy }
+    }
     if (options.agent && !access.canUseAgent) return { allowed: false, reason: 'The AI agent is disabled for this group.', policy }
     return { allowed: true, policy }
 }
