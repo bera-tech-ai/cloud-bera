@@ -1,9 +1,14 @@
 'use strict'
 
 const crypto = require('crypto')
+const { resolveDbSchema, qualified } = require('./db-schema')
 
-const TABLE_SQL = `
-CREATE TABLE IF NOT EXISTS bera_whatsapp_auth (
+// Phase 4: the auth table is schema-qualified like bera_state (see
+// Library/lib/db-schema.js). Under the default search_path the old
+// unqualified name resolved to public.bera_whatsapp_auth while the
+// tenant-isolated auth rows live in berahost.bera_whatsapp_auth.
+const tableSql = schema => `
+CREATE TABLE IF NOT EXISTS ${qualified(schema, 'bera_whatsapp_auth')} (
     session_id TEXT NOT NULL,
     auth_type TEXT NOT NULL,
     auth_key TEXT NOT NULL,
@@ -50,7 +55,7 @@ const decryptValue = (payload, encryptionKey, context, BufferJSON) => {
     return JSON.parse(plaintext, BufferJSON.reviver)
 }
 
-const createPostgresAuthState = async ({ pool, sessionId = 'whatsapp', encryptionKey, legacyState, baileys } = {}) => {
+const createPostgresAuthState = async ({ pool, sessionId = 'whatsapp', encryptionKey, legacyState, baileys, schema = null } = {}) => {
     if (!pool || typeof pool.query !== 'function') throw new Error('PostgreSQL pool is unavailable for WhatsApp auth storage.')
     if (!legacyState?.creds || !legacyState?.keys || typeof legacyState.saveCreds !== 'function') {
         throw new Error('A valid Baileys legacy auth state is required for startup and migration.')
@@ -62,13 +67,16 @@ const createPostgresAuthState = async ({ pool, sessionId = 'whatsapp', encryptio
     const { BufferJSON } = baileysApi
     const key = makeEncryptionKey(encryptionKey)
     const sid = String(sessionId)
+    // Phase 4: explicit schema (defaults to the same schema as bera_state).
+    const dbSchema = schema || resolveDbSchema()
+    const authTable = qualified(dbSchema, 'bera_whatsapp_auth')
 
-    await pool.query(TABLE_SQL)
+    await pool.query(tableSql(dbSchema))
 
     const context = (authType, authKey) => contextFor(sid, authType, authKey)
     const readRecord = async (authType, authKey) => {
         const result = await pool.query(
-            'SELECT payload FROM bera_whatsapp_auth WHERE session_id = $1 AND auth_type = $2 AND auth_key = $3',
+            `SELECT payload FROM ${authTable} WHERE session_id = $1 AND auth_type = $2 AND auth_key = $3`,
             [sid, authType, authKey]
         )
         return result.rows[0] ? decryptValue(result.rows[0].payload, key, context(authType, authKey), BufferJSON) : null
@@ -76,7 +84,7 @@ const createPostgresAuthState = async ({ pool, sessionId = 'whatsapp', encryptio
     const writeRecord = async (authType, authKey, value) => {
         const payload = encryptValue(value, key, context(authType, authKey), BufferJSON)
         await pool.query(
-            `INSERT INTO bera_whatsapp_auth (session_id, auth_type, auth_key, payload, updated_at)
+            `INSERT INTO ${authTable} (session_id, auth_type, auth_key, payload, updated_at)
              VALUES ($1, $2, $3, $4::jsonb, NOW())
              ON CONFLICT (session_id, auth_type, auth_key)
              DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
@@ -102,7 +110,7 @@ const createPostgresAuthState = async ({ pool, sessionId = 'whatsapp', encryptio
             const wanted = [...new Set((ids || []).map(String))]
             if (!wanted.length) return {}
             const result = await pool.query(
-                `SELECT auth_key, payload FROM bera_whatsapp_auth
+                `SELECT auth_key, payload FROM ${authTable}
                  WHERE session_id = $1 AND auth_type = $2 AND auth_key = ANY($3::text[])`,
                 [sid, String(type), wanted]
             )
@@ -137,13 +145,13 @@ const createPostgresAuthState = async ({ pool, sessionId = 'whatsapp', encryptio
                     for (const [id, value] of Object.entries(entries || {})) {
                         if (value === null || value === undefined) {
                             await query(
-                                'DELETE FROM bera_whatsapp_auth WHERE session_id = $1 AND auth_type = $2 AND auth_key = $3',
+                                `DELETE FROM ${authTable} WHERE session_id = $1 AND auth_type = $2 AND auth_key = $3`,
                                 [sid, type, id]
                             )
                         } else {
                             const payload = encryptValue(value, key, context(type, id), BufferJSON)
                             await query(
-                                `INSERT INTO bera_whatsapp_auth (session_id, auth_type, auth_key, payload, updated_at)
+                                `INSERT INTO ${authTable} (session_id, auth_type, auth_key, payload, updated_at)
                                  VALUES ($1, $2, $3, $4::jsonb, NOW())
                                  ON CONFLICT (session_id, auth_type, auth_key)
                                  DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
@@ -164,7 +172,7 @@ const createPostgresAuthState = async ({ pool, sessionId = 'whatsapp', encryptio
             await legacyState.keys.set(data)
         },
         clear: async () => {
-            await pool.query('DELETE FROM bera_whatsapp_auth WHERE session_id = $1 AND auth_type <> $2', [sid, 'creds'])
+            await pool.query(`DELETE FROM ${authTable} WHERE session_id = $1 AND auth_type <> $2`, [sid, 'creds'])
         }
     }
 
@@ -173,7 +181,7 @@ const createPostgresAuthState = async ({ pool, sessionId = 'whatsapp', encryptio
         await mirrorCreds()
     }
     const clear = async () => {
-        await pool.query('DELETE FROM bera_whatsapp_auth WHERE session_id = $1', [sid])
+        await pool.query(`DELETE FROM ${authTable} WHERE session_id = $1`, [sid])
     }
 
     return { state: { creds, keys }, saveCreds, clear, sessionId: sid }

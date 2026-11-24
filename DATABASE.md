@@ -53,3 +53,88 @@ Add the Neon connection string as the hosting provider's `DATABASE_URL` secret. 
 ## Neon compatibility
 
 Neon connection strings using `sslmode=require` are supported. The PostgreSQL client uses TLS by default and a small connection pool. The password is never logged or written to application state.
+
+## Phase 4 — explicit schema, tenant scale, backup/restore, write alarm
+
+### The search_path finding (Neon inspection, 2026-11-24)
+
+The bot used to create its pool with only a connection string and use
+unqualified table names. Under the default search_path (`"$user"`, public)
+it therefore read/wrote `public.bera_state` — the legacy single-row table
+with no `tenant_id` — and looked for `bera_session_leases` in `public`,
+where that table does not exist. The tenant-isolated rows live in
+`berahost.bera_state`. Tenant isolation was **not in effect** for
+application state on a default deployment, whatever `BERA_TENANT_ID` was
+set to. Which schema the live deployment actually used depended on its
+effective search_path (e.g. set by BeraHost via `PGOPTIONS`).
+
+The fix, in `Database/index.js` and `Library/lib/postgres-auth-state.js`,
+is explicit in two independent ways:
+
+1. Every table name in SQL is schema-qualified (`"berahost"."bera_state"`,
+   `"berahost"."bera_session_leases"`, `"berahost"."bera_whatsapp_auth"`).
+2. The pool opens with an explicit `search_path` for the same schema.
+
+The schema defaults to `berahost` — where the live tenant rows are — and
+is overridable with `BERA_DB_SCHEMA`. A deployment that still keeps state
+in the legacy `public` table must set `BERA_DB_SCHEMA=public` explicitly.
+
+**One-time move from `public` to `berahost`** (run once, then restart with
+the default schema). This copies the legacy row into the tenant table; it
+does not delete the legacy row:
+
+```sql
+INSERT INTO berahost.bera_state (tenant_id, data, updated_at)
+SELECT 'bot-<your-tenant-id>', data, updated_at
+FROM public.bera_state WHERE id = 1
+ON CONFLICT (tenant_id) DO NOTHING;
+```
+
+### Tenant allocation — no manual env var per customer
+
+- Tenant IDs are auto-generated as `bot-<16 hex>` (same shape as the live
+  tenant IDs). Precedence: `BERA_TENANT_ID` → `BERA_AUTH_SESSION_ID`
+  (backwards-compatible) → marker file `Database/.tenant-id` from a
+  previous auto-generation → generate once and persist the marker, so a
+  restart never orphans state. The literal tenant `'default'` is gone.
+- Each WhatsApp number gets a deterministic session ID derived from
+  tenant + phone number (`Library/lib/tenant.js`); sessions for different
+  numbers are never shared. Session leases (`bera_session_leases`) still
+  prevent duplicate live sessions, and a lost lease still stops the bot
+  before a WhatsApp 440 conflict.
+- Storage paths derive from the tenant ID (`sessions/<tenant>/`,
+  `backups/<tenant>/`). Provision a customer from WhatsApp (owner-only):
+  `.tenant provision [phone] [owner-phone]`, `.tenant status`,
+  `.tenant list`. Start a bot for a provisioned tenant with
+  `BERA_TENANT_ID=<tenant id>`.
+
+### Backup and restore
+
+`.tenant backup` writes a JSON backup of the current tenant's state to
+`backups/<tenant>/bera_state-<tenant>-<timestamp>.json`. Backup files
+contain tenant state — keep them private, never send them over WhatsApp,
+never commit them.
+
+Tested restore procedure (see `test/phase4-backup.test.js`):
+
+1. Copy the backup JSON to the target host.
+2. Dry run: `node scripts/tenant-restore.js <backup-file.json>` — validates
+   format, version and tenant, and prints what would be restored.
+3. Apply: `node scripts/tenant-restore.js <backup-file.json> --apply` —
+   writes the state into `<schema>.bera_state` for the backup's tenant.
+   A tenant mismatch or tampered file refuses the restore.
+4. Copy any session files listed by the script into
+   `sessions/<tenant>/`, then restart the bot with
+   `BERA_TENANT_ID=<tenant id>`.
+
+### Failed-write alarm
+
+A failed PostgreSQL write used to be only a `console.error` while the
+write promise still resolved — the caller could not tell, and the local
+JSON cache silently diverged from the database. The Neon inspection found
+323 bot-log lines mentioning postgres / `[DB]` / write-failed. Writes now
+record success/failure in `Library/lib/db-health.js`; check
+`.tenant health` or `global.db.writeHealth`. While writes are failing the
+alarm reads `DATABASE WRITE ALARM: N consecutive failed write(s)` — do
+not restart the bot until writes recover, or the newer local state will
+be lost.

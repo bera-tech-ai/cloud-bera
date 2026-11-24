@@ -328,7 +328,7 @@ const startBot = async () => {
         const lease = await acquireSessionLease(authSessionId)
         if (!lease.acquired) {
             beraLog.err(`Duplicate WhatsApp session blocked: ${authSessionId} is already active in another Bera process.`)
-            beraLog.warn('Stop the other deployment or use a different BERA_BOT_ID before starting this bot.')
+            beraLog.warn('Stop the other deployment or use a different BERA_TENANT_ID (or BERA_AUTH_SESSION_ID) before starting this bot.')
             process.exitCode = 1
             setTimeout(() => process.exit(1), 250)
             return null
@@ -368,6 +368,9 @@ const startBot = async () => {
             pool: global.db.pool,
             sessionId: process.env.BERA_AUTH_SESSION_ID || 'whatsapp',
             encryptionKey: process.env.BERA_SESSION_ENCRYPTION_KEY,
+            // Phase 4: same explicit schema as bera_state — the auth table
+            // must live next to the tenant rows, not in public.
+            schema: global.db.dbSchema,
             legacyState: {
                 creds: state.creds,
                 keys: state.keys,

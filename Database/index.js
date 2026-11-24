@@ -5,19 +5,39 @@ const low = require('lowdb')
 const FileSync = require('lowdb/adapters/FileSync')
 const path = require('path')
 const fs = require('fs')
+const { resolveDbSchema, qualified, quoteIdent, searchPathOption } = require('../Library/lib/db-schema')
+const { recordWriteSuccess, recordWriteFailure, getWriteHealth } = require('../Library/lib/db-health')
+const { resolveTenantId } = require('../Library/lib/tenant')
 
 const dbDir = path.resolve('./Database')
 const dbPath = path.join(dbDir, 'db.json')
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true })
 
-// Every bot must have its own tenant. BERA_AUTH_SESSION_ID is used as a
-// fallback so existing deployments can opt into isolation by setting the auth
-// session ID, while BERA_TENANT_ID remains the explicit application-data ID.
-const tenantId = String(
-    process.env.BERA_TENANT_ID ||
-    process.env.BERA_AUTH_SESSION_ID ||
-    'default'
-).trim() || 'default'
+// Phase 4 — explicit PostgreSQL schema (spec §20). See Library/lib/db-schema.js:
+// the old code set no search_path and used unqualified table names, so under
+// the default path it read/wrote public.bera_state (legacy, no tenant_id)
+// while the tenant-isolated rows live in berahost.bera_state. Every table
+// below is schema-qualified through q(), and the pool also opens with an
+// explicit search_path for the same schema.
+const dbSchema = resolveDbSchema()
+const q = table => qualified(dbSchema, table)
+const beraStateTable = q('bera_state')
+const sessionLeasesTable = q('bera_session_leases')
+
+// Phase 4 — tenant allocation (spec §20). No manual env var per customer:
+// an explicit BERA_TENANT_ID still wins, BERA_AUTH_SESSION_ID is the
+// backwards-compatible fallback, otherwise the ID from a previous
+// auto-generation is re-used from the marker file, and only a fresh install
+// generates one (persisted once, so restarts never orphan state).
+const tenantMarkerPath = path.join(dbDir, '.tenant-id')
+const tenantResolution = resolveTenantId({
+    readMarker: () => fs.existsSync(tenantMarkerPath) ? fs.readFileSync(tenantMarkerPath, 'utf8') : '',
+    writeMarker: value => fs.writeFileSync(tenantMarkerPath, `${value}\n`, 'utf8')
+})
+const tenantId = tenantResolution.tenantId
+if (tenantResolution.generated) {
+    console.log(`[DB] No tenant configured — generated tenant ${tenantId} (saved to ${tenantMarkerPath}). Set BERA_TENANT_ID to pin it.`)
+}
 
 const defaultData = {
     users: {},
@@ -67,7 +87,7 @@ const mergeDefaults = (base, value) => {
 const ensureSessionLeaseTable = async () => {
     if (!_pool) return false
     await _pool.query(`
-        CREATE TABLE IF NOT EXISTS bera_session_leases (
+        CREATE TABLE IF NOT EXISTS ${sessionLeasesTable} (
             session_id TEXT PRIMARY KEY,
             owner_id TEXT NOT NULL,
             acquired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -82,20 +102,20 @@ const acquireSessionLease = async (sessionId) => {
     const sid = String(sessionId || tenantId).trim() || tenantId
     await ensureSessionLeaseTable()
     const result = await _pool.query(
-        `INSERT INTO bera_session_leases (session_id, owner_id, acquired_at, heartbeat_at)
+        `INSERT INTO ${sessionLeasesTable} (session_id, owner_id, acquired_at, heartbeat_at)
          VALUES ($1, $2, NOW(), NOW())
          ON CONFLICT (session_id) DO UPDATE
          SET owner_id = EXCLUDED.owner_id,
              acquired_at = CASE
-                 WHEN bera_session_leases.owner_id = EXCLUDED.owner_id
-                   OR bera_session_leases.heartbeat_at < NOW() - ($3 * INTERVAL '1 second')
-                 THEN NOW() ELSE bera_session_leases.acquired_at END,
+                 WHEN ${sessionLeasesTable}.owner_id = EXCLUDED.owner_id
+                   OR ${sessionLeasesTable}.heartbeat_at < NOW() - ($3 * INTERVAL '1 second')
+                 THEN NOW() ELSE ${sessionLeasesTable}.acquired_at END,
              heartbeat_at = CASE
-                 WHEN bera_session_leases.owner_id = EXCLUDED.owner_id
-                   OR bera_session_leases.heartbeat_at < NOW() - ($3 * INTERVAL '1 second')
-                 THEN NOW() ELSE bera_session_leases.heartbeat_at END
-         WHERE bera_session_leases.owner_id = EXCLUDED.owner_id
-            OR bera_session_leases.heartbeat_at < NOW() - ($3 * INTERVAL '1 second')
+                 WHEN ${sessionLeasesTable}.owner_id = EXCLUDED.owner_id
+                   OR ${sessionLeasesTable}.heartbeat_at < NOW() - ($3 * INTERVAL '1 second')
+                 THEN NOW() ELSE ${sessionLeasesTable}.heartbeat_at END
+         WHERE ${sessionLeasesTable}.owner_id = EXCLUDED.owner_id
+            OR ${sessionLeasesTable}.heartbeat_at < NOW() - ($3 * INTERVAL '1 second')
          RETURNING owner_id, heartbeat_at`,
         [sid, leaseOwnerId, leaseTtlSeconds]
     )
@@ -114,7 +134,7 @@ const heartbeatSessionLease = async (sessionId) => {
     const sid = String(sessionId || tenantId).trim() || tenantId
     await ensureSessionLeaseTable()
     const result = await _pool.query(
-        `UPDATE bera_session_leases SET heartbeat_at = NOW()
+        `UPDATE ${sessionLeasesTable} SET heartbeat_at = NOW()
          WHERE session_id = $1 AND owner_id = $2 RETURNING session_id`,
         [sid, leaseOwnerId]
     )
@@ -131,7 +151,7 @@ const releaseSessionLease = async (sessionId) => {
     if (!_pool) return
     const sid = String(sessionId || tenantId).trim() || tenantId
     await _pool.query(
-        'DELETE FROM bera_session_leases WHERE session_id = $1 AND owner_id = $2',
+        `DELETE FROM ${sessionLeasesTable} WHERE session_id = $1 AND owner_id = $2`,
         [sid, leaseOwnerId]
     )
 }
@@ -139,21 +159,34 @@ const releaseSessionLease = async (sessionId) => {
 const persistPostgres = () => {
     if (!_pool || !_db) return Promise.resolve()
     const snapshot = JSON.stringify(_db.getState())
-    _persistQueue = _persistQueue.then(() => _pool.query(
-        `INSERT INTO bera_state (tenant_id, data, updated_at)
-         VALUES ($1, $2::jsonb, NOW())
-         ON CONFLICT (tenant_id)
-         DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
-        [tenantId, snapshot]
-    )).catch(error => console.error('[DB] PostgreSQL write failed:', error.message))
+    // Phase 4 — a failed write must not silently discard state (spec §20).
+    // The promise still resolves (callers must not crash the bot on a
+    // transient outage), but the failure is now recorded in the write-health
+    // alarm (Library/lib/db-health.js) instead of only being console-logged:
+    // check getWriteHealth() / global.db.writeHealth before trusting that
+    // PostgreSQL holds the latest state.
+    _persistQueue = _persistQueue.then(async () => {
+        await _pool.query(
+            `INSERT INTO ${beraStateTable} (tenant_id, data, updated_at)
+             VALUES ($1, $2::jsonb, NOW())
+             ON CONFLICT (tenant_id)
+             DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+            [tenantId, snapshot]
+        )
+        recordWriteSuccess()
+    }).catch(error => {
+        const health = recordWriteFailure(error)
+        console.error(`[DB] PostgreSQL write failed (${health.consecutiveFailures} consecutive):`, error.message)
+    })
     return _persistQueue
 }
 
 const migrateStateTable = async () => {
-    // New installations use tenant_id as the primary key. IF NOT EXISTS keeps
-    // this safe for deployments that already have the old id-based table.
+    // Phase 4: the schema is created explicitly first — a fresh database has
+    // no berahost schema, and the old code relied on the default search_path.
+    await _pool.query(`CREATE SCHEMA IF NOT EXISTS ${quoteIdent(dbSchema)}`)
     await _pool.query(`
-        CREATE TABLE IF NOT EXISTS bera_state (
+        CREATE TABLE IF NOT EXISTS ${beraStateTable} (
             tenant_id TEXT PRIMARY KEY,
             data JSONB NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -163,9 +196,9 @@ const migrateStateTable = async () => {
     const columns = await _pool.query(`
         SELECT column_name
         FROM information_schema.columns
-        WHERE table_schema = current_schema()
+        WHERE table_schema = $1
           AND table_name = 'bera_state'
-    `)
+    `, [dbSchema])
     const names = new Set(columns.rows.map(row => row.column_name))
 
     // Migrate the original or partially migrated schema:
@@ -181,44 +214,44 @@ const migrateStateTable = async () => {
         const lockedColumns = await client.query(`
             SELECT column_name
             FROM information_schema.columns
-            WHERE table_schema = current_schema()
+            WHERE table_schema = $1
               AND table_name = 'bera_state'
-        `)
+        `, [dbSchema])
         const lockedNames = new Set(lockedColumns.rows.map(row => row.column_name))
         const hasId = lockedNames.has('id')
         const hasTenantId = lockedNames.has('tenant_id')
 
         if (hasId && !hasTenantId) {
-            await client.query('ALTER TABLE bera_state ADD COLUMN tenant_id TEXT')
+            await client.query(`ALTER TABLE ${beraStateTable} ADD COLUMN tenant_id TEXT`)
         }
 
         if (hasId || hasTenantId) {
             await client.query(
-                'UPDATE bera_state SET tenant_id = $1 WHERE tenant_id IS NULL',
+                `UPDATE ${beraStateTable} SET tenant_id = $1 WHERE tenant_id IS NULL`,
                 [tenantId]
             )
-            await client.query('ALTER TABLE bera_state ALTER COLUMN tenant_id SET NOT NULL')
+            await client.query(`ALTER TABLE ${beraStateTable} ALTER COLUMN tenant_id SET NOT NULL`)
 
             // Keep the legacy id column for compatibility with old tooling,
             // but make it nullable because new tenant rows do not use it.
-            if (hasId) await client.query('ALTER TABLE bera_state ALTER COLUMN id DROP NOT NULL')
+            if (hasId) await client.query(`ALTER TABLE ${beraStateTable} ALTER COLUMN id DROP NOT NULL`)
 
             // Drop whichever primary-key constraint the old table used, then
-            // make tenant_id the sole identity for application state.
-            await client.query(`
-                DO $$
-                DECLARE primary_key_name TEXT;
-                BEGIN
-                    SELECT conname INTO primary_key_name
-                    FROM pg_constraint
-                    WHERE conrelid = 'bera_state'::regclass
-                      AND contype = 'p';
-                    IF primary_key_name IS NOT NULL THEN
-                        EXECUTE format('ALTER TABLE bera_state DROP CONSTRAINT %I', primary_key_name);
-                    END IF;
-                END $$;
-            `)
-            await client.query('ALTER TABLE bera_state ADD CONSTRAINT bera_state_pkey PRIMARY KEY (tenant_id)')
+            // make tenant_id the sole identity for application state. The
+            // constraint is looked up by schema + table name (a DO block
+            // cannot take query parameters, and 'bera_state'::regclass
+            // would resolve through search_path instead of explicitly).
+            const pk = await client.query(`
+                SELECT c.conname
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                WHERE n.nspname = $1 AND t.relname = 'bera_state' AND c.contype = 'p'
+            `, [dbSchema])
+            if (pk.rows[0]) {
+                await client.query(`ALTER TABLE ${beraStateTable} DROP CONSTRAINT ${quoteIdent(pk.rows[0].conname)}`)
+            }
+            await client.query(`ALTER TABLE ${beraStateTable} ADD CONSTRAINT bera_state_pkey PRIMARY KEY (tenant_id)`)
         }
 
         await client.query('COMMIT')
@@ -244,18 +277,22 @@ const initPostgres = async () => {
             max: Number(process.env.DB_POOL_MAX || 5),
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 15000,
+            // Phase 4: explicit search_path (belt and braces next to the
+            // schema-qualified table names above) so no query can silently
+            // resolve to public.bera_state on a default deployment.
+            options: searchPathOption(dbSchema),
             ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false }
         })
 
         await migrateStateTable()
         const result = await _pool.query(
-            'SELECT data FROM bera_state WHERE tenant_id = $1',
+            `SELECT data FROM ${beraStateTable} WHERE tenant_id = $1`,
             [tenantId]
         )
         if (result.rows[0]?.data) _db.setState(mergeDefaults(defaultData, result.rows[0].data)).write()
         await persistPostgres()
         _provider = 'postgresql'
-        console.log(`[DB] PostgreSQL persistence enabled for tenant: ${tenantId}`)
+        console.log(`[DB] PostgreSQL persistence enabled for tenant: ${tenantId} (schema: ${dbSchema})`)
         return true
     } catch (error) {
         console.error('[DB] PostgreSQL unavailable; using JSON fallback:', error.message)
@@ -280,6 +317,9 @@ const initDb = async () => {
         write: () => writeState(),
         get provider() { return _provider },
         get tenantId() { return tenantId },
+        get tenantSource() { return tenantResolution.source },
+        get dbSchema() { return dbSchema },
+        get writeHealth() { return getWriteHealth() },
         get ready() { return Boolean(_db) },
         get pool() { return _pool }
     }
@@ -365,5 +405,10 @@ module.exports = {
     saveDeployment,
     saveSession,
     getSession,
-    recordAudit
+    recordAudit,
+    // Phase 4: explicit schema + failed-write alarm (spec §20).
+    get dbSchema() { return dbSchema },
+    get tenantId() { return tenantId },
+    get tenantSource() { return tenantResolution.source },
+    getWriteHealth
 }

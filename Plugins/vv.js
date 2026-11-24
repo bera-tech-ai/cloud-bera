@@ -3,6 +3,11 @@
 const config = require('../Config')
 const { findMedia, downloadMediaContent, downloadRawMedia, buildResendPayload } = require('../Library/lib/baileys-media')
 const rawStore = require('../Library/lib/view-once-store')
+// Phase 4 (spec §25): view-once recovery is disabled by default. Only an
+// explicit owner opt-in (BERA_ALLOW_VIEWONCE_RECOVERY=1 or the
+// allowViewOnceRecovery setting) enables it; otherwise the command answers
+// with the standard unsupported response and recovers nothing.
+const { isViewOnceRecoveryAllowed, VIEWONCE_RECOVERY } = require('../Library/lib/recovery-gate')
 
 if (typeof global.antivvEnabled === 'undefined') global.antivvEnabled = true
 
@@ -53,7 +58,7 @@ async function recover(sock, message, ctx) {
 
 module.exports = {
     commands: ['vv', 'viewonce', 'open', 'openphoto', 'openvideo', 'vvphoto', 'vvsave', 'savevv', 'vvdm'],
-    description: 'Recover view-once image, video, audio, sticker, or document media',
+    description: 'Open view-once media this bot received while it was still viewable (disabled by default — see spec §25; enable with BERA_ALLOW_VIEWONCE_RECOVERY=1)',
     permission: 'owner',
     group: true,
     private: true,
@@ -62,6 +67,10 @@ module.exports = {
         const command = String(ctx.command || 'vv').toLowerCase()
         const chat = ctx.jid || message.key?.remoteJid
         const quoted = message.quoted
+        // Phase 4 (spec §25): no arbitrary view-once recovery. When the gate
+        // is off, say so in the standard format and stop — do not download
+        // or re-send anything.
+        if (!isViewOnceRecoveryAllowed()) return ctx.reply(VIEWONCE_RECOVERY().card)
         if (!quoted) return ctx.reply('❌ Reply to the view-once media with .vv or .vvsave.')
 
         try {

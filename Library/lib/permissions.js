@@ -8,7 +8,9 @@ const OWNER_ONLY = new Set([
     'genkey', 'revokekey', 'extendkey', 'listkeys', 'sudo', 'delsudo', 'resetsudo',
     'block', 'unblock', 'blocklist', 'resetlimit', 'listusers', 'mode', 'noprefix',
     'berahost', 'berahost_deploy', 'pterodactyl', 'pt', 'project_lifecycle',
-    'deploy', 'deployweb', 'delete_deployment'
+    'deploy', 'deployweb', 'delete_deployment',
+    // Phase 4: tenant operations and channel operations are owner-only.
+    'tenant', 'tenants', 'channel', 'channels'
 ])
 
 const GROUP_ADMIN_ONLY = new Set([
