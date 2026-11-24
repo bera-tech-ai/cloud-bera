@@ -77,6 +77,10 @@ const checkNumber = async (conn, number) => {
     }
 }
 
+const CLOSE_FRIENDS_UNSUPPORTED = 'Close-friends / restricted status is unsupported: WhatsApp does not expose a close-friends audience for status posts through the installed Baileys runtime. Post to your normal status or a group status instead, or retry without a restricted audience.'
+
+const mChat = (action) => action?.chat || action?.jid || ''
+
 const normalizeJid = (value) => {
     const raw = String(value || '').trim()
     if (!raw) return null
@@ -98,6 +102,20 @@ const resolveTarget = async (conn, m, spec, options = {}) => {
     }
     if (!jid && ['me', 'myself', 'owner'].includes(lower)) jid = m?.sender
     if (!jid && /^\+?[0-9]{7,15}$/.test(value)) jid = normalizeJid(value)
+    if (!jid) {
+        // Pronouns / referents (spec §3): "him/her/them", "that person",
+        // "the person who replied". Ambiguity never resolves silently.
+        try {
+            const referents = require('./referents')
+            const chat = m?.chat || m?.key?.remoteJid
+            const resolved = referents.resolvePerson(chat, lower, m)
+            if (resolved?.ambiguous) throw new Error(referents.clarificationReply(resolved.candidates))
+            if (resolved?.jid) jid = resolved.jid
+        } catch (error) {
+            if (error?.message?.includes('Which person did you mean')) throw error
+            // Referent lookup is best-effort; fall through to the generic error.
+        }
+    }
     if (!jid) throw new Error('No valid WhatsApp recipient was found. Use a number, reply, tag, or current private chat.')
     if (jid.endsWith('@g.us') || jid.endsWith('@newsletter')) {
         if (!options.allowSpecial) throw new Error('This action requires a private WhatsApp recipient.')
@@ -114,7 +132,7 @@ const resolveTarget = async (conn, m, spec, options = {}) => {
 
 const execute = async (conn, owner, action) => {
     try {
-        if (!action || !['send', 'sendMedia', 'forward', 'story', 'groupstory'].includes(action.type)) throw new Error('Unknown WhatsApp action.')
+        if (!action || !['send', 'sendMedia', 'forward', 'story', 'groupstory', 'react', 'pin', 'unpin', 'edit', 'delete', 'poll'].includes(action.type)) throw new Error('Unknown WhatsApp action.')
         if (action.type === 'send') {
             const target = action.jid ? { jid: action.jid, number: action.number || action.jid.split('@')[0], exists: true } : await checkNumber(conn, action.number)
             if (target.exists === false) throw new Error(`+${target.number} is not registered on WhatsApp.`)
@@ -134,7 +152,7 @@ const execute = async (conn, owner, action) => {
             return result
         }
 
-        if (action.type === 'forward') {
+        if (action.type === 'forward' && !Array.isArray(action.destinations)) {
             if (!action.jid || !action.message) throw new Error('A recipient and quoted message are required.')
             const sent = typeof conn.copyNForward === 'function'
                 ? await conn.copyNForward(action.jid, action.message, true)
@@ -145,7 +163,119 @@ const execute = async (conn, owner, action) => {
             return result
         }
 
+        if (action.type === 'react') {
+            if (!action.key) throw new Error('A message key is required to react to a message.')
+            // Empty text removes the reaction (spec §7).
+            const sent = await conn.sendMessage(action.chat || action.jid || mChat(action), { react: { text: String(action.emoji ?? action.text ?? ''), key: action.key } })
+            if (!sent) throw new Error('Baileys did not accept the reaction request.')
+            const result = { ok: true, key: action.key, emoji: String(action.emoji ?? action.text ?? '') }
+            record(owner, action, result)
+            return result
+        }
+
+        if (action.type === 'pin' || action.type === 'unpin') {
+            if (!action.key) throw new Error('A message key is required to pin or unpin a message.')
+            const isUnpin = action.type === 'unpin'
+            const sent = await conn.sendMessage(action.chat, {
+                pin: action.key,
+                type: isUnpin ? 0 : 1,
+                time: isUnpin ? 0 : (Number.isInteger(action.time) ? action.time : 604800),
+            })
+            if (!sent) throw new Error(`Baileys did not accept the ${isUnpin ? 'unpin' : 'pin'} request.`)
+            const result = { ok: true, key: action.key }
+            record(owner, action, result)
+            return result
+        }
+
+        if (action.type === 'edit') {
+            if (!action.key || typeof action.text !== 'string' || !action.text.trim()) throw new Error('A message key and replacement text are required to edit a message.')
+            // Bot-authored only (spec §9). key.fromMe is authoritative; fall
+            // back to comparing the key participant against the bot identity.
+            const botIds = [conn?.user?.id, conn?.user?.lid].filter(Boolean).map(String)
+            const participant = action.key.participant || action.key.participantAlt || action.key.remoteJid
+            const isBotAuthored = Boolean(action.key.fromMe) ||
+                (participant && botIds.some(id => String(participant).split(':')[0].toLowerCase() === id.split(':')[0].toLowerCase()))
+            if (!isBotAuthored) throw new Error('I can edit only a message sent by this bot. Quote a bot message and provide the replacement text. Messages from other people cannot be edited, and old or unavailable messages may no longer be editable.')
+            const sent = await conn.sendMessage(action.chat, { text: action.text, edit: action.key })
+            if (!sent) throw new Error('Baileys did not accept the edit request.')
+            const result = { ok: true, key: action.key }
+            record(owner, action, result)
+            return result
+        }
+
+        if (action.type === 'delete') {
+            if (!action.key) throw new Error('A message key is required to delete a message.')
+            const sent = await conn.sendMessage(action.chat, { delete: action.key })
+            if (!sent) throw new Error('Baileys did not accept the delete request.')
+            const result = { ok: true, key: action.key }
+            record(owner, action, result)
+            return result
+        }
+
+        if (action.type === 'poll') {
+            const question = String(action.question || action.name || '').trim()
+            const options = Array.isArray(action.options) ? action.options.map(o => String(o).trim()).filter(Boolean)
+                : Array.isArray(action.values) ? action.values.map(o => String(o).trim()).filter(Boolean) : []
+            if (!question) throw new Error('A poll needs a question.')
+            if (options.length < 2 || options.length > 12) throw new Error('A poll needs 2–12 options.')
+            if (!action.chat) throw new Error('A poll needs a destination chat.')
+            // Native poll, poll creation v3 encoding in the installed Baileys
+            // runtime (spec §11/§24). Acceptance is checked, never assumed.
+            const sent = await conn.sendMessage(action.chat, {
+                poll: { name: question.slice(0, 300), values: options.slice(0, 12).map(o => o.slice(0, 100)), selectableCount: Number.isInteger(action.selectableCount) ? action.selectableCount : 1 },
+            })
+            if (!sent) throw new Error('Baileys did not accept the poll.')
+            const result = { ok: true, jid: action.chat, question }
+            record(owner, action, result)
+            return result
+        }
+
+        if (action.type === 'forward' && Array.isArray(action.destinations) && action.destinations.length) {
+            // Multi-destination forward (spec §12): each destination is
+            // forwarded in turn; a failure stops the run and is reported
+            // with the destinations already reached.
+            const done = []
+            for (const dest of action.destinations) {
+                const jid = typeof dest === 'string' ? dest : dest.jid
+                if (!jid || !action.message) throw new Error('A recipient and quoted message are required.')
+                const sent = typeof conn.copyNForward === 'function'
+                    ? await conn.copyNForward(jid, action.message, true)
+                    : await conn.sendMessage(jid, action.message)
+                if (!sent) throw new Error(`Baileys did not accept the forwarded message to ${jid}.`)
+                done.push(jid)
+            }
+            const result = { ok: true, jid: done[0], destinations: done }
+            record(owner, action, result)
+            return result
+        }
+
+        // Close-friends / restricted status is explicitly unsupported (§6/§25).
+        if ((action.type === 'story' || action.type === 'groupstory') &&
+            ['close_friends', 'closefriends', 'close-friends', 'restricted'].includes(String(action.audience || '').toLowerCase())) {
+            throw new Error(CLOSE_FRIENDS_UNSUPPORTED)
+        }
+
         const text = String(action.text || '').trim()
+        if (action.type === 'story' && action.mediaType && action.url) {
+            if (!['image', 'video'].includes(action.mediaType)) throw new Error('Status media must be an image or a video.')
+            const sent = await conn.sendMessage('status@broadcast', { [action.mediaType]: { url: action.url }, ...(action.caption ? { caption: action.caption } : {}) })
+            if (!sent) throw new Error('Baileys did not accept the media story.')
+            const result = { ok: true, jid: 'status@broadcast' }
+            record(owner, action, result)
+            return result
+        }
+        if (action.type === 'groupstory' && (action.mediaType || action.media)) {
+            const { sendGroupStatus } = require('../actions/gcstatus')
+            const content = action.media
+                ? { [action.mediaType || 'image']: action.media, caption: action.caption || action.text || '' }
+                : null
+            if (!content) throw new Error('Group media status needs a downloaded media buffer. Quote the media and try again, or post it as text.')
+            const sent = await sendGroupStatus(conn, action.groupJid, content)
+            if (!sent) throw new Error('Baileys did not accept the group story.')
+            const result = { ok: true, jid: action.groupJid }
+            record(owner, action, result)
+            return result
+        }
         if (!text) throw new Error('Story text cannot be empty.')
         if (action.type === 'groupstory') {
             const { sendGroupStatus } = require('../actions/gcstatus')
@@ -174,6 +304,8 @@ const execute = async (conn, owner, action) => {
 const getAudit = (owner) => audit.filter(item => item.owner === String(owner || '')).slice(-20)
 
 module.exports = {
+    CLOSE_FRIENDS_UNSUPPORTED,
+    PENDING_TTL_MS,
     normalizeNumber,
     normalizeJid,
     checkNumber,

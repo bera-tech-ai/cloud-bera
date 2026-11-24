@@ -13,16 +13,22 @@ module.exports = {
 
         // ── UNPIN ────────────────────────────────────────────────
         if (sub === 'unpin' || sub === 'remove') {
+            // Spec §8 unpin payload: { pin: targetKey, type: 0, time: 0 }.
+            // Target is the quoted message, not the command message itself.
+            const unpinTarget = quoted || m.quoted;
+            if (!unpinTarget) return reply('`✘ Reply to the pinned message with .unpin`');
             try {
-                await sock.sendMessage(m.chat, {
-                    pin: m.key,
-                    type: 0 // 0 = unpin
+                const sent = await sock.sendMessage(m.chat, {
+                    pin: unpinTarget.key,
+                    type: 0, // 0 = unpin
+                    time: 0
                 });
+                if (!sent) throw new Error('Baileys did not accept the unpin request.');
                 await sock.sendMessage(m.chat, { react: { text: '📌', key: m.key } });
-                return reply('_*🥏 Message unpinned!*_');
+                return reply('✅ Unpin request accepted by Baileys.');
             } catch (error) {
                 await sock.sendMessage(m.chat, { react: { text: '❔', key: m.key } });
-                return reply('`✘ Failed to unpin message`');
+                return reply('`✘ Failed to unpin message: ' + error.message + '`');
             }
         }
 
@@ -62,11 +68,12 @@ module.exports = {
         await sock.sendMessage(m.chat, { react: { text: '📌', key: m.key } });
 
         try {
-            await sock.sendMessage(m.chat, {
-                pin: target.key || target.key,
+            const sent = await sock.sendMessage(m.chat, {
+                pin: target.key,
                 time: time,
                 type: 1 // 1 = pin
             });
+            if (!sent) throw new Error('Baileys did not accept the pin request.');
 
             // Format duration for response
             let durationText = '30 days';
@@ -75,6 +82,7 @@ module.exports = {
             else if (time === 3600) durationText = '1 hour';
 
             await sock.sendMessage(m.chat, { react: { text: '📅', key: m.key } });
+            return reply('Pin request accepted by Baileys. Final device-side visibility depends on WhatsApp processing.');
          //   await reply(
         //        `╭─❍ *MESSAGE PINNED*\n│\n` +
         ///        `│ ⇆ *Status:* Pinned\n` +
