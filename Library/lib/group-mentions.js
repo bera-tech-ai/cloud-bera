@@ -1,4 +1,5 @@
 'use strict'
+const { formatBeraCard, stripCardOptions } = require('./bera-card')
 
 const normalizeJid = value => String(value || '').replace(/:\d+@/, '@')
 
@@ -25,7 +26,14 @@ const addRequesterMention = (message, value, extra = {}, field = 'text') => {
 const sendGroupReply = (conn, message, text, extra = {}) => {
     const chat = message?.chat || message?.key?.remoteJid
     if (!chat || !conn?.sendMessage) return Promise.resolve(null)
-    const payload = addRequesterMention(message, text, extra, 'text')
+    const cardOptions = extra.card === false || extra.raw === true ? { enabled: false } : {
+        title: extra.cardTitle,
+        subtitle: extra.cardSubtitle,
+        type: extra.cardType,
+        status: extra.cardStatus,
+        footer: extra.cardFooter,
+    }
+    const payload = addRequesterMention(message, formatBeraCard(text, cardOptions), stripCardOptions(extra), 'text')
     return conn.sendMessage(chat, payload, { quoted: message })
 }
 

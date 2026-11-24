@@ -5,6 +5,7 @@ const { getAccessContext, authorizeCommand } = require('../Library/lib/permissio
 const fs = require('fs')
 const path = require('path')
 const { sendGroupReply } = require('../Library/lib/group-mentions')
+const { formatBeraCard } = require('../Library/lib/bera-card')
 const { getInteractiveReply } = require('../Library/lib/interactive-replies')
 const waActions = require('../Library/lib/wa-actions')
 
@@ -77,6 +78,34 @@ const getPrefix = () => {
     return config.prefix
 }
 
+// Legacy commands often call conn.sendMessage({ text }) directly instead of
+// ctx.reply(). Keep those commands on the same response-card path without
+// touching media, reactions, documents, polls, or other structured payloads.
+const cardConnection = (conn, message, title, subtitle) => new Proxy(conn, {
+    get(target, property) {
+        if (property !== 'sendMessage') {
+            const value = target[property]
+            return typeof value === 'function' ? value.bind(target) : value
+        }
+        return (jid, content, options) => {
+            if (content && typeof content === 'object' && typeof content.text === 'string' && content.raw !== true && content.card !== false) {
+                const { raw, card, cardTitle, cardSubtitle, cardType, cardStatus, cardFooter, ...payload } = content
+                content = {
+                    ...payload,
+                    text: formatBeraCard(content.text, {
+                        title: cardTitle || title,
+                        subtitle: cardSubtitle || subtitle,
+                        type: cardType,
+                        status: cardStatus,
+                        footer: cardFooter,
+                    })
+                }
+            }
+            return target.sendMessage(jid, content, options)
+        }
+    }
+})
+
 const smsg = (conn, m) => {
     if (!m) return m
     const M = m.message
@@ -137,7 +166,7 @@ const checkAutoReply = async (conn, m, text) => {
     const lower = text.toLowerCase()
     for (const [keyword, response] of Object.entries(autoReplies)) {
         if (lower.includes(keyword.toLowerCase())) {
-            await conn.sendMessage(m.chat, { text: response }, { quoted: m })
+            await sendGroupReply(conn, m, response, { cardTitle: 'AUTO REPLY', cardSubtitle: 'BERA AUTOMATION' })
             return true
         }
     }
@@ -4471,14 +4500,15 @@ const handleMessage = async (conn, rawMsg) => {
         const access = await getAccessContext({ conn, chat, sender, isOwner, authorized })
         const policy = authorizeCommand(command, access)
         if (!policy.allowed) {
-            return conn.sendMessage(chat, { text: `⛔ ${policy.reason}` }, { quoted: m })
+            return sendGroupReply(conn, m, `⛔ ${policy.reason}`, { cardTitle: command.toUpperCase(), cardSubtitle: 'BOT PERMISSION' })
         }
         const isGroup = access.isGroup
         const isAdmin = access.isAdmin
         const beraAiCommands = new Set(['bera', 'agent', 'chatbot', 'beraclone', 'apidocs', 'scaffold', 'create', 'init', 'replit', 'rpl'])
         const isBeraAiCommand = handler?.isBeraAI === true || beraAiCommands.has(command)
+        const commandConn = cardConnection(conn, m, isBeraAiCommand ? 'AGENT' : command.toUpperCase(), isBeraAiCommand ? 'WHATSAPP AGENT' : 'BOT COMMAND')
         const ctx = {
-            conn,
+            conn: commandConn,
             m,
             text: body,
             args,
@@ -4496,10 +4526,12 @@ const handleMessage = async (conn, rawMsg) => {
             role: access.role,
             permission: policy.policy,
             isAuthorized: authorized,
-            reply: (txt, extra = {}) => isBeraAiCommand
-                ? sendGroupReply(conn, m, String(txt), extra)
-                : conn.sendMessage(chat, { text: String(txt), ...extra }, { quoted: m }),
-            react: (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {}),
+            reply: (txt, extra = {}) => sendGroupReply(conn, m, String(txt), {
+                ...extra,
+                cardTitle: extra.cardTitle || (isBeraAiCommand ? 'AGENT' : command.toUpperCase()),
+                cardSubtitle: extra.cardSubtitle || (isBeraAiCommand ? 'WHATSAPP AGENT' : 'BOT COMMAND'),
+            }),
+            react: (e) => commandConn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {}),
         }
 
         if (global.db?.data?.settings?.autoTyping !== false) {
@@ -4518,7 +4550,7 @@ const handleMessage = async (conn, rawMsg) => {
                 contextInfo:  m.msg?.contextInfo || m.message?.extendedTextMessage?.contextInfo || {},
                 safeSend: ctx.reply,
             }
-            await handler.run(conn, m, args, extCtx)
+            await handler.run(commandConn, m, args, extCtx)
         } else if (typeof handler?.all === 'function') {
             await handler.all(m, ctx)
         } else {
@@ -4566,14 +4598,28 @@ const runCommand = async (commandName, argsString, m, conn, options = {}) => {
         const isGroup = access.isGroup
         const isAdmin = access.isAdmin
         const prefix = getPrefix()
+        const commandConn = cardConnection(conn, m, commandRoute.toUpperCase(), 'AGENT COMMAND')
         const captured = []
         const reply = async (txt, extra = {}) => {
-            captured.push(String(txt))
+            captured.push(formatBeraCard(String(txt), {
+                enabled: extra.card !== false && extra.raw !== true,
+                title: extra.cardTitle || commandRoute.toUpperCase(),
+                subtitle: extra.cardSubtitle || 'AGENT COMMAND',
+                type: extra.cardType,
+                status: extra.cardStatus,
+                footer: extra.cardFooter,
+            }))
             if (options.captureOnly) return
-            try { await sendGroupReply(conn, m, String(txt)) } catch {}
+            try {
+                await sendGroupReply(conn, m, String(txt), {
+                    ...extra,
+                    cardTitle: extra.cardTitle || commandRoute.toUpperCase(),
+                    cardSubtitle: extra.cardSubtitle || 'AGENT COMMAND',
+                })
+            } catch {}
         }
         const ctx = {
-            conn, m, text, args, command: commandRoute, sender, chat, prefix,
+            conn: commandConn, m, text, args, command: commandRoute, sender, chat, prefix,
             isOwner, isGroup, isAdmin,
             isBotAdmin: access.isBotAdmin,
             isSenderAdmin: access.isSenderAdmin,
@@ -4593,7 +4639,7 @@ const runCommand = async (commandName, argsString, m, conn, options = {}) => {
                 contextInfo:  m.msg?.contextInfo || m.message?.extendedTextMessage?.contextInfo || {},
                 safeSend: ctx.reply,
             }
-            await handler.run(conn, m, args, extCtx)
+            await handler.run(commandConn, m, args, extCtx)
         }
         else if (typeof handler.all === 'function') await handler.all(m, ctx)
         else if (typeof handler.handler === 'function') await handler.handler(m, ctx)
