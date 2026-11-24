@@ -139,11 +139,11 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
         if (!action) return reply('❌ Token is invalid, expired, or belongs to another owner session.')
         const result = await execute(conn, sender, action)
         if (!result.ok) return reply(`❌ Action failed: ${result.error}`)
-        return reply(action.type === 'story'
-            ? '✅ Text story posted to WhatsApp status.'
-            : action.type === 'groupstory'
-            ? '✅ Text story posted to the current group.'
-            : `✅ Message sent to +${result.number}.`)
+        // execute() only confirms Baileys acceptance, never device-side
+        // visibility — report exactly that (spec §23), not "sent"/"posted".
+        return reply(action.type === 'send'
+            ? `${result.message}\nTarget: +${result.number}`
+            : result.message)
     }
 
     if (sub === 'cancel') {
