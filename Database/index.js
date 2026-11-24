@@ -43,6 +43,13 @@ const defaultData = {
     },
     stats: { totalCommands: 0, startedAt: Date.now() },
     reminders: [],
+    // Pending WhatsApp confirmation tokens (Library/lib/wa-actions.js):
+    // { token, owner, action, createdAt, expiresAt }. Written on every
+    // stage/consume/cancel and pruned of expired entries on boot, so a
+    // staged send/story survives a restart but never outlives its 2-minute
+    // TTL. Persisted with the rest of this state (lowdb JSON + Postgres
+    // bera_state snapshot) by global.db.write().
+    pendingConfirmations: [],
     pendingCreds: {},
     sessions: {}
 }

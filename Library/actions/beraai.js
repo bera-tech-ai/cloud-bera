@@ -983,7 +983,9 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         action.jid = target.jid
         action.number = target.number
         const token = waActions.stage(m.sender || m.key?.participant || chatId, action)
-        return `⏳ Preview only — nothing was sent.\nTarget: ${target.jid}\nAction: ${action.type}\nToken: ${token}\nReply with .wact confirm ${token} to execute, or .wact cancel ${token}.`
+        // Single source of truth for preview text: always shows the expiry
+        // time (Africa/Nairobi) and the cancellation instruction.
+        return waActions.formatPreview(action, token)
     }
     const requireGroupMutationAccess = async group => {
         if (!group || !String(group).endsWith('@g.us')) return '❌ This action must target a WhatsApp group.'
