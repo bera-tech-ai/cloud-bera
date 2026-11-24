@@ -43,6 +43,7 @@ const defaultData = {
     },
     stats: { totalCommands: 0, startedAt: Date.now() },
     reminders: [],
+    cronJobs: [],
     pendingCreds: {},
     sessions: {}
 }

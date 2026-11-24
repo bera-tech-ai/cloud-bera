@@ -290,33 +290,28 @@ const startBioLoop = (conn) => {
 
 let reminderLoopStarted = false
 
+// Persistent reminders live in global.db.data.reminders and are delivered by
+// Library/actions/reminders.js. The old inline loop only fired one-time
+// reminders and deleted them on fire; the new loop also reschedules repeats
+// and sends one follow-up nudge if a reminder is not done/snoozed in 10 min.
+// Cron job definitions saved in global.db.data.cronJobs are re-registered
+// here so they survive a restart (see Library/actions/scheduler.js).
 const startReminderLoop = (conn) => {
     if (reminderLoopStarted) return
     reminderLoopStarted = true
     console.log(chalk.gray('[BOT] Reminder loop started'))
 
-    setInterval(async () => {
-        try {
-            if (!global.db?.data?.reminders?.length) return
-            const now = Date.now()
-            const due = global.db.data.reminders.filter(r => r.fireAt <= now)
-            if (!due.length) return
+    try {
+        const { restoreCronJobs } = require('../Library/actions/scheduler')
+        const restored = restoreCronJobs(conn)
+        if (restored.restored) console.log(chalk.gray(`[BOT] Restored ${restored.restored} cron job(s)`))
+        if (restored.skipped) console.log(chalk.yellow(`[BOT] Skipped ${restored.skipped} saved cron job(s) (invalid expression)`))
+    } catch (e) { console.error('[REMINDER] Could not restore cron jobs:', e.message) }
 
-            global.db.data.reminders = global.db.data.reminders.filter(r => r.fireAt > now)
-            await global.db.write()
-
-            for (const r of due) {
-                try {
-                    await conn.sendMessage(r.chat, {
-                        text: `⏰ *Reminder!*\n\n_${r.msg}_\n\n_(set by @${r.jid.split('@')[0]})_`,
-                        mentions: [r.jid]
-                    })
-                } catch (e) {
-                    console.error('[REMINDER]', e.message)
-                }
-            }
-        } catch {}
-    }, 30000) // check every 30 seconds
+    try {
+        const { startPersistentReminderLoop } = require('../Library/actions/reminders')
+        startPersistentReminderLoop(conn)
+    } catch (e) { console.error('[REMINDER] Reminder loop failed to start:', e.message) }
 }
 
 const startBot = async () => {

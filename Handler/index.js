@@ -2829,17 +2829,19 @@ const handleMessage = async (conn, rawMsg) => {
                 }
 
                 if (intent === 'remind' || intent === 'admin_remind') {
-                    const rM = text.match(/remind\s+me\s+(?:to\s+)?(.+?)\s+(?:in|after)\s+(\d+)\s*(min(?:ute)?s?|hour?s?|sec(?:ond)?s?)/i)
-                    if (!rM) { await reply('❓ Format: *Bera remind me to drink water in 5 minutes*'); return }
-                    const task   = rM[1].trim()
-                    const amount = parseInt(rM[2])
-                    const unit   = rM[3].toLowerCase()
-                    const ms     = unit.startsWith('h') ? amount*3600000 : unit.startsWith('s') ? amount*1000 : amount*60000
+                    // Persistent reminder (Library/actions/reminders.js): saved
+                    // in db.reminders and delivered by the loop, so it survives
+                    // a restart. The old version used a setTimeout capped at
+                    // 24h and only understood "in N minutes/hours".
+                    const { parseNaturalReminder, createReminder, formatNairobi, repeatLabel } = require('../Library/actions/reminders')
+                    const phrase = (text.match(/remind\s+me\s+(?:to\s+)?(.+)$/i) || [])[1] || ''
+                    const parsed = parseNaturalReminder(phrase.trim())
+                    if (parsed.error) { await reply('❓ ' + parsed.error + '\nSay it like: *Bera remind me to drink water in 5 minutes* or *Bera remind me to call mum tomorrow at 9am*'); return }
+                    let created
+                    try { created = createReminder({ chat, jid: sender, msg: parsed.msg, fireAt: parsed.fireAt, repeat: parsed.repeat }) }
+                    catch (e) { await reply('❌ ' + e.message); return }
                     await react('⏰')
-                    await reply('⏰ Got it! I will remind you to *' + task + '* in ' + amount + ' ' + unit + '.')
-                    setTimeout(() => {
-                        conn.sendMessage(chat, { text: '⏰ *REMINDER:*\n' + task }, { quoted: m }).catch(()=>{})
-                    }, Math.min(ms, 24*3600000))
+                    await reply('⏰ Got it! I will remind you to *' + created.msg + '* at ' + formatNairobi(created.fireAt) + ' (Africa/Nairobi). [#' + created.id + ']' + (created.repeat ? ' 🔁 ' + repeatLabel(created.repeat) : ''))
                     return
                 }
 
@@ -3216,8 +3218,14 @@ const handleMessage = async (conn, rawMsg) => {
                     const msgMatch = text.match(/["']([^"']+)["']/) || text.match(/send\s+(.+)$/i)
                     const msg = msgMatch ? msgMatch[1] : 'Reminder!'
                     await react('⏰')
-                    const r = agent.scheduleMessage(conn, chat, `⏰ *Scheduled Reminder:*\n${msg}`, ms)
-                    await reply(`✅ Scheduled: "${msg.slice(0,50)}" in *${amount} ${unit}${amount>1?'s':''}*`)
+                    // Persistent: saved in db.reminders so it survives a
+                    // restart. (The old agent.scheduleMessage used an
+                    // in-memory timer.)
+                    const { createReminder, formatNairobi } = require('../Library/actions/reminders')
+                    let created
+                    try { created = createReminder({ chat, jid: sender, msg, fireAt: Date.now() + ms, repeat: null }) }
+                    catch (e) { await reply('❌ ' + e.message); return }
+                    await reply(`✅ Scheduled: "${msg.slice(0,50)}" for *${formatNairobi(created.fireAt)}* (Africa/Nairobi) [#${created.id}]`)
                     return
                 }
 
