@@ -60,6 +60,23 @@ function isViewOnceMessage(message) {
     return false
 }
 
+function extractViewOnceText(message) {
+    const content = unwrapMessage(message)
+    if (!content) return null
+    const im = content.interactiveMessage
+    if (im) {
+        const parts = []
+        const title = im.header?.title || im.header?.text
+        if (title) parts.push(String(title))
+        if (im.body?.text) parts.push(String(im.body.text))
+        if (im.footer?.text) parts.push(String(im.footer.text))
+        if (parts.length) return parts.join('\n')
+    }
+    if (typeof content.conversation === 'string' && content.conversation) return content.conversation
+    if (content.extendedTextMessage?.text) return content.extendedTextMessage.text
+    return null
+}
+
 function findMedia(message) {
     const content = unwrapMessage(message)
     if (!content) return null
@@ -163,4 +180,4 @@ function buildResendPayload(media, buffer, caption = '') {
     }
 }
 
-module.exports = { MEDIA_TYPES, VIEW_ONCE_WRAPPERS, unwrapMessage, findMedia, downloadMediaContent, downloadRawMedia, downloadViewOnceFirst, buildResendPayload, isViewOnceMessage, loadViewOnceFork }
+module.exports = { MEDIA_TYPES, VIEW_ONCE_WRAPPERS, unwrapMessage, findMedia, extractViewOnceText, downloadMediaContent, downloadRawMedia, downloadViewOnceFirst, buildResendPayload, isViewOnceMessage, loadViewOnceFork }

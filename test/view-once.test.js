@@ -70,3 +70,35 @@ test('downloadViewOnceFirst fails honestly when the media cannot be served', asy
     await assert.rejects(() => downloadViewOnceFirst(raw, media, sock))
     await assert.rejects(() => downloadViewOnceFirst(raw, null, sock), /No original raw message/)
 })
+
+test('extractViewOnceText reveals a media-less view-once card', () => {
+    const { extractViewOnceText } = require('../Library/lib/baileys-media')
+    const card = { viewOnceMessage: { message: { interactiveMessage: {
+        header: { title: 'Toxic-MD', subtitle: 'Q', hasMediaAttachment: false },
+        body: { text: 'the hidden body text' },
+        footer: { text: 'a footer' },
+    } } } }
+    const text = extractViewOnceText(card)
+    assert.match(text, /Toxic-MD/)
+    assert.match(text, /hidden body text/)
+    const mediaVo = { viewOnceMessageV2: { message: { imageMessage: { mimetype: 'image/jpeg' } } } }
+    assert.equal(extractViewOnceText(mediaVo), null)
+})
+
+test('the arrival media cache round-trips bytes and metadata', () => {
+    const fs = require('node:fs')
+    const os = require('node:os')
+    const path = require('node:path')
+    process.env.BERA_VIEWONCE_MEDIA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'vo-media-'))
+    const cachePath = require.resolve('../Library/lib/view-once-cache')
+    delete require.cache[cachePath]
+    const cache = require(cachePath)
+    const buf = Buffer.from('fake-jpeg-bytes')
+    assert.equal(cache.put('123@g.us', 'MSG1', buf, { kind: 'image', field: 'image', mimetype: 'image/jpeg' }), true)
+    const hit = cache.get('123@g.us', 'MSG1')
+    assert.deepEqual(hit.buffer, buf)
+    assert.equal(hit.meta.kind, 'image')
+    assert.equal(cache.get('123@g.us', 'NOPE'), null)
+    delete process.env.BERA_VIEWONCE_MEDIA_DIR
+    delete require.cache[cachePath]
+})

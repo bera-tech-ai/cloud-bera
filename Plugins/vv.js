@@ -1,7 +1,7 @@
 'use strict'
 
 const config = require('../Config')
-const { findMedia, downloadMediaContent, downloadViewOnceFirst, buildResendPayload } = require('../Library/lib/baileys-media')
+const { findMedia, extractViewOnceText, downloadMediaContent, downloadViewOnceFirst, buildResendPayload } = require('../Library/lib/baileys-media')
 const rawStore = require('../Library/lib/view-once-store')
 // Phase 4 (spec §25): view-once recovery is disabled by default. Only an
 // explicit owner opt-in (BERA_ALLOW_VIEWONCE_RECOVERY=1 or the
@@ -53,8 +53,29 @@ function infoText({ sender, group, originalCaption = '' }) {
 async function recover(sock, message, ctx) {
     const quoted = message.quoted
     const raw = rawFromQuoted(ctx, message)
+
+    // Arrival cache first: media captured the moment it arrived (antiviewonce)
+    // needs no download and no re-upload gamble.
+    const quotedId = quoted?.key?.id || quoted?.id
+    const chat = ctx.jid || message.key?.remoteJid
+    if (quotedId && chat) {
+        try {
+            const cached = require('../Library/lib/view-once-cache').get(chat, quotedId)
+            if (cached?.buffer?.length) {
+                const meta = cached.meta || {}
+                const media = { kind: meta.kind, field: meta.field, content: { mimetype: meta.mimetype, caption: meta.caption || '', fileName: meta.fileName, ptt: meta.ptt, gifPlayback: meta.gifPlayback } }
+                return { quoted, raw, media, buffer: cached.buffer }
+            }
+        } catch {}
+    }
+
     const media = findMedia(raw?.message) || findMedia(quoted?.message) || findMedia(message.message)
-    if (!media) throw new Error('Reply to a view-once image, video, audio, sticker, or document.')
+    if (!media) {
+        // Media-less view-once (e.g. an interactive text card): reveal its text.
+        const text = extractViewOnceText(raw?.message) || extractViewOnceText(quoted?.message)
+        if (text) return { quoted, raw, media: null, buffer: null, textOnly: text }
+        throw new Error('Reply to a view-once image, video, audio, sticker, or document.')
+    }
 
     // Candidates in order: the stored original (full media fields, captured
     // when the message arrived) first, then the quoted copy itself (stripped
@@ -95,6 +116,19 @@ module.exports = {
 
         try {
             const recovery = await recover(sock, message, ctx)
+            if (recovery.textOnly) {
+                const reveal = `👁️ *View-once text revealed:*\n\n${recovery.textOnly}`
+                if (['vvsave', 'savevv', 'vvdm'].includes(command)) {
+                    const destination = ownerJid()
+                    if (!destination) throw new Error('OWNER_NUMBER is not configured.')
+                    await sock.sendMessage(destination, { text: reveal })
+                    await sock.sendMessage(chat, { react: { text: '✅', key: message.key } }).catch(() => {})
+                    return ctx.reply('✅ View-once text saved to the owner DM.')
+                }
+                await sock.sendMessage(chat, { text: reveal }, { quoted: message })
+                await sock.sendMessage(chat, { react: { text: '✅', key: message.key } }).catch(() => {})
+                return
+            }
             const { media } = recovery
             const caption = media.content?.caption || ''
 
