@@ -48,7 +48,7 @@ test('natural-language language preference saves per sender and rolls back on wr
     assert.equal(data.chatbera.languagePreferences['254700000001@s.whatsapp.net'], 'en')
 })
 
-test('language and voice controls save per-sender choices and keep group voice off', async () => {
+test('language and voice controls save per-sender choices; group voice is owner-only', async () => {
     const previousDb = global.db
     global.db = { data: {}, write: async () => {} }
     const sender = '254700000001@s.whatsapp.net'
@@ -64,9 +64,17 @@ test('language and voice controls save per-sender choices and keep group voice o
         ctx.command = 'voice'
         await voicePlugin.run({}, {}, ['auto', 'on'], ctx)
         assert.equal(global.db.data.chatbera.voiceReplies[sender], true)
+        // A non-owner cannot switch a group to voice replies.
         ctx.jid = '12345@g.us'
+        ctx.isOwner = false
         await voicePlugin.run({}, {}, ['auto', 'on'], ctx)
-        assert.equal(global.db.data.chatbera.voiceReplies[sender], true)
-        assert.match(replies.at(-1), /private chat/i)
+        assert.equal(global.db.data.chatbera.voiceChats?.['12345@g.us'], undefined)
+        assert.match(replies.at(-1), /Only Bera/i)
+        // The owner can — group voice is off by default, not forbidden.
+        ctx.isOwner = true
+        await voicePlugin.run({}, {}, ['auto', 'on'], ctx)
+        assert.equal(global.db.data.chatbera.voiceChats['12345@g.us'], true)
+        await voicePlugin.run({}, {}, ['auto', 'status'], ctx)
+        assert.match(replies.at(-1), /ON/i)
     } finally { global.db = previousDb }
 })

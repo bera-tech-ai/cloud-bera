@@ -3,7 +3,24 @@
 // letting the regex router in Library/router.js take over.
 
 const tokenize = (text) =>
-    String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean)
+    String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean).filter(t => !STOPWORDS.has(t))
+
+// Stopwords carry no intent on their own. Without this filter a one-word
+// input like "this" scored 0.50 against the bug_finder example "debug this"
+// (single shared token) and "delete this" scored 0.33 — both above the
+// 0.30 threshold — so short delete requests were misrouted to bug_finder
+// (2026-11-24, TECH SPACE). Filtering them makes the semantic fallback
+// compare content words only; inputs left with no content words score 0.
+const STOPWORDS = new Set([
+    'a', 'an', 'the', 'this', 'that', 'these', 'those', 'it', 'its', 'it\'s',
+    'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am',
+    'do', 'does', 'did', 'done', 'can', 'could', 'will', 'would', 'should', 'shall', 'may', 'might', 'must',
+    'what', 'how', 'why', 'when', 'where', 'who', 'whom', 'which', 'whose',
+    'you', 'your', 'yours', 'me', 'my', 'mine', 'i', 'we', 'our', 'ours', 'he', 'she', 'they', 'them', 'their', 'theirs', 'his', 'her', 'him',
+    'in', 'on', 'at', 'to', 'of', 'for', 'with', 'by', 'from', 'into', 'over', 'under', 'about', 'as', 'if', 'then', 'than', 'and', 'or', 'but', 'not', 'no', 'yes',
+    'please', 'just', 'so', 'very', 'really', 'also', 'now', 'here', 'there',
+    'get', 'give', 'show', 'tell', 'say', 'see', 'look',
+])
 
 const jaccard = (setA, setB) => {
     if (!setA.size || !setB.size) return 0

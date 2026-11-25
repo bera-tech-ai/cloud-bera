@@ -2,7 +2,7 @@
 const { fetchTts, VOICE_MAP, normalizeLanguage } = require('../Library/actions/tts')
 
 const LANG_LABELS = {
-    en: 'English', fr: 'French', sw: 'Swahili', sh: 'Sheng (spoken with the closest Swahili voice)', sheng: 'Sheng (spoken with the closest Swahili voice)', ar: 'Arabic',
+    en: 'English', fr: 'French', sw: 'Swahili', sh: 'Sheng (Kenyan Sheng / English mix)', sheng: 'Sheng (Kenyan Sheng / English mix)', ar: 'Arabic',
     es: 'Spanish', de: 'German', ja: 'Japanese', zh: 'Chinese', hi: 'Hindi', pt: 'Portuguese', ko: 'Korean', ru: 'Russian', it: 'Italian', nl: 'Dutch'
 }
 const normalizeJid = value => String(value || '').replace(/:\d+@/, '@').toLowerCase()
@@ -16,7 +16,7 @@ module.exports = {
     private: true,
 
     run: async (sock, message, args, ctx) => {
-        const { jid, reply, sender, command } = ctx
+        const { jid, reply, sender, command, isOwner } = ctx
         const userKey = normalizeJid(sender || jid)
         const chatbera = () => {
             if (!global.db?.data) throw new Error('Database is not ready.')
@@ -46,22 +46,31 @@ module.exports = {
         if (String(args[0] || '').toLowerCase() === 'auto') {
             const choice = String(args[1] || 'status').toLowerCase()
             const state = chatbera()
+            const inGroup = String(jid || '').endsWith('@g.us')
             if (choice === 'status') {
-                return reply(`🔊 Automatic spoken replies are *${state.voiceReplies[userKey] ? 'ON' : 'OFF'}*.\nUse: .voice auto on|off. This only affects your private-chat AI replies; group voice replies stay off.`)
+                const on = inGroup ? state.voiceChats?.[jid] === true : state.voiceReplies[userKey] === true
+                return reply(`🔊 Automatic spoken replies are *${on ? 'ON' : 'OFF'}*${inGroup ? ' in this group' : ''}.\nUse: .voice auto on|off — or just say "from now on use voice".`)
             }
             if (!['on', 'off'].includes(choice)) return reply('Use `.voice auto on` or `.voice auto off`.')
-            if (choice === 'on' && String(jid || '').endsWith('@g.us')) return reply('For privacy, enable automatic voice replies in a private chat with the bot.')
+            if (inGroup) {
+                if (!isOwner) return reply('Only Bera can turn on voice replies for a group.')
+                state.voiceChats = state.voiceChats || {}
+                state.voiceChats[jid] = choice === 'on'
+                await global.db.write()
+                return reply(`🔊 Voice replies in this group turned *${choice.toUpperCase()}*. I\u2019ll answer with voice notes instead of text when the reply fits in one voice note.`)
+            }
             state.voiceReplies[userKey] = choice === 'on'
             await global.db.write()
-            return reply(`🔊 Automatic spoken replies turned *${choice.toUpperCase()}*. Text replies remain enabled.`)
+            return reply(`🔊 Automatic spoken replies turned *${choice.toUpperCase()}*. I\u2019ll answer with voice notes instead of text when the reply fits in one voice note.`)
         }
 
         if (!args.length) {
             return reply(
                 `🔊 *Voice controls*\n` +
-                `• .voice auto on|off — opt in/out of spoken private-chat AI replies\n` +
+                `• .voice auto on|off — answer with voice notes instead of text (in a group, only Bera can switch it on)\n` +
                 `• .language en|sw|sheng|auto — choose reply language (default: English)\n` +
-                `• .voice <text> or .voice <lang> <text> — send a voice note\n\n` +
+                `• .voice <text> or .voice <lang> <text> — send a voice note\n` +
+                `• or just say "from now on use voice" / "use text again"\n\n` +
                 `Languages: ${Object.keys(LANG_LABELS).join(', ')}`
             )
         }

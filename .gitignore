@@ -9,3 +9,7 @@ backups/
 *.log
 .phone
 workspace/
+
+# Piper voice binary + models (~150 MB) — installed on the host, not committed
+Library/assets/piper/piper/
+Library/assets/piper/voices/

@@ -128,3 +128,54 @@ test('execute validates media and story actions before sending', async () => {
     assert.equal(emptyStory.ok, false)
     assert.match(emptyStory.error, /cannot be empty/)
 })
+
+test('name targets resolve from the group roster, not only the name directory', async () => {
+    // 2026-11-24 TECH SPACE: "who is baba" found @baba.hany from the roster
+    // while "send hello to baba" said it didn't know him — the send path
+    // only consulted the learned-name directory. The roster is a real
+    // WhatsApp fact, so a match here also teaches the directory.
+    const referents = require('../Library/lib/referents')
+    const groupConn = {
+        ...conn,
+        groupMetadata: async () => ({
+            participants: [
+                { id: '88240858083431@s.whatsapp.net', username: 'baba.hany' },
+                { id: '254700000001@s.whatsapp.net', username: 'casper' },
+            ],
+        }),
+    }
+    const group = message({ chat: '120363210534568276@g.us', isGroup: true })
+    const resolved = await resolveTarget(groupConn, group, 'name:baba')
+    assert.equal(resolved.jid, '88240858083431@s.whatsapp.net')
+    // Learned: the name now resolves even without the roster.
+    assert.equal(referents.resolveName('baba')?.jid, '88240858083431@s.whatsapp.net')
+})
+
+test('name targets ask instead of guessing when several group members match', async () => {
+    const groupConn = {
+        ...conn,
+        groupMetadata: async () => ({
+            participants: [
+                { id: '254711000001@s.whatsapp.net', username: 'samwise' },
+                { id: '254722000002@s.whatsapp.net', username: 'samuelx' },
+            ],
+        }),
+    }
+    const group = message({ chat: '120363210534568276@g.us', isGroup: true })
+    await assert.rejects(
+        resolveTarget(groupConn, group, 'name:sam'),
+        /Which person did you mean/,
+    )
+})
+
+test('name targets still say plainly when nobody in the group matches', async () => {
+    const groupConn = {
+        ...conn,
+        groupMetadata: async () => ({ participants: [{ id: '254700000001@s.whatsapp.net', username: 'casper' }] }),
+    }
+    const group = message({ chat: '120363210534568276@g.us', isGroup: true })
+    await assert.rejects(
+        resolveTarget(groupConn, group, 'name:nobody'),
+        /don't know who "nobody" is yet/,
+    )
+})

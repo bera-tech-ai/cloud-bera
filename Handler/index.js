@@ -182,12 +182,21 @@ const checkAutoReply = async (conn, m, text) => {
 }
 
 const sendOptInVoiceReply = async (conn, m, text, languagePreference = 'en') => {
-    if (!conn?.sendMessage || !m?.chat || m.isGroup || String(text || '').length > 1200) return false
+    if (!conn?.sendMessage || !m?.chat) return false
     const sender = String(m.sender || '').replace(/:\d+@/, '@').toLowerCase()
-    if (global.db?.data?.chatbera?.voiceReplies?.[sender] !== true) return false
+    const prefs = global.db?.data?.chatbera || {}
+    // PMs: per-user opt-in (.voice auto on / "from now on use voice").
+    // Groups: per-chat opt-in — only the owner can switch it on, so one
+    // member can't make the bot voice-note a whole group.
+    const voiceOn = m.isGroup ? prefs.voiceChats?.[m.chat] === true : prefs.voiceReplies?.[sender] === true
+    if (!voiceOn) return false
     try {
-        const { fetchTts, resolveSpeechLanguage } = require('../Library/actions/tts')
-        const audio = await fetchTts(text, resolveSpeechLanguage(text, languagePreference))
+        const { fetchTts, resolveSpeechLanguage, toSpeechText } = require('../Library/actions/tts')
+        // Speak the words, not the card frame: long/formatted replies and
+        // empty-after-cleaning replies fall back to text.
+        const speakable = toSpeechText(text)
+        if (!speakable || speakable.length > 1200) return false
+        const audio = await fetchTts(speakable, resolveSpeechLanguage(speakable, languagePreference))
         await conn.sendMessage(m.chat, { audio, mimetype: 'audio/ogg; codecs=opus', ptt: true }, { quoted: m })
         return true
     } catch (error) {
@@ -4292,11 +4301,14 @@ const handleMessage = async (conn, rawMsg) => {
                     const cleaned = text.replace(/^\s*bera[, :\s]+/i, '').trim() || text
                     const result = await generateAdvancedReply(cleaned, chat, conn, m, { agentMode: true, MAX_LOOPS: 12, languagePreference })
                     if (result && result.success && result.reply) {
-                        await reply(result.reply)
-                        await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
+                        // Voice mode replaces the text reply when it works
+                        // (long replies still arrive as text). skipVoice is
+                        // set by preDispatch branches that already sent audio.
+                        const voiced = !result.skipVoice && await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
+                        if (!voiced) await reply(result.reply)
                     } else if (result && result.reply) {
-                        await reply(result.reply)
-                        await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
+                        const voiced = !result.skipVoice && await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
+                        if (!voiced) await reply(result.reply)
                     } else {
                         await reply('🤖 (no response)')
                     }

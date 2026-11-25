@@ -19,7 +19,7 @@ const { PIN_ACCEPTED_MESSAGE, BAILEYS_ACCEPTED_MESSAGE, groupPermissionFailure, 
 const HANDLED_INTENTS = new Set([
     'react_msg', 'remove_reaction', 'pin_msg', 'unpin_msg', 'edit_msg',
     'delete_msg', 'delete_this', 'poll_create', 'group_poll',
-    'forward_msg', 'send_pm',
+    'forward_msg', 'send_pm', 'remember_name',
 ])
 
 const CLOSE_FRIENDS_RE = /\b(close[- ]?friends?|close friends|restricted (audience|status)|only (my )?close friends)\b/i
@@ -83,6 +83,16 @@ const parseTargets = (text, m) => {
     if (/\b(this\s+(pm|chat)|current\s+(pm|chat)|private chat)\b/i.test(text)) specs.push('this pm')
     if (/\b(him|her|them|that person)\b/i.test(text)) specs.push('him')
     if (/\breply|quoted|replied\b/i.test(text)) specs.push('reply')
+    // Named recipient: "forward this to babe" / "send hello to mum".
+    // Keywords that are not names are excluded; resolution happens in
+    // wa-actions.resolveTarget via the referents name directory.
+    const nameMatch = String(text || '').match(/\bto\s+([A-Za-z][A-Za-z' -]{1,30})/i)
+    if (nameMatch) {
+        const name = nameMatch[1].trim().replace(/\s+(please|now|for me|asap)$/i, '').trim()
+        const lowerName = name.toLowerCase()
+        const nonNames = new Set(['reply', 'quoted', 'replied', 'tag', 'tagged', 'mention', 'mentioned', 'him', 'her', 'them', 'this pm', 'current pm', 'private chat', 'me', 'myself', 'owner', 'the group', 'this group', 'everyone', 'all', 'my phone', 'my number'])
+        if (name && !nonNames.has(lowerName) && !/^\d+$/.test(name)) specs.push(`name:${name}`)
+    }
     return [...new Set(specs)]
 }
 
@@ -180,29 +190,58 @@ const dispatch = async (ctx) => {
             return true
         }
 
-        // ── Forward (§12, confirmation-gated, multi-destination) ──────
+        // ── Remember a name ("remember babe is 254712345678") ─────────────
+        // Teaches the bot a contact-name alias, since it cannot read the
+        // user's phone contacts. Stored in db.data.nameAliases when available.
+        if (intent === 'remember_name') {
+            const match = String(text || '').match(/\bremember\s+([A-Za-z][A-Za-z' -]{1,30})\s+(?:is|=|as)\s+\+?(\d{7,15})\b/i)
+            if (!match) { await reply('❓ Say it like this:\\n*remember babe is 254712345678*'); return true }
+            const [, name, number] = match
+            try {
+                const target = await waActions.resolveTarget(conn, m, number, { allowSpecial: true })
+                referents.rememberAlias(name.trim(), target.jid)
+                await reply(`✅ I'll remember *${name.trim()}* as +${target.number}. You can now say "forward this to ${name.trim()}" or "send hello to ${name.trim()}".`)
+            } catch (error) {
+                await reply(`❌ Could not save that: ${error.message}`)
+            }
+            return true
+        }
+
+        // ── Forward (§12, immediate — no confirmation) ─────────────────────
+        // Owner decision 2026-11-24 (live test): forwarding runs straight
+        // away on the message the user replied to, with a short confirmation
+        // reply afterwards. This deliberately bypasses the stage() + token
+        // flow that `send` still uses — a forward is the user's own quoted
+        // message going to a named recipient, and the owner found the
+        // preview/token step annoying. Ambiguity/unknown recipients still
+        // error out in resolveTarget above, so nothing is ever sent blind.
         if (intent === 'forward_msg') {
             const qMsg = m?.quoted?.message ? m.quoted : null
             if (!qMsg) { await reply('❓ Quote the message you want me to forward, then say:\n*forward this to 254712345678*'); return true }
             const specs = parseTargets(text, m)
             if (!specs.length) { await reply('❓ Specify a number, tag, or current private chat to forward to.'); return true }
             const targets = []
+            const labels = []
             for (const spec of specs) {
                 try {
-                    targets.push(await waActions.resolveTarget(conn, m, spec, { allowSpecial: true }))
+                    const target = await waActions.resolveTarget(conn, m, spec, { allowSpecial: true })
+                    targets.push(target)
+                    labels.push(spec.startsWith('name:') ? spec.slice(5) : `+${target.number}`)
                 } catch (error) {
                     await reply(`❌ Failed: ${error.message}`)
                     return true
                 }
             }
-            if (targets.length === 1) {
-                const token = waActions.stage(sender, { type: 'forward', jid: targets[0].jid, number: targets[0].number, message: m.quoted })
-                await reply(`⏳ Preview only — nothing was forwarded.\nTarget: ${targets[0].jid}\nToken: ${token}\nReply: .wact confirm ${token} within 2 minutes to forward it.`)
-            } else {
-                const tokens = targets.map(t => waActions.stage(sender, { type: 'forward', jid: t.jid, number: t.number, message: m.quoted }))
-                const lines = targets.map((t, i) => `• ${t.jid} — token ${tokens[i]}`).join('\n')
-                await reply(`⏳ Preview only — nothing was forwarded.\n${lines}\n\nReply with .wact confirm <token> within 2 minutes for each destination.`)
+            try {
+                const result = targets.length === 1
+                    ? await waActions.execute(conn, sender, { type: 'forward', jid: targets[0].jid, message: m.quoted })
+                    : await waActions.execute(conn, sender, { type: 'forward', destinations: targets.map(t => t.jid), message: m.quoted })
+                if (result && result.ok === false) { await reply(`❌ Failed to forward: ${result.error || 'Baileys did not accept the forward.'}`); return true }
+            } catch (error) {
+                await reply(`❌ Failed to forward: ${error.message}`)
+                return true
             }
+            await reply(`✅ Forwarded to ${labels.join(', ')} successfully.`)
             return true
         }
 
