@@ -48,6 +48,41 @@ const pathWithPackageManagers = () => {
     return parts.join(':')
 }
 
+// Deploy self-heal: read a failed deployment's BeraHost build log and
+// recognise failures the bot can fix itself. Only deterministic fixes are
+// attempted — anything else is reported with the log's own error line.
+const diagnoseDeploymentFailure = buildLog => {
+    const log = String(buildLog || '')
+    if (/EADDRINUSE|address already in use/i.test(log)) {
+        return { fix: 'port', summary: 'the app tried to listen on a fixed port that was already taken on the host' }
+    }
+    if (/GitHub repository download failed|repository.*404|clone.*failed/i.test(log)) {
+        return { fix: null, summary: 'BeraHost could not clone the GitHub repository' }
+    }
+    return null
+}
+
+const deploymentLogErrorLine = buildLog => {
+    const lines = String(buildLog || '').split('\n').map(l => l.trim()).filter(Boolean)
+    const errorLine = [...lines].reverse().find(l => /ERROR|Error:/.test(l)) || lines[lines.length - 1] || ''
+    return errorLine.replace(/^\[BERAHOST\]\s*/, '').slice(0, 220)
+}
+
+// Rewrite the project's package.json start script to honour the host's
+// assigned PORT (the fix for the EADDRINUSE diagnosis). True when changed.
+const fixProjectPortConfig = dir => {
+    try {
+        const pkgPath = path.join(dir, 'package.json')
+        if (!fs.existsSync(pkgPath)) return false
+        const original = fs.readFileSync(pkgPath, 'utf8')
+        const { normalizePackageJsonStart } = require('./agent-os')
+        const fixed = normalizePackageJsonStart(original)
+        if (fixed === original) return false
+        fs.writeFileSync(pkgPath, fixed)
+        return true
+    } catch { return false }
+}
+
 // BeraHost sometimes fails a brand-new deployment while an earlier
 // deployment of the same project keeps running — and already serves the
 // updated repository. Find such a deployment (verified live over HTTP) so
@@ -316,6 +351,28 @@ const lifecycle = async (options = {}) => {
                     record.deployment = { ...record.deployment, ...d, id: deployment.id, url: extractDeploymentUrl(d) || record.deployment.url }
                 }
                 if (!/^running$/i.test(String(record.deployment.status || ''))) {
+                    // Self-heal: a terminally failed deployment gets one
+                    // diagnosis from its own BeraHost build log. When the
+                    // cause is one the bot can fix itself (today: a
+                    // hardcoded listen port), fix the project and redeploy
+                    // once instead of just reporting the failure.
+                    let failureLogLine = ''
+                    if (/fail|error|suspend|crash/i.test(String(record.deployment.status || '')) && !options.selfHealAttempted) {
+                        try {
+                            const detail = await berahost.getWebDeployment(deployment.id)
+                            const log = String(detail?.deployment?.buildLog || detail?.buildLog || '')
+                            failureLogLine = deploymentLogErrorLine(log)
+                            const diagnosis = diagnoseDeploymentFailure(log)
+                            if (diagnosis?.fix === 'port' && fixProjectPortConfig(dir)) {
+                                const healed = await lifecycle({ ...options, selfHealAttempted: true })
+                                if (healed.success) {
+                                    healed.record.deployment = { ...healed.record.deployment, selfHealed: { cause: diagnosis.summary, failedDeploymentId: deployment.id } }
+                                    return healed
+                                }
+                                if (healed.record?.deployment?.status) failureLogLine = deploymentLogErrorLine(String(healed.record.deployment.buildLog || '')) || failureLogLine
+                            }
+                        } catch { /* diagnosis is best-effort; the honest error below still applies */ }
+                    }
                     // The fresh deployment did not reach "running": it failed
                     // on BeraHost's side, or their builder is stuck and the
                     // poll window elapsed (deployments have hung in
@@ -327,9 +384,10 @@ const lifecycle = async (options = {}) => {
                     const fallback = await findRunningDeploymentForProject(name, deployment.id)
                     if (fallback) {
                         record.deployment = { ...fallback, production, replacedFailedDeployment: deployment.id }
-                    } else if (/fail|error|suspend/i.test(String(record.deployment.status || ''))) {
+                    } else if (/fail|error|suspend|crash/i.test(String(record.deployment.status || ''))) {
                         const privateHint = repoIsPrivate ? ' The repository is private, and BeraHost cannot clone private repositories (it has no GitHub account connected) — this failure is consistent with that. Make the repository public to deploy it.' : ''
-                        throw new Error(`BeraHost deployment failed (status: ${record.deployment.status}). The code was pushed to GitHub, but the site is not live.${privateHint}`)
+                        const logHint = failureLogLine ? ` BeraHost log: ${failureLogLine}` : ''
+                        throw new Error(`BeraHost deployment failed (status: ${record.deployment.status}). The code was pushed to GitHub, but the site is not live.${privateHint}${logHint}`)
                     }
                 }
                 if (record.deployment.url) {
@@ -365,4 +423,4 @@ const formatReport = record => [
 const getProject = id => loadState().projects[id] || null
 const listProjects = userId => Object.values(loadState().projects).filter(p => !userId || p.userId === userId)
 
-module.exports = { lifecycle, getProject, listProjects, inspectProject, formatReport, getOrCreateRepository, extractDeploymentUrl }
+module.exports = { lifecycle, getProject, listProjects, inspectProject, formatReport, getOrCreateRepository, extractDeploymentUrl, diagnoseDeploymentFailure, deploymentLogErrorLine }

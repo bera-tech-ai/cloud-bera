@@ -394,9 +394,35 @@ const normalizePackageJsonStart = content => {
     try { pkg = JSON.parse(String(content || '')) } catch { return content }
     const start = pkg?.scripts?.start
     if (typeof start !== 'string' || !start) return content
-    let next = start.replace(/(^|\s)(--port|-p|--listen|-l)(=|\s+)(\d+)\b/g, (m, pre, flag, sep, port) => `${pre}${flag}${sep}\${PORT:-${port}}`)
-    if (/\bhttp-server\b/.test(next) && !/(--port|-p)(=|\s)/.test(next)) next = `${next} -p \${PORT:-3000}`
-    if (next === start) return content
+    let next = start
+    let changed = false
+    if (/\bhttp-server\b/.test(next)) {
+        // http-server binds exactly the port it is told (3000 by default)
+        // and dies with EADDRINUSE when that port is taken — on BeraHost's
+        // shared host, 3000 is effectively always taken. serve reads the
+        // PORT env var and switches to a free port when its default is
+        // busy, which is the behaviour that survives there (proven live by
+        // the tembea-safaris deployment). Swap the server, keep the path.
+        const usesNpx = /(^|\s)npx\s+/.test(next)
+        const afterServer = next.split(/\bhttp-server\b/)[1] || ''
+        const pathArg = afterServer.trim().split(/\s+/).find(tok => tok && !tok.startsWith('-') && !/^\d+$/.test(tok)) || '.'
+        next = usesNpx ? `npx serve ${pathArg}` : `serve ${pathArg}`
+        changed = next !== start
+        if (!usesNpx) {
+            // The binary must come from the project's own dependencies.
+            for (const field of ['dependencies', 'devDependencies']) {
+                if (pkg[field]?.['http-server']) { delete pkg[field]['http-server']; pkg[field].serve = '^14.2.4'; changed = true }
+            }
+            if (!pkg.dependencies?.serve && !pkg.devDependencies?.serve) {
+                pkg.dependencies = { ...(pkg.dependencies || {}), serve: '^14.2.4' }
+                changed = true
+            }
+        }
+    } else {
+        next = start.replace(/(^|\s)(--port|-p|--listen|-l)(=|\s+)(\d+)\b/g, (m, pre, flag, sep, port) => `${pre}${flag}${sep}\${PORT:-${port}}`)
+        changed = next !== start
+    }
+    if (!changed) return content
     pkg.scripts.start = next
     return JSON.stringify(pkg, null, 2)
 }
