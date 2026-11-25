@@ -55,7 +55,11 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     const deployRequested = /\b(deploy|publish|launch\s+(?:it|the\s+app|the\s+site))\b/i.test(text)
     const repoRequested = deployRequested || /\b(github|repository|repo|push\s+(?:the\s+)?(?:code|project))\b/i.test(text)
     const repositoryVisibility = repositoryVisibilityFromRequest(text)
-    await replyProgress('🏗️ I’ll build and validate the project locally first. Any GitHub push or deployment will wait for a separate owner approval tied to this exact build.')
+    let requesterIsOwner = false
+    try { requesterIsOwner = Boolean(require('../../Auth').isAuthorized(userId)?.isOwner) } catch {}
+    await replyProgress(deployRequested && requesterIsOwner
+        ? '🏗️ I’ll build and validate the project locally first, then push and deploy it as you asked.'
+        : '🏗️ I’ll build and validate the project locally first. Any GitHub push or deployment will wait for a separate owner approval tied to this exact build.')
     const progressSent = new Set()
     const result = await agentOs.run({
         action: 'run',
@@ -91,13 +95,32 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     const failureMessage = [result.error, failureDetails].filter(Boolean).join(' | ').slice(0, 1800)
     const buildValidated = Boolean(record.checkpoint) && (record.checks || []).length > 0 && (record.checks || []).every(check => check.success)
     const usedFallback = Boolean(record.usedFallback)
+    // The owner explicitly asking to deploy in the same message IS the
+    // approval — no separate prompt. The prompt stays for everyone else,
+    // for builds without an explicit deploy request, and for fallback
+    // builds (a starter template must never go live unnoticed).
+    const skipApproval = Boolean(deployRequested && requesterIsOwner && result.success && buildValidated && !usedFallback)
     let approvalCase = null
+    let directPublish = null
     if (record.id) {
         try {
             const support = require('./project-support')
             await support.registerProject(record, { userId, chat })
             if (result.success && buildValidated && repoRequested) {
-                approvalCase = await support.createBuildApproval(record, { userId, chat, requestedPublish: repoRequested, requestedDeploy: deployRequested, repositoryVisibility })
+                if (skipApproval) {
+                    try {
+                        directPublish = await agentOs.run({ action: 'publish', projectId: record.id, userId, private: repositoryVisibility !== 'public', deploy: true, approveProduction: true, ownerAuthorized: true })
+                    } catch (error) {
+                        directPublish = { success: false, error: error.message }
+                    }
+                    const updated = agentOs.get(record.id)
+                    if (updated) {
+                        record.github = updated.github || record.github
+                        record.deployment = updated.deployment || record.deployment
+                    }
+                } else {
+                    approvalCase = await support.createBuildApproval(record, { userId, chat, requestedPublish: repoRequested, requestedDeploy: deployRequested, repositoryVisibility })
+                }
             }
         } catch (error) {
             await replyProgress(`⚠️ Project memory/approval metadata could not be saved: ${error.message}`)
@@ -112,8 +135,10 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         record.github?.url ? `GitHub: ${record.github.url}` : null,
         record.deployment?.url ? `Live site: ${record.deployment.url}` : null,
         record.deployment?.status === 'approval_required' ? 'Production deployment needs approval.' : null,
+        directPublish?.success ? '🚀 Published and deployed as you asked — no separate approval needed.' : null,
+        directPublish && !directPublish.success ? `⚠️ You asked me to deploy it, but publishing/deployment did not finish: ${directPublish.error || 'unknown error'}` : null,
         approvalCase ? `Owner approval is pending. Reply directly to the separate approval prompt with 1 to approve or 2 to decline (case ${approvalCase.id}).` : null,
-        !approvalCase && (repoRequested || deployRequested) && buildValidated ? 'No repository or deployment was created; project approval metadata was not recorded.' : null
+        !approvalCase && !directPublish?.success && (repoRequested || deployRequested) && buildValidated ? 'No repository or deployment was created; project approval metadata was not recorded.' : null
     ].filter(Boolean)
     await replyProgress(parts.join('\n'))
     if (approvalCase && conn?.sendMessage && chat) {
@@ -139,7 +164,23 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
             })
         } catch {}
     }
-    if (result.screenshot?.buffer && conn?.sendMessage && chat) {
+    let deployShotSent = false
+    if (directPublish?.success && record.deployment?.url && conn?.sendMessage && chat) {
+        try {
+            const { takeScreenshot } = require('./browser')
+            const shot = await takeScreenshot(record.deployment.url)
+            if (shot.success && Buffer.isBuffer(shot.buffer)) {
+                const caption = `*${record.name || record.id}*\nLive: ${record.deployment.url}${record.github?.url ? `\nRepo: ${record.github.url}` : ''}`
+                await conn.sendMessage(chat, {
+                    image: shot.buffer,
+                    mimetype: shot.mimetype || 'image/png',
+                    ...addRequesterMention(message, caption, {}, 'caption')
+                }, message ? { quoted: message } : {})
+                deployShotSent = true
+            }
+        } catch {}
+    }
+    if (!deployShotSent && result.screenshot?.buffer && conn?.sendMessage && chat) {
         try {
             const caption = `📸 ${record.deployment?.url ? 'Deployment' : 'Preview'} screenshot${record.deployment?.url ? `\n${record.deployment.url}` : ''}`
             await conn.sendMessage(chat, {
