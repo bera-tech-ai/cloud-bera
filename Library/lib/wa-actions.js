@@ -1,6 +1,7 @@
 'use strict'
 
 const crypto = require('crypto')
+const { assertAccepted, BAILEYS_ACCEPTED_MESSAGE } = require('./truthful-status')
 
 // Pending confirmation tokens. The in-memory Map is a cache in front of the
 // database: the DB (global.db.data.pendingConfirmations, persisted by
@@ -317,8 +318,8 @@ const execute = async (conn, owner, action) => {
             const target = action.jid ? { jid: action.jid, number: action.number || action.jid.split('@')[0], exists: true } : await checkNumber(conn, action.number)
             if (target.exists === false) throw new Error(`+${target.number} is not registered on WhatsApp.`)
             const sent = await conn.sendMessage(target.jid, { text: action.text })
-            if (!sent) throw new Error('Baileys did not accept the message.')
-            const result = { ok: true, jid: target.jid, number: target.number }
+            assertAccepted(sent, 'message')
+            const result = { ok: true, jid: target.jid, number: target.number, message: BAILEYS_ACCEPTED_MESSAGE }
             record(owner, action, result)
             return result
         }
@@ -326,8 +327,8 @@ const execute = async (conn, owner, action) => {
         if (action.type === 'sendMedia') {
             if (!action.jid || !action.url || !['image', 'video', 'audio', 'document', 'sticker'].includes(action.mediaType)) throw new Error('Invalid media action.')
             const sent = await conn.sendMessage(action.jid, { [action.mediaType]: { url: action.url }, ...(action.caption ? { caption: action.caption } : {}) })
-            if (!sent) throw new Error('Baileys did not accept the media message.')
-            const result = { ok: true, jid: action.jid }
+            assertAccepted(sent, 'media message')
+            const result = { ok: true, jid: action.jid, message: BAILEYS_ACCEPTED_MESSAGE }
             record(owner, action, result)
             return result
         }
@@ -337,8 +338,8 @@ const execute = async (conn, owner, action) => {
             const sent = typeof conn.copyNForward === 'function'
                 ? await conn.copyNForward(action.jid, action.message, true)
                 : await conn.sendMessage(action.jid, action.message)
-            if (!sent) throw new Error('Baileys did not accept the forwarded message.')
-            const result = { ok: true, jid: action.jid }
+            assertAccepted(sent, 'forwarded message')
+            const result = { ok: true, jid: action.jid, message: BAILEYS_ACCEPTED_MESSAGE }
             record(owner, action, result)
             return result
         }
@@ -348,8 +349,8 @@ const execute = async (conn, owner, action) => {
         if (action.type === 'groupstory') {
             const { sendGroupStatus } = require('../actions/gcstatus')
             const sent = await sendGroupStatus(conn, action.groupJid, { text: text.slice(0, 700) })
-            if (!sent) throw new Error('Baileys did not accept the group story.')
-            const result = { ok: true, jid: action.groupJid }
+            assertAccepted(sent, 'group story')
+            const result = { ok: true, jid: action.groupJid, message: BAILEYS_ACCEPTED_MESSAGE }
             record(owner, action, result)
             return result
         }
@@ -358,8 +359,8 @@ const execute = async (conn, owner, action) => {
             backgroundColor: action.backgroundColor || '#1DA462',
             font: Number.isInteger(action.font) ? action.font : 1,
         })
-        if (!sent) throw new Error('Baileys did not accept the story.')
-        const result = { ok: true, jid: 'status@broadcast' }
+        assertAccepted(sent, 'story')
+        const result = { ok: true, jid: 'status@broadcast', message: BAILEYS_ACCEPTED_MESSAGE }
         record(owner, action, result)
         return result
     } catch (error) {

@@ -1,3 +1,5 @@
+const { assertAccepted, BAILEYS_ACCEPTED_MESSAGE, PIN_ACCEPTED_MESSAGE } = require('../../../../lib/truthful-status')
+
 module.exports = {
     name: 'pin',
     alias: ['pinmsg', 'unpin', 'pinned'],
@@ -14,14 +16,26 @@ module.exports = {
         // ── UNPIN ────────────────────────────────────────────────
         if (sub === 'unpin' || sub === 'remove') {
             try {
-                await sock.sendMessage(m.chat, {
+                const sent = await sock.sendMessage(m.chat, {
                     pin: m.key,
-                    type: 0 // 0 = unpin
+                    type: 0, // 0 = unpin
+                    time: 0, // spec §8 unpin payload: { pin, type: 0, time: 0 }
                 });
-                await sock.sendMessage(m.chat, { react: { text: '📌', key: m.key } });
-                return reply('_*🥏 Message unpinned!*_');
+                // Baileys acceptance only — never claim the message is visibly unpinned.
+                assertAccepted(sent, 'unpin');
+                try {
+                    await sock.sendMessage(m.chat, { react: { text: '📌', key: m.key } });
+                } catch (reactError) {
+                    console.error('[PIN] Unpin confirmation reaction failed:', reactError.message);
+                }
+                return reply(BAILEYS_ACCEPTED_MESSAGE);
             } catch (error) {
-                await sock.sendMessage(m.chat, { react: { text: '❔', key: m.key } });
+                console.error('[PIN ERROR]', error.message);
+                try {
+                    await sock.sendMessage(m.chat, { react: { text: '❔', key: m.key } });
+                } catch (reactError) {
+                    console.error('[PIN] Unpin error reaction failed:', reactError.message);
+                }
                 return reply('`✘ Failed to unpin message`');
             }
         }
@@ -44,7 +58,11 @@ module.exports = {
         // ── MUST REPLY TO A MESSAGE ─────────────────────────────
         const target = quoted || m.quoted;
         if (!target) {
-            await sock.sendMessage(m.chat, { react: { text: '🙊', key: m.key } });
+            try {
+                await sock.sendMessage(m.chat, { react: { text: '🙊', key: m.key } });
+            } catch (reactError) {
+                console.error('[PIN] Usage reaction failed:', reactError.message);
+            }
             return reply(
                 `╭─❍ *PIN MESSAGE*\n│\n` +
                 `│ ⚉ *Usage:* Reply to a message with ${prefix}pin\n│\n` +
@@ -59,34 +77,35 @@ module.exports = {
             );
         }
 
-        await sock.sendMessage(m.chat, { react: { text: '📌', key: m.key } });
+        try {
+            await sock.sendMessage(m.chat, { react: { text: '📌', key: m.key } });
+        } catch (reactError) {
+            console.error('[PIN] Pin start reaction failed:', reactError.message);
+        }
 
         try {
-            await sock.sendMessage(m.chat, {
-                pin: target.key || target.key,
+            const sent = await sock.sendMessage(m.chat, {
+                pin: target.key,
                 time: time,
                 type: 1 // 1 = pin
             });
+            // Baileys acceptance only — never claim the message is visibly pinned.
+            assertAccepted(sent, 'pin', PIN_ACCEPTED_MESSAGE);
 
-            // Format duration for response
-            let durationText = '30 days';
-            if (time === 86400) durationText = '1 day';
-            else if (time === 604800) durationText = '7 days';
-            else if (time === 3600) durationText = '1 hour';
-
-            await sock.sendMessage(m.chat, { react: { text: '📅', key: m.key } });
-         //   await reply(
-        //        `╭─❍ *MESSAGE PINNED*\n│\n` +
-        ///        `│ ⇆ *Status:* Pinned\n` +
-        //        `│ —͟͟͞͞𖣘 *Duration:* ${durationText}\n│\n` +
-        //        `│ 𝓬𝓻𝔂𝓼𝓷𝓸𝓿𝓪 𝓿𝓮𝓻𝓲𝓯𝓲𝓮𝓭\n` +
-      //          `╰──────────────────`
-        //    );
-
+            try {
+                await sock.sendMessage(m.chat, { react: { text: '📅', key: m.key } });
+            } catch (reactError) {
+                console.error('[PIN] Pin success reaction failed:', reactError.message);
+            }
+            return reply(PIN_ACCEPTED_MESSAGE);
         } catch (error) {
             console.error('[PIN ERROR]', error.message);
-            await sock.sendMessage(m.chat, { react: { text: '❔', key: m.key } });
-            reply('`✘ Failed to pin message. Make sure bot is admin.`');
+            try {
+                await sock.sendMessage(m.chat, { react: { text: '❔', key: m.key } });
+            } catch (reactError) {
+                console.error('[PIN] Pin error reaction failed:', reactError.message);
+            }
+            return reply('`✘ Failed to pin message. Make sure bot is admin.`');
         }
     }
 };

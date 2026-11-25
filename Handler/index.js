@@ -8,6 +8,7 @@ const { sendGroupReply } = require('../Library/lib/group-mentions')
 const { formatBeraCard } = require('../Library/lib/bera-card')
 const { getInteractiveReply } = require('../Library/lib/interactive-replies')
 const waActions = require('../Library/lib/wa-actions')
+const { assertAccepted, BAILEYS_ACCEPTED_MESSAGE, PIN_ACCEPTED_MESSAGE } = require('../Library/lib/truthful-status')
 
 // Pre-warm library modules so first command has zero load delay
 try { require('../Library/actions/music') } catch {}
@@ -275,7 +276,7 @@ const handleReaction = async (conn, reactionMsg) => {
         const { searchAndDownload }      = require('../Library/actions/music')
         const { analyzeImageFromBuffer } = require('../Library/actions/vision')
 
-        const react = (e) => conn.sendMessage(chat, { react: { text: e, key: reactionMsg.key } }).catch(() => {})
+        const react = (e) => conn.sendMessage(chat, { react: { text: e, key: reactionMsg.key } }).catch((err) => { console.error('[HANDLER] Reaction send failed:', err?.message || err) })
 
         if (emoji === '🌐' && orig.text) {
             await react('⏳')
@@ -1064,7 +1065,7 @@ const handleMessage = async (conn, rawMsg) => {
                 // Use the stripped text inside all handlers for accurate parsing
                 text = _taskText
                 const agent  = require('../Library/actions/agent')
-                const react  = (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {})
+                const react  = (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch((err) => { console.error('[HANDLER] Reaction send failed:', err?.message || err) })
                 const reply  = (t) => sendGroupReply(conn, m, String(t))
                 const fmt    = (lines) => lines.split('\n').slice(0, 30).map(l => '┃ ' + l.slice(0, 90)).join('\n')
                 if (['set_bio', 'set_bot_name', 'set_bot_ppic'].includes(intent)) {
@@ -1566,8 +1567,9 @@ const handleMessage = async (conn, rawMsg) => {
                     if (!quoted.key?.fromMe && !(m.isGroup && botAdmin && (senderAdmin || isOwner))) { await reply('❌ I can delete my own message, or a group admin can authorize deletion.'); return }
                     try {
                         const sent = await conn.sendMessage(chat, { delete: quoted.key })
-                        if (!sent) throw new Error('Baileys did not accept the delete request.')
+                        const accepted = assertAccepted(sent, 'delete')
                         await react('🗑️')
+                        await reply(accepted)
                     } catch(e) { await reply('❌ Could not delete: ' + e.message + ' (I may not be admin or it may be too old)') }
                     return
                 }
@@ -2544,9 +2546,9 @@ const handleMessage = async (conn, rawMsg) => {
                     try {
                         await react('📌')
                         const sent = await conn.sendMessage(chat, { pin: targetKey, type: 1, time: 604800 })
-                        if (!sent) throw new Error('Baileys did not accept the pin request.')
+                        const accepted = assertAccepted(sent, 'pin', PIN_ACCEPTED_MESSAGE)
                         await react('✅')
-                        await reply('📌 Pin request accepted by Baileys for 7 days.')
+                        await reply(accepted)
                     } catch(e) { await react('❌'); await reply('❌ Failed to pin: ' + e.message) }
                     return
                 }
@@ -2554,7 +2556,7 @@ const handleMessage = async (conn, rawMsg) => {
                 if (intent === 'unpin_msg') {
                     const targetKey = m.quoted ? m.quoted.key : m.key
                     if (m.isGroup && (!isAdmin || (!isSenderAdmin && !isOwner))) { await reply('❌ The bot and requesting user must have group admin rights.'); return }
-                    try { const sent = await conn.sendMessage(chat, { pin: targetKey, type: 0, time: 0 }); if (!sent) throw new Error('Baileys did not accept the unpin request.'); await reply('✅ Unpin request accepted by Baileys.') }
+                    try { const sent = await conn.sendMessage(chat, { pin: targetKey, type: 0, time: 0 }); const accepted = assertAccepted(sent, 'unpin'); await reply(accepted) }
                     catch (e) { await reply('❌ Failed to unpin: ' + e.message) }
                     return
                 }
@@ -2566,7 +2568,7 @@ const handleMessage = async (conn, rawMsg) => {
                     const keyIsBotAuthored = Boolean(target?.key?.fromMe) || botIds.some(id => [target?.key?.participant, target?.key?.participantAlt, target?.key?.remoteJid].filter(Boolean).some(value => String(value).split(':')[0].toLowerCase() === id.split(':')[0].toLowerCase()))
                     if (!keyIsBotAuthored) { await reply('❌ For safety, I can edit only a recent message sent by this bot. Quote that message and provide the replacement text.'); return }
                     if (!replacement) { await reply('❓ Provide the replacement text.'); return }
-                    try { const sent = await conn.sendMessage(chat, { text: replacement, edit: target.key }); if (!sent) throw new Error('Baileys did not accept the edit request.'); await reply('✅ Edit request accepted by Baileys.') }
+                    try { const sent = await conn.sendMessage(chat, { text: replacement, edit: target.key }); const accepted = assertAccepted(sent, 'edit'); await reply(accepted) }
                     catch (e) { await reply('❌ Edit failed: ' + e.message) }
                     return
                 }
@@ -2574,7 +2576,7 @@ const handleMessage = async (conn, rawMsg) => {
                 if (intent === 'react_msg') {
                     const key = m.quoted?.key || m.key
                     const emoji = (text.match(/[\u{1F300}-\u{1FAFF}]|❤️|❤/u) || [])[0] || '👍'
-                    try { const sent = await conn.sendMessage(chat, { react: { text: emoji, key } }); if (!sent) throw new Error('Baileys did not accept the reaction request.'); await reply(`✅ Reaction request accepted by Baileys: ${emoji}`) }
+                    try { const sent = await conn.sendMessage(chat, { react: { text: emoji, key } }); const accepted = assertAccepted(sent, 'reaction'); await reply(accepted) }
                     catch (e) { await reply('❌ Reaction failed: ' + e.message) }
                     return
                 }
@@ -2731,8 +2733,9 @@ const handleMessage = async (conn, rawMsg) => {
                     if (m.quoted && !delKey?.fromMe && !(m.isGroup && botAdmin && (senderAdmin || isOwner))) { await reply('❌ I can delete my own message, or a group admin can authorize deletion.'); return }
                     try {
                         const sent = await conn.sendMessage(chat, { delete: delKey })
-                        if (!sent) throw new Error('Baileys did not accept the delete request.')
+                        const accepted = assertAccepted(sent, 'delete')
                         await react('🗑️')
+                        await reply(accepted)
                     } catch(e) { await reply('❌ Couldn\'t delete: ' + e.message) }
                     return
                 }

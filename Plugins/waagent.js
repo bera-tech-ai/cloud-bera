@@ -145,12 +145,12 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
         const staged = getPending(args[1])
         const result = await executeConfirmed(conn, sender, args[1])
         if (!result.ok) return reply(`❌ ${result.error}`)
+        // execute() only confirms Baileys acceptance, never device-side
+        // visibility — report exactly that (spec §23), not "sent"/"posted".
         const target = staged?.action?.number ? `+${staged.action.number}` : (staged?.action?.jid || staged?.action?.groupJid || result.jid || '')
-        return reply(staged?.action?.type === 'story'
-            ? '✅ Text story posted to WhatsApp status.'
-            : staged?.action?.type === 'groupstory'
-            ? '✅ Text story posted to the current group.'
-            : `✅ Message sent to ${target}.`)
+        return reply(staged?.action?.type === 'send'
+            ? `${result.message}\nTarget: ${target}`
+            : result.message)
     }
 
     if (sub === 'cancel') {
