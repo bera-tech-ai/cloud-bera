@@ -464,11 +464,11 @@ const preDispatch = async (text, m, conn) => {
         if (!isOwner) return { success: false, reply: '⛔ View-once reveal is restricted to the bot owner.' }
         if (!m?.quoted?.message) return { success: false, reply: '❌ Quote the view-once message you want me to open, then ask again.' }
         try {
-            const { isViewOnceMessage, findMedia, downloadRawMedia, buildResendPayload } = require('../lib/baileys-media')
+            const { isViewOnceMessage, findMedia, downloadViewOnceFirst, buildResendPayload } = require('../lib/baileys-media')
             if (!isViewOnceMessage(m.quoted.message)) return { success: false, reply: '❌ That message is not a view-once message.' }
             const media = findMedia(m.quoted.message)
             if (!media) return { success: false, reply: '❌ That view-once message has no media I can reveal.' }
-            const buffer = await downloadRawMedia(m.quoted, media, conn)
+            const buffer = await downloadViewOnceFirst(m.quoted, media, conn)
             if (!buffer?.length) return { success: false, reply: '❌ I could not download that view-once media. It may have expired.' }
             const payload = buildResendPayload(media, buffer, '👁️ View-once revealed by Bera AI')
             const target = m.isGroup ? (m.sender || m.key?.participant) : m.chat
