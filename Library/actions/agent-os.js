@@ -136,15 +136,33 @@ const checkProjectEntrypoint = (dir, info) => {
     const pythonEntrypoint = ['main.py', 'app.py'].find(file => {
         try { const stat = fs.statSync(path.join(dir, file)); return stat.isFile() && stat.size > 0 } catch { return false }
     })
-    const packageApp = Boolean(info.manager && (info.startCommand || info.buildCommand))
+    // A package.json start script only counts as an entrypoint when the
+    // file it names actually exists. EduTrack rebuild #11 "passed" with a
+    // two-step plan (package.json + mkdir data) because the declaration
+    // alone was trusted — the app was an empty shell that then deployed.
+    const startTarget = (() => {
+        // info.startCommand is normalised to "npm start" — the file the
+        // script actually runs lives in package.json's own script text.
+        let scriptText = ''
+        try {
+            const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+            scriptText = String(pkg?.scripts?.start || pkg?.scripts?.dev || '')
+        } catch {}
+        const m = scriptText.match(/(?:^|\s)node\s+(?:--\S+\s+)*([^\s&;|]+\.js)\b/) || scriptText.match(/([^\s&;|]+\.js)\b/)
+        return m ? m[1] : null
+    })()
+    const startTargetExists = !startTarget || (() => { try { const s = fs.statSync(path.join(dir, startTarget)); return s.isFile() && s.size > 0 } catch { return false } })()
+    const packageApp = Boolean(info.manager && (info.startCommand || info.buildCommand)) && startTargetExists
     const success = staticSite || packageApp || Boolean(rootScript) || Boolean(pythonEntrypoint)
     return {
         name: 'project-entrypoint',
         success,
         output: success
             ? 'Found a non-empty application entrypoint at the project root.'
-            : 'No runnable application entrypoint found at the project root. Add a real root index.html, a package.json with a start/build script, or a root index.js/server.js/app.js/main.py/app.py file; do not hide the application inside an extra project/ or project_root/ folder.',
-        rootScript: rootScript || null,
+            : startTarget && !startTargetExists
+                ? `package.json starts ${startTarget} but that file does not exist in the project — the plan never wrote it. Write the complete ${startTarget} file with the full application.`
+                : 'No runnable application entrypoint found at the project root. Add a real root index.html, a package.json with a start/build script, or a root index.js/server.js/app.js/main.py/app.py file; do not hide the application inside an extra project/ or project_root/ folder.',
+        rootScript: rootScript || (startTargetExists ? startTarget : null),
         pythonEntrypoint: pythonEntrypoint || null
     }
 }

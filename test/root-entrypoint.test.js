@@ -147,7 +147,7 @@ test('executeStep refuses corrupted content and invalid package.json writes', as
     assert.equal(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'), '{"name":"good"}')
 })
 
-const { bootCheck } = require('../Library/actions/agent-os')
+const { bootCheck, validate } = require('../Library/actions/agent-os')
 
 test('bootCheck passes a server that answers HTTP and fails one that crashes on a missing module', async () => {
     const good = tmpProject({ 'server.js': 'require("http").createServer((q,s)=>{s.end("ok")}).listen(process.env.PORT)' })
@@ -174,4 +174,15 @@ test('sanitizeGeneratedScripts drops a jest test script when the project has no 
     })
     const removedB = sanitizeGeneratedScripts({ id: 'x', dir: withTests, name: 'x' })
     assert.ok(!removedB.includes('test'))
+})
+
+test('entrypoint check fails when package.json starts a file that does not exist', async () => {
+    const dir = tmpProject({
+        'package.json': JSON.stringify({ name: 'x', scripts: { start: 'node server.js' }, dependencies: { express: '*' } }),
+    })
+    const result = await validate({ id: 'x', dir, name: 'x' }, { installTimeout: 5000, bootTimeout: 3000 })
+    const entry = result.checks.find(c => c.name === 'project-entrypoint')
+    assert.equal(entry.success, false)
+    assert.match(entry.output, /server\.js.*does not exist/)
+    assert.equal(result.success, false)
 })
