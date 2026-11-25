@@ -2512,8 +2512,9 @@ const handleMessage = async (conn, rawMsg) => {
                     if (!msg || msg.length < 1) { await reply('❓ What message should I send?\nExample: *Bera send "hello brother" to 254712345678*'); return }
                     try {
                         const target = await waActions.resolveTarget(conn, m, targetSpec, { allowSpecial: true })
-                        const token = waActions.stage(sender, { type: 'send', jid: target.jid, number: target.number, text: msg })
-                        await reply(`⏳ Preview only — nothing was sent.\nTarget: ${target.jid}\nMessage: ${msg}\nToken: ${token}\nReply: .wact confirm ${token}`)
+                        const action = { type: 'send', jid: target.jid, number: target.number, text: msg }
+                        const token = waActions.stage(sender, action)
+                        await reply(waActions.formatPreview(action, token))
                     } catch(e) { await react('❌'); await reply('❌ Failed to send: ' + e.message) }
                     return
                 }
@@ -2529,8 +2530,9 @@ const handleMessage = async (conn, rawMsg) => {
                     if (!qMsg) { await reply('❓ Quote the message you want me to forward, then say:\n*agent forward this to 254712345678*'); return }
                     try {
                         const target = await waActions.resolveTarget(conn, m, targetSpec, { allowSpecial: true })
-                        const token = waActions.stage(sender, { type: 'forward', jid: target.jid, number: target.number, message: m.quoted })
-                        await reply(`⏳ Preview only — nothing was forwarded.\nTarget: ${target.jid}\nToken: ${token}\nReply: .wact confirm ${token}`)
+                        const action = { type: 'forward', jid: target.jid, number: target.number, message: m.quoted }
+                        const token = waActions.stage(sender, action)
+                        await reply(waActions.formatPreview(action, token))
                     } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
                     return
                 }

@@ -4,9 +4,10 @@ const {
     normalizeNumber,
     checkNumber,
     stage,
-    consume,
     cancel,
-    execute,
+    getPending,
+    executeConfirmed,
+    formatPreview,
     getAudit,
 } = require('../Library/lib/wa-actions')
 
@@ -22,7 +23,7 @@ const HELP = `📱 *Bera WhatsApp Control*
 • *.wact cancel <token>* — cancel a pending action
 • *.wact audit* — show recent action results
 
-Outbound messages and stories always require a confirmation token.`
+Outbound messages and stories always require a confirmation token. Tokens are single-use, bound to you, and expire after 2 minutes — the preview shows the exact expiry time (Africa/Nairobi). Cancel a pending action any time with *.wact cancel <token>*.`
 
 const ownerOnly = (isOwner, reply) => {
     if (isOwner) return true
@@ -114,40 +115,48 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
         if (!match) return reply('❓ Usage: *.wact send 254712345678 | Hello from Bera*\nOr reply/tag a user: *.wact send reply | Hello*')
         try {
             const target = await resolveTarget(conn, m, match[1], sender)
-            const token = stage(sender, { type: 'send', number: target.number, jid: target.jid, text: match[2].trim() })
-            return reply(`⚠️ *Message preview*\n\nTo: +${target.number}\nText: _${match[2].trim()}_\n\nReply with *.wact confirm ${token}* within 2 minutes to send it.`)
+            const action = { type: 'send', number: target.number, jid: target.jid, text: match[2].trim() }
+            const token = stage(sender, action)
+            return reply(formatPreview(action, token))
         } catch (error) { return reply(`❌ ${error.message}`) }
     }
 
     if (sub === 'story' || sub === 'status') {
         const story = rest.replace(/^(story|status)\s*/i, '').trim()
         if (!story) return reply('❓ Usage: *.wact story Bera AI is online*')
-        const token = stage(sender, { type: 'story', text: story })
-        return reply(`⚠️ *Story preview*\n\n_${story.slice(0, 700)}_\n\nReply with *.wact confirm ${token}* within 2 minutes to post it.`)
+        const action = { type: 'story', text: story }
+        const token = stage(sender, action)
+        return reply(formatPreview(action, token))
     }
 
     if (sub === 'groupstory' || sub === 'groupstatus') {
         if (!m?.isGroup || !m?.chat?.endsWith('@g.us')) return reply('❌ Use groupstory inside the group where the story should be posted.')
         const story = rest.replace(/^(groupstory|groupstatus)\s*/i, '').trim()
         if (!story) return reply('❓ Usage: *.wact groupstory Hello group*')
-        const token = stage(sender, { type: 'groupstory', groupJid: m.chat, text: story })
-        return reply(`⚠️ *Group story preview*\n\nGroup: ${m.chat}\n_${story.slice(0, 700)}_\n\nReply with *.wact confirm ${token}* within 2 minutes to post it.`)
+        const action = { type: 'groupstory', groupJid: m.chat, text: story }
+        const token = stage(sender, action)
+        return reply(formatPreview(action, token))
     }
 
     if (sub === 'confirm') {
-        const action = consume(sender, args[1])
-        if (!action) return reply('❌ Token is invalid, expired, or belongs to another owner session.')
-        const result = await execute(conn, sender, action)
-        if (!result.ok) return reply(`❌ Action failed: ${result.error}`)
-        return reply(action.type === 'story'
+        // executeConfirmed() consumes the single-use, owner-bound token and
+        // only then sends — an invalid, expired, cancelled, or wrong-owner
+        // token never reaches Baileys.
+        const staged = getPending(args[1])
+        const result = await executeConfirmed(conn, sender, args[1])
+        if (!result.ok) return reply(`❌ ${result.error}`)
+        const target = staged?.action?.number ? `+${staged.action.number}` : (staged?.action?.jid || staged?.action?.groupJid || result.jid || '')
+        return reply(staged?.action?.type === 'story'
             ? '✅ Text story posted to WhatsApp status.'
-            : action.type === 'groupstory'
+            : staged?.action?.type === 'groupstory'
             ? '✅ Text story posted to the current group.'
-            : `✅ Message sent to +${result.number}.`)
+            : `✅ Message sent to ${target}.`)
     }
 
     if (sub === 'cancel') {
-        return reply(cancel(sender, args[1]) ? '✅ Pending action cancelled.' : '❌ Token is invalid or expired.')
+        const staged = getPending(args[1])
+        if (staged && staged.owner !== String(sender || '')) return reply('❌ That token belongs to another owner session.')
+        return reply(cancel(sender, args[1]) ? '✅ Pending action cancelled. The token can no longer be used.' : '❌ Token is invalid, expired, or already used.')
     }
 
     if (sub === 'audit') {

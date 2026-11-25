@@ -318,6 +318,14 @@ const startBot = async () => {
     if (!_bannerShown) { printBanner(); _bannerShown = true }
     await initDb()
 
+    // Restore confirmation tokens staged before a restart. Expired entries
+    // are pruned on load, so a token never comes back to life after its TTL.
+    try {
+        const { loadPendingFromDb } = require('../Library/lib/wa-actions')
+        const restored = loadPendingFromDb()
+        if (restored) console.log(`[DB] Restored ${restored} pending confirmation token(s)`)
+    } catch (error) { console.error('[DB] Could not restore pending confirmations:', error.message) }
+
     const authSessionId = process.env.BERA_AUTH_SESSION_ID || global.db.tenantId || 'whatsapp'
     if (global.db.provider === 'postgresql' && databaseLeaseEnabled()) {
         const lease = await acquireSessionLease(authSessionId)
