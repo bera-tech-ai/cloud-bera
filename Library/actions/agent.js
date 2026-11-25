@@ -3,18 +3,53 @@ const { exec } = require('child_process')
 const fs   = require('fs')
 const path = require('path')
 const {
-    getUserWorkspace, resolvePath: wsResolve,
+    getUserWorkspace,
     listWorkspace, readWorkspaceFile, writeWorkspaceFile,
-    mkdirWorkspace, deleteWorkspaceItem
+    mkdirWorkspace, deleteWorkspaceItem, resolveContainedPath
 } = require('../lib/workspace')
+const { safeChildEnv, isSecretEnvKey, runSandboxedShell } = require('../lib/agent-sandbox')
 
-// Resolve agent file path: relative → workspace, absolute → as-is
+// Resolve agent file path: relative → inside the per-user workspace;
+// absolute → rejected unless it stays inside that workspace (canonical
+// path + symlink check in resolveContainedPath). Throws on escape.
 const resolveAgentPath = (argPath, userId) => {
-    if (!argPath) return userId ? getUserWorkspace(userId) : '/workspace/shared'
-    const p = String(argPath)
-    if (path.isAbsolute(p)) return p
-    return wsResolve(userId || 'shared', p)
+    if (!argPath) return getUserWorkspace(userId || 'shared')
+    return resolveContainedPath(userId || 'shared', argPath)
 }
+
+// ── Executor-level owner/sudo gate (spec §22) ───────────────────────────────
+// Shell / code execution is owner/sudo-only AT THE EXECUTOR, not just at the
+// command layer: every planner step for a shell/code action passes through
+// requireOwnerSudo() before any execution, using Library/lib/permissions.js
+// authorizeCommand() / policyFor() ('shell' is in OWNER_ONLY there, so the
+// policy scope is owner — owner or sudo — and the check fails closed when
+// the caller's identity cannot be established).
+const requireOwnerSudo = async (m, opts, conn, chat) => {
+    const caller = m?.sender || m?.key?.participant || opts?.userId || ''
+    try {
+        const { getAccessContext, authorizeCommand } = require('../lib/permissions')
+        const { isAuthorized } = require('../../Auth')
+        let auth = { authorized: false, isOwner: false }
+        try { auth = isAuthorized(caller) || auth } catch {}
+        const access = await getAccessContext({ conn, chat, sender: caller, isOwner: Boolean(auth.isOwner), authorized: Boolean(auth.authorized) })
+        return authorizeCommand('shell', access)
+    } catch {
+        return { allowed: false, reason: 'Shell and code execution are owner/sudo-only, and the permission check could not be completed.' }
+    }
+}
+
+// Actions whose execution is owner/sudo-only at the executor. Anything the
+// planner can use to run host code, inspect/manage the host, or touch
+// credentials is in this set. (Other host-shell users — project scaffolding
+// via supertools, Agent OS with allowShell — keep their own gates and are
+// called out as follow-ups in the PR.)
+const EXECUTOR_OWNER_ACTIONS = new Set([
+    'shell', 'multi_shell', 'js_eval', 'run_code',
+    'npm_install', 'pm2_start', 'pm2_stop', 'pm2_restart', 'pm2_logs',
+    'git_clone', 'git_push', 'git_status', 'docker_manage',
+    'system_info', 'port_check', 'file_search', 'file_diff', 'sqlite_manage',
+    'env_manage'
+])
 
 // ── Xcasper AI provider chain ────────────────────────────────────────────────
 const xcasper = require('./xcasper')
@@ -38,8 +73,12 @@ const callPollinationsAgent = (systemPrompt, userMsg, timeoutMs) => callAI(syste
 const callPollinations = callAI
 
 // ── Shell runner ───────────────────────────────────────────────────────────────
+// Internal fixed commands only (system info, health checks, ...). The
+// planner's `shell` action does NOT use this — it uses runSandboxedShell()
+// (allowlist, no shell, contained cwd, credential-free env). This runner
+// still never passes bot credentials to its children.
 const runShell = (cmd, timeout = 30000) => new Promise(resolve => {
-    exec(cmd, { timeout, maxBuffer: 1024 * 1024 * 5 }, (err, stdout, stderr) => {
+    exec(cmd, { timeout, maxBuffer: 1024 * 1024 * 5, env: safeChildEnv() }, (err, stdout, stderr) => {
         const out = (stdout || '').trim() + (stderr ? '\n[stderr]: ' + stderr.trim() : '')
         resolve({ success: !err, output: out.slice(0, 3000) || (err ? err.message : 'done') })
     })
@@ -396,11 +435,27 @@ const githubTokenRegen = async (tokenInDB) => {
 const PLAN_PROMPT = `You are Bera AI's action planner. You can use the server file system, bash shell, Puter cloud storage, and the tools below subject to authorization and configured credentials. Tool availability does not prove that an external account is authenticated.
 
 WORKSPACE RULES (CRITICAL):
-- All files and folders are created inside /workspace/{userId}/ by default unless the user specifies an absolute path.
+- All files and folders are created inside /workspace/{userId}/ by default.
+  Every path — relative or absolute — must stay inside that per-user
+  workspace; absolute paths outside it, ".." escapes and symlinks that
+  point outside it are rejected, never followed.
 - When user says "create a folder called X" → use file_mkdir with path: "X" (relative — system auto-resolves to /workspace/{userId}/X)
 - When user says "save file at Y" → use file_write with path: "Y" (relative)
-- When user says "create in /tmp/..." → use absolute path as given
-- ALWAYS use file_mkdir BEFORE file_write for new directories
+- NEVER use an absolute path outside the per-user workspace (no /tmp, no
+  /etc, no other user's folder). If the user asks for one, say it is not
+  allowed and offer the workspace equivalent instead.
+
+SHELL / CODE RULES (CRITICAL — enforced by the executor, not just by you):
+- shell and multi_shell run ONE allowlisted development command only:
+  npm, pnpm, yarn, node, python, pytest or git. No chaining (&&, ;, |),
+  no redirection, no substitution, no other binaries. Anything else is
+  rejected without running. Examples that work: "npm install vite",
+  "git status", "node app.js", "pytest tests/".
+- js_eval and run_code are owner/sudo-only and run without bot
+  credentials in their environment.
+- Shell / code execution is owner/sudo-only. If you are asked to run a
+  shell command or code for someone who is not the owner or a sudo user,
+  the executor will reject it — do not try to work around that.
 
 CHAIN-OF-THOUGHT (include in your response):
 Think through the task step by step in the "reasoning" field BEFORE listing steps.
@@ -417,12 +472,12 @@ Given a user task, return ONLY strict JSON — no markdown, no extra text.
 
 Available actions:
 SYSTEM & SHELL:
-- shell          → args: { cmd }   ← run ANY bash command
+- shell          → args: { cmd }   ← ONE allowlisted command only (npm/pnpm/yarn/node/python/pytest/git); anything else is rejected, never run
 - file_read      → args: { path }
 - file_write     → args: { path, content }
 - file_mkdir     → args: { path }   ← create a directory (recursive)
 - file_mkdir_nested → args: { paths }   ← create multiple nested dirs (array)
-- js_eval        → args: { code }
+- js_eval        → args: { code }   ← owner/sudo-only; runs in a child node process without bot credentials
 - system_info    → args: {}
 - port_check     → args: { port }
 - file_search    → args: { pattern, directory, ext }
@@ -439,7 +494,7 @@ PUTER CLOUD (files & folders on Puter cloud storage):
 - puter_delete   → args: { path }             ← delete file/folder on Puter
 
 CODE EXECUTION (any language via Piston API):
-- run_code       → args: { code, lang, stdin }   ← lang: js, python, php, ruby, go, rust, c, cpp, java, kotlin, swift, lua, perl, r, haskell, ts, bash, etc.
+- run_code       → args: { code, lang, stdin }   ← owner/sudo-only; lang: js, python, php, ruby, go, rust, c, cpp, java, kotlin, swift, lua, perl, r, haskell, ts, bash, etc. Local JS/Python/Bash run without bot credentials; other languages run on the remote Piston API.
 - npm_install    → args: { packages, cwd }
 - code_gen       → args: { description, language }
 - code_review    → args: { code, context }
@@ -582,7 +637,7 @@ SUPERTOOLS 2 — REPLIT-LEVEL AUTONOMOUS:
 - auto_install_deps  → args: { path, lang("node"|"python") }  ← detect and install missing packages from code or directory
 - format_convert     → args: { input, from("json"|"csv"|"yaml"|"tsv"), to("json"|"csv"|"yaml"|"xml"|"table"), saveTo }  ← convert between data formats
 - zip_tools          → args: { action("create"|"extract"|"list"|"tar"|"untar"|"tarlist"), target, dest }  ← archive management
-- multi_shell        → args: { commands: [{ cmd, desc, required, timeout }] }  ← ordered bash pipeline with dependency checking
+- multi_shell        → args: { commands: [{ cmd, desc, required, timeout }] }  ← ordered pipeline; EVERY command must pass the same allowlist as shell, or nothing runs
 - nl_to_sql          → args: { query, schema, dialect("sqlite"|"mysql"|"postgres") }  ← natural language → SQL query
 - self_test_fix      → args: { projectDir, port, endpoints: ["/health","/api/items"], maxRetries }  ← build → test → AI fix → repeat
 - mock_server        → args: { spec, port }  ← describe API in plain English → running mock server with sample data
@@ -689,6 +744,13 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
         try { return require('../../Auth').isAuthorized(caller).isOwner === true } catch { return false }
     }
     const ownerDenied = () => ({ success: false, output: '⛔ This GitHub/publishing/deployment action requires the bot owner.', desc })
+    // Phase 1 sandbox: shell / code actions are owner/sudo-only AT THE
+    // EXECUTOR. This runs before any execution, including the AI
+    // self-correction loop (executeWithRetry re-enters executeStep per try).
+    if (EXECUTOR_OWNER_ACTIONS.has(action)) {
+        const decision = await requireOwnerSudo(m, opts, conn, chat)
+        if (!decision.allowed) return { success: false, output: `⛔ ${decision.reason}`, desc }
+    }
     try {
         switch (action) {
             case 'find_commands': {
@@ -711,14 +773,24 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 const result = await handler.runCommand(command, commandArgs, m, conn, { captureOnly: true })
                 return { success: result?.success === true, output: result?.message || result?.error || 'Command returned no message.', desc }
             }
-            case 'shell':        return { ...await runShell(args.cmd, 45000), desc }
+            case 'shell': {
+                // Phase 1 sandbox: allowlisted command only, no shell, inside
+                // the caller's workspace, credential-free env. Rejected
+                // commands are never executed.
+                const r = await runSandboxedShell(args.cmd, { userId, timeout: 45000 })
+                return { ...r, desc }
+            }
             case 'file_read': {
-                const filePath = resolveAgentPath(args.path, userId)
+                let filePath
+                try { filePath = resolveAgentPath(args.path, userId) }
+                catch (e) { return { success: false, output: e.message, desc } }
                 const content  = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8').slice(0, 3000) : 'File not found'
                 return { success: true, output: content, desc }
             }
             case 'file_write': {
-                const writePath = resolveAgentPath(args.path, userId)
+                let writePath
+                try { writePath = resolveAgentPath(args.path, userId) }
+                catch (e) { return { success: false, output: e.message, desc } }
                 fs.mkdirSync(path.dirname(writePath), { recursive: true })
                 fs.writeFileSync(writePath, args.content || '')
                 return { success: true, output: `✅ Written: ${writePath}`, desc }
@@ -726,7 +798,9 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
             case 'file_mkdir': {
                 const rawPath = args.path || args.dir || ''
                 if (!rawPath) return { success: false, output: 'No path provided', desc }
-                const mkPath = resolveAgentPath(rawPath, userId)
+                let mkPath
+                try { mkPath = resolveAgentPath(rawPath, userId) }
+                catch (e) { return { success: false, output: e.message, desc } }
                 fs.mkdirSync(mkPath, { recursive: true })
                 return { success: true, output: `✅ Directory created: ${mkPath}`, desc }
             }
@@ -734,7 +808,9 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 const rawPaths = Array.isArray(args.paths) ? args.paths : [args.paths || args.path]
                 const results  = []
                 for (const p of rawPaths) {
-                    const resolved = resolveAgentPath(p, userId)
+                    let resolved
+                    try { resolved = resolveAgentPath(p, userId) }
+                    catch (e) { results.push(`❌ ${p}: ${e.message}`); continue }
                     try { fs.mkdirSync(resolved, { recursive: true }); results.push(`✅ ${resolved}`) }
                     catch (e) { results.push(`❌ ${resolved}: ${e.message}`) }
                 }
@@ -790,10 +866,23 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 return { success: true, output: `Puter cloud FS operation '${action}' on ${args.path} — requires browser auth.`, desc }
             }
             case 'js_eval': {
-                const out = eval(args.code)
-                return { success: true, output: String(out ?? 'done'), desc }
+                // Phase 1 sandbox: owner/sudo-only (gated above). Runs in a
+                // child node process without bot credentials (jseval.js);
+                // the old in-process eval() is gone — evaluated code no
+                // longer shares the bot process, its memory or its env.
+                const { evalJS } = require('./jseval')
+                const r = await evalJS(args.code || '', { cwd: getUserWorkspace(userId) })
+                return { success: r.success, output: r.output, desc }
             }
-            case 'npm_install':    return { ...await runShell(`cd ${args.cwd||'.'} && npm install ${args.packages||''} --loglevel=error`, 60000), desc }
+            case 'npm_install': {
+                // Phase 1 sandbox: validated like any shell command
+                // (allowlisted npm install with valid package specs only).
+                let cwd
+                try { cwd = resolveContainedPath(userId, args.cwd || '.') }
+                catch (e) { return { success: false, output: e.message, desc } }
+                const r = await runSandboxedShell(`npm install ${args.packages || ''}`, { userId, cwd, timeout: 60000 })
+                return { ...r, desc }
+            }
             case 'pm2_start':      return { ...await runShell(`pm2 start ${args.script} --name ${args.name}`), desc }
             case 'pm2_stop':       return { ...await runShell(`pm2 stop ${args.name}`), desc }
             case 'pm2_restart':    return { ...await runShell(`pm2 restart ${args.name}`), desc }
@@ -1181,9 +1270,34 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
             }
 
             // ── Dev tools ───────────────────────────────────────────────────
-            case 'env_manage':   { const r = await envManager(args.action, args.key, args.value); return { success: r.success, output: r.output || r.error, desc } }
-            case 'file_search':  { const r = await fileSearch(args.pattern, args.directory || '.', args.ext || ''); return { success: r.success, output: r.output, desc } }
-            case 'file_diff':    { const r = await fileDiff(args.file1, args.file2); return { success: r.success, output: r.output, desc } }
+            case 'env_manage': {
+                // Owner/sudo-only (gated above). Secret values are never
+                // returned: list/get redact any key matching a secret
+                // pattern instead of printing the bot's credentials.
+                const r = await envManager(args.action, args.key, args.value)
+                let output = r.output || r.error
+                if (r.success && output && (args.action === 'list' || args.action === 'get')) {
+                    output = String(output).split('\n').map(line => {
+                        const key = line.split('=')[0].trim()
+                        return isSecretEnvKey(key) ? `${key}=***redacted***` : line
+                    }).join('\n')
+                }
+                return { success: r.success, output, desc }
+            }
+            case 'file_search': {
+                try { resolveContainedPath(userId, args.directory || '.') }
+                catch (e) { return { success: false, output: e.message, desc } }
+                const r = await fileSearch(args.pattern, args.directory || '.', args.ext || '')
+                return { success: r.success, output: r.output, desc }
+            }
+            case 'file_diff': {
+                try {
+                    resolveContainedPath(userId, args.file1)
+                    resolveContainedPath(userId, args.file2)
+                } catch (e) { return { success: false, output: e.message, desc } }
+                const r = await fileDiff(args.file1, args.file2)
+                return { success: r.success, output: r.output, desc }
+            }
             case 'json_tools':   { const r = jsonTools(args.action, args.json); return { success: r.success, output: r.output, desc } }
             case 'password_gen': { const r = passwordGen(args.length || 16, { noSymbols: args.noSymbols }); return { success: r.success, output: `🔑 Password: \`${r.password}\`\n${r.strength}`, desc } }
 
@@ -1378,8 +1492,11 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
                 const preview = (r.output || '').slice(0, 1500)
                 if (args.saveTo) {
-                    try { require('fs').writeFileSync(args.saveTo, r.output); } catch {}
-                    return { success: true, output: `✅ Converted ${args.from}→${args.to} saved to ${args.saveTo}\n\nPreview:\n${preview}`, desc }
+                    let savePath
+                    try { savePath = resolveAgentPath(args.saveTo, userId) }
+                    catch (e) { return { success: false, output: e.message, desc } }
+                    try { require('fs').writeFileSync(savePath, r.output); } catch (e) { return { success: false, output: `Could not save: ${e.message}`, desc } }
+                    return { success: true, output: `✅ Converted ${args.from}→${args.to} saved to ${savePath}\n\nPreview:\n${preview}`, desc }
                 }
                 return { success: true, output: `✅ *${args.from.toUpperCase()} → ${args.to.toUpperCase()}*\n\n${preview}`, desc }
             }
@@ -1389,10 +1506,13 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 return { success: r.success, output: `🗜️ *${args.action}*\n${r.output}`, desc }
             }
             case 'multi_shell': {
+                // Phase 1 sandbox: owner/sudo-only (gated above). Every
+                // command must pass the shell allowlist or nothing runs;
+                // each runs without a shell, in the caller's workspace.
                 const st2 = require('./supertools2')
                 const cmds = Array.isArray(args.commands) ? args.commands
                     : String(args.commands||'').split('\n').map(c=>({cmd:c.trim(),desc:c.trim(),required:true})).filter(c=>c.cmd)
-                const r = await st2.multiShell(cmds)
+                const r = await st2.multiShell(cmds, { userId })
                 return {
                     success: r.success,
                     output: `🔧 *Multi-Shell: ${r.ok}✅ ${r.failed}❌ ${r.skipped}⏭️*\n\n${r.summary}`,

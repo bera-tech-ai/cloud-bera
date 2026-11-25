@@ -8,6 +8,7 @@ const axios = require('axios')
 const fs    = require('fs')
 const path  = require('path')
 const os    = require('os')
+const { safeChildEnv } = require('../lib/agent-sandbox')
 
 const WORKSPACE  = path.resolve('./workspace')
 const TMP_DIR    = os.tmpdir()
@@ -87,7 +88,9 @@ const runLocal = (code, lang, timeoutMs = TIMEOUT_MS) => new Promise((resolve) =
     let stdout = '', stderr = '', settled = false
     const proc = spawn(cmd, [tmpFile], {
         cwd: WORKSPACE, timeout: timeoutMs,
-        env: { ...process.env, GH_TOKEN: undefined, GITHUB_PERSONAL_ACCESS_TOKEN: undefined, SESSION_SECRET: undefined }
+        // Phase 1 sandbox: locally executed code runs without bot credentials.
+        // (Previously this spread process.env and only unset three keys.)
+        env: safeChildEnv()
     })
     const cleanup = () => { try { fs.unlinkSync(tmpFile) } catch {} }
     const done = (code) => {

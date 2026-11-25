@@ -57,17 +57,53 @@ const getUserWorkspace = (userId) => {
     return dir
 }
 
-// ── Resolve path: relative → inside user workspace; absolute → as-is ──────────
+// ── Contained path resolution ────────────────────────────────────────────────
+// Every agent-supplied path must stay inside the caller's per-user workspace.
+// Absolute paths are NOT taken as-is: they are canonicalised (symlinks resolved)
+// and rejected when they escape the workspace. This fixes the absolute-path
+// escape noted in XADON-vs-Bera-Comparison.md, where workspace helpers
+// permitted absolute paths outside the per-user workspace.
+const resolveContainedPath = (userId, inputPath) => {
+    const root = fs.realpathSync(getUserWorkspace(userId || 'shared'))
+    if (inputPath === undefined || inputPath === null || String(inputPath).trim() === '') return root
+    const raw = String(inputPath)
+    if (raw.includes('\0')) throw new Error(`⛔ Path is outside your workspace: NUL byte in path.`)
+    const candidate = path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(root, raw)
+    // Canonicalise the nearest existing ancestor so symlinks cannot smuggle
+    // a path outside the workspace (e.g. workspace/link -> /etc).
+    let current = candidate
+    const rest = []
+    while (!fs.existsSync(current)) {
+        rest.unshift(path.basename(current))
+        const parent = path.dirname(current)
+        if (parent === current) break
+        current = parent
+    }
+    let base = current
+    try { base = fs.realpathSync(current) } catch {}
+    const canonical = path.join(base, ...rest)
+    if (canonical !== root && !canonical.startsWith(root + path.sep)) {
+        throw new Error(`⛔ Path is outside your workspace (${root}): ${raw}`)
+    }
+    return canonical
+}
+
+// ── Resolve path: relative → inside user workspace; absolute → contained ────
+// Throws on escape; callers that surface the error to a user should catch it
+// and return { success: false, output: err.message }.
 const resolvePath = (userId, relOrAbsPath) => {
     if (!relOrAbsPath) return getUserWorkspace(userId)
-    const p = String(relOrAbsPath).trim()
-    if (path.isAbsolute(p)) return p
-    return path.join(getUserWorkspace(userId), p)
+    return resolveContainedPath(userId, relOrAbsPath)
 }
 
 // ── List workspace directory ───────────────────────────────────────────────────
 const listWorkspace = (userId, subPath) => {
-    const dir = subPath ? resolvePath(userId, subPath) : getUserWorkspace(userId)
+    let dir
+    try {
+        dir = subPath ? resolvePath(userId, subPath) : getUserWorkspace(userId)
+    } catch (e) {
+        return { success: false, output: e.message, dir: null }
+    }
     try {
         if (!fs.existsSync(dir)) return { success: false, output: `Directory not found: ${dir}`, dir }
         const items = fs.readdirSync(dir)
@@ -94,7 +130,12 @@ const listWorkspace = (userId, subPath) => {
 
 // ── Read a file from workspace ────────────────────────────────────────────────
 const readWorkspaceFile = (userId, relPath) => {
-    const full = resolvePath(userId, relPath)
+    let full
+    try {
+        full = resolvePath(userId, relPath)
+    } catch (e) {
+        return { success: false, output: e.message, path: null }
+    }
     try {
         if (!fs.existsSync(full)) return { success: false, output: `File not found: ${full}`, path: full }
         const content = fs.readFileSync(full, 'utf8')
@@ -106,7 +147,12 @@ const readWorkspaceFile = (userId, relPath) => {
 
 // ── Write a file to workspace ─────────────────────────────────────────────────
 const writeWorkspaceFile = (userId, relPath, content) => {
-    const full = resolvePath(userId, relPath)
+    let full
+    try {
+        full = resolvePath(userId, relPath)
+    } catch (e) {
+        return { success: false, output: e.message, path: null }
+    }
     try {
         fs.mkdirSync(path.dirname(full), { recursive: true })
         fs.writeFileSync(full, content || '')
@@ -118,7 +164,12 @@ const writeWorkspaceFile = (userId, relPath, content) => {
 
 // ── Create directory in workspace ─────────────────────────────────────────────
 const mkdirWorkspace = (userId, relPath) => {
-    const full = resolvePath(userId, relPath)
+    let full
+    try {
+        full = resolvePath(userId, relPath)
+    } catch (e) {
+        return { success: false, output: e.message, path: null }
+    }
     try {
         fs.mkdirSync(full, { recursive: true })
         return { success: true, output: `✅ Directory created: ${full}`, path: full }
@@ -129,7 +180,12 @@ const mkdirWorkspace = (userId, relPath) => {
 
 // ── Delete a file or folder from workspace ────────────────────────────────────
 const deleteWorkspaceItem = (userId, relPath) => {
-    const full = resolvePath(userId, relPath)
+    let full
+    try {
+        full = resolvePath(userId, relPath)
+    } catch (e) {
+        return { success: false, output: e.message }
+    }
     try {
         if (!fs.existsSync(full)) return { success: false, output: `Not found: ${full}` }
         const stat = fs.statSync(full)
@@ -159,6 +215,7 @@ module.exports = {
     WORKSPACE_ROOT,
     getUserWorkspace,
     resolvePath,
+    resolveContainedPath,
     listWorkspace,
     readWorkspaceFile,
     writeWorkspaceFile,

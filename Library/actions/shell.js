@@ -1,6 +1,7 @@
 const { exec } = require('child_process')
 const path = require('path')
 const fs = require('fs')
+const { safeChildEnv } = require('../lib/agent-sandbox')
 
 const WORK_DIR = path.resolve('./workspace')
 if (!fs.existsSync(WORK_DIR)) fs.mkdirSync(WORK_DIR, { recursive: true })
@@ -11,7 +12,8 @@ const run = (cmd, cwd = WORK_DIR, env = {}) => {
             cwd,
             timeout: 120000,
             maxBuffer: 1024 * 1024 * 10,
-            env: { ...process.env, ...env }
+            // Phase 1 sandbox: shell children never inherit bot credentials.
+            env: safeChildEnv(env)
         }, (err, stdout, stderr) => {
             const out = (stdout || '').trim()
             const errOut = (stderr || '').trim()
