@@ -835,6 +835,7 @@ PM2 PROCESS MANAGER  (start, stop, monitor apps)
 ADVANCED GITHUB  (create repos, push full projects)
 ══════════════════════════════════════════════
 {"tool":"create_repo","name":"my-app","private":false,"description":"My new app","autoInit":true}
+→ Repositories are PUBLIC by default. Set "private":true ONLY when the user explicitly asked for a private repository.
 {"tool":"git_push_folder","folder":"workspace/my-app","repo":"username/my-app","message":"feat: initial commit","branch":"main"}
 → This creates the repo on GitHub, inits git in the folder, commits all files, and pushes — one shot.
 {"tool":"github","action":"clone","repo":"user/repo","dest":"workspace/myapp"}
@@ -2649,7 +2650,7 @@ cards.forEach(card => {
             const res = await axios2.post('https://api.github.com/user/repos', {
                 name: tc.name,
                 description: tc.description || '',
-                private: tc.private !== false,
+                private: tc.private === true,
                 auto_init: tc.autoInit !== false
             }, { headers: { Authorization: `token ${token}`, 'User-Agent': 'BeraAgent/1.0', Accept: 'application/vnd.github.v3+json' } })
             const repo = res.data

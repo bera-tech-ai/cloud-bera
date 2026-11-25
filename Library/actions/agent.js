@@ -528,7 +528,7 @@ NETWORKING:
 
 PROJECT MANAGEMENT:
 - create_project → args: { name, type, port, description }
-- workspace_save → args: { projectDir, repoName, description, isPrivate }
+- workspace_save → args: { projectDir, repoName, description, isPrivate } — isPrivate ONLY when the user explicitly asked for a private repo; repos are public by default
 - pm2_start      → args: { script, name }
 - pm2_stop       → args: { name }
 - pm2_restart    → args: { name }
@@ -617,7 +617,7 @@ DATABASE (SQLite):
 - sqlite_manage  → args: { action("create"|"schema"|"tables"|"insert"|"query"|"run"|"drop"|"info"|"seed"), dbPath, query, data }
 
 GITHUB:
-- github_manage  → args: { action("whoami"|"list_repos"|"create_repo"|"delete_repo"|"create_issue"|"list_issues"|"commit_file"|"read_file"|"get_commits"|"fork"|"star"|"search_repos"), opts: { name, repo, owner, title, body, path, content, message, description, private, query, labels } }
+- github_manage  → args: { action("whoami"|"list_repos"|"create_repo"|"delete_repo"|"create_issue"|"list_issues"|"commit_file"|"read_file"|"get_commits"|"fork"|"star"|"search_repos"), opts: { name, repo, owner, title, body, path, content, message, description, private, query, labels } } — for create_repo, opts.private ONLY when the user explicitly asked for a private repo; repos are public by default
 
 REGISTERED WHATSAPP COMMANDS:
 - find_commands   → args: { query, limit }  ← search Bera's live command registry by intent
@@ -944,7 +944,7 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 try {
                     const gh = require('./github')
                     const repoName = (args.repoName || path.basename(args.projectDir || 'workspace')).replace(/[^a-zA-Z0-9-_.]/g, '-')
-                    const createRes = await gh.createRepo(repoName, args.description || '', !!args.isPrivate)
+                    const createRes = await gh.createRepo(repoName, args.isPrivate === true, args.description || '')
                     if (!createRes.success && !createRes.html_url) return { success: false, output: `❌ Could not create GitHub repo: ${createRes.message || createRes.error || JSON.stringify(createRes)}`, desc }
                     const repoUrl = createRes.clone_url || createRes.html_url || `https://github.com/${createRes.full_name}`
                     const htmlUrl = createRes.html_url || repoUrl
