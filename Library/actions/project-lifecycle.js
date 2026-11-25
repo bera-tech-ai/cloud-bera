@@ -56,6 +56,14 @@ const diagnoseDeploymentFailure = buildLog => {
     if (/EADDRINUSE|address already in use/i.test(log)) {
         return { fix: 'port', summary: 'the app tried to listen on a fixed port that was already taken on the host' }
     }
+    const missing = log.match(/Cannot find module '([^']+)'/)
+    if (missing) {
+        const mod = missing[1]
+        if (!mod.startsWith('.') && !mod.startsWith('/')) {
+            return { fix: 'missing-module', module: mod, summary: `the app crashed because the '${mod}' package was missing from its dependencies` }
+        }
+        return { fix: null, summary: `the app crashed on a missing local file (${mod})` }
+    }
     if (/GitHub repository download failed|repository.*404|clone.*failed/i.test(log)) {
         return { fix: null, summary: 'BeraHost could not clone the GitHub repository' }
     }
@@ -68,18 +76,29 @@ const deploymentLogErrorLine = buildLog => {
     return errorLine.replace(/^\[BERAHOST\]\s*/, '').slice(0, 220)
 }
 
-// Rewrite the project's package.json start script to honour the host's
-// assigned PORT (the fix for the EADDRINUSE diagnosis). True when changed.
-const fixProjectPortConfig = dir => {
+// Apply the deterministic fix for a diagnosed deployment failure to the
+// project on disk. True when something actually changed (worth redeploying).
+const fixDiagnosedProjectIssue = (dir, diagnosis) => {
     try {
         const pkgPath = path.join(dir, 'package.json')
         if (!fs.existsSync(pkgPath)) return false
         const original = fs.readFileSync(pkgPath, 'utf8')
-        const { normalizePackageJsonStart } = require('./agent-os')
-        const fixed = normalizePackageJsonStart(original)
-        if (fixed === original) return false
-        fs.writeFileSync(pkgPath, fixed)
-        return true
+        if (diagnosis?.fix === 'port') {
+            const { normalizePackageJsonStart } = require('./agent-os')
+            const fixed = normalizePackageJsonStart(original)
+            if (fixed === original) return false
+            fs.writeFileSync(pkgPath, fixed)
+            return true
+        }
+        if (diagnosis?.fix === 'missing-module' && diagnosis.module) {
+            const pkg = JSON.parse(original)
+            pkg.dependencies = { ...(pkg.dependencies || {}) }
+            if (pkg.dependencies[diagnosis.module]) return false
+            pkg.dependencies[diagnosis.module] = '*'
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+            return true
+        }
+        return false
     } catch { return false }
 }
 
@@ -357,13 +376,28 @@ const lifecycle = async (options = {}) => {
                     // hardcoded listen port), fix the project and redeploy
                     // once instead of just reporting the failure.
                     let failureLogLine = ''
-                    if (/fail|error|suspend|crash/i.test(String(record.deployment.status || '')) && !options.selfHealAttempted) {
+                    let deploymentFailed = /fail|error|suspend|crash/i.test(String(record.deployment.status || ''))
+                    if (!deploymentFailed && !options.selfHealAttempted) {
+                        // The poll can end while BeraHost still shows the
+                        // deployment as building/queued even though the
+                        // process already died — the log tells the truth
+                        // (this is how a dead SkyCast URL got handed out).
                         try {
                             const detail = await berahost.getWebDeployment(deployment.id)
                             const log = String(detail?.deployment?.buildLog || detail?.buildLog || '')
-                            failureLogLine = deploymentLogErrorLine(log)
+                            if (/exited before opening its assigned port|Cannot find module|EADDRINUSE/i.test(log)) {
+                                deploymentFailed = true
+                                failureLogLine = deploymentLogErrorLine(log)
+                            }
+                        } catch { /* best-effort */ }
+                    }
+                    if (deploymentFailed && !options.selfHealAttempted) {
+                        try {
+                            const detail = await berahost.getWebDeployment(deployment.id)
+                            const log = String(detail?.deployment?.buildLog || detail?.buildLog || '')
+                            failureLogLine = deploymentLogErrorLine(log) || failureLogLine
                             const diagnosis = diagnoseDeploymentFailure(log)
-                            if (diagnosis?.fix === 'port' && fixProjectPortConfig(dir)) {
+                            if (diagnosis?.fix && fixDiagnosedProjectIssue(dir, diagnosis)) {
                                 const healed = await lifecycle({ ...options, selfHealAttempted: true })
                                 if (healed.success) {
                                     healed.record.deployment = { ...healed.record.deployment, selfHealed: { cause: diagnosis.summary, failedDeploymentId: deployment.id } }
@@ -384,7 +418,7 @@ const lifecycle = async (options = {}) => {
                     const fallback = await findRunningDeploymentForProject(name, deployment.id)
                     if (fallback) {
                         record.deployment = { ...fallback, production, replacedFailedDeployment: deployment.id }
-                    } else if (/fail|error|suspend|crash/i.test(String(record.deployment.status || ''))) {
+                    } else if (deploymentFailed) {
                         const privateHint = repoIsPrivate ? ' The repository is private, and BeraHost cannot clone private repositories (it has no GitHub account connected) — this failure is consistent with that. Make the repository public to deploy it.' : ''
                         const logHint = failureLogLine ? ` BeraHost log: ${failureLogLine}` : ''
                         throw new Error(`BeraHost deployment failed (status: ${record.deployment.status}). The code was pushed to GitHub, but the site is not live.${privateHint}${logHint}`)
@@ -423,4 +457,4 @@ const formatReport = record => [
 const getProject = id => loadState().projects[id] || null
 const listProjects = userId => Object.values(loadState().projects).filter(p => !userId || p.userId === userId)
 
-module.exports = { lifecycle, getProject, listProjects, inspectProject, formatReport, getOrCreateRepository, extractDeploymentUrl, diagnoseDeploymentFailure, deploymentLogErrorLine }
+module.exports = { lifecycle, getProject, listProjects, inspectProject, formatReport, getOrCreateRepository, extractDeploymentUrl, diagnoseDeploymentFailure, deploymentLogErrorLine, fixDiagnosedProjectIssue }

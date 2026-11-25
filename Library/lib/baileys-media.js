@@ -31,6 +31,21 @@ function unwrapMessage(message) {
     return current || null
 }
 
+function isViewOnceMessage(message) {
+    let current = message
+    let guard = 0
+    while (current && typeof current === 'object' && guard++ < 8) {
+        if (current.viewOnceMessage || current.viewOnceMessageV2 || current.viewOnceMessageV2Extension) return true
+        for (const type of ['imageMessage', 'videoMessage', 'audioMessage']) {
+            if (current[type]?.viewOnce) return true
+        }
+        const next = current.ephemeralMessage?.message || current.documentWithCaptionMessage?.message || null
+        if (!next || next === current) break
+        current = next
+    }
+    return false
+}
+
 function findMedia(message) {
     const content = unwrapMessage(message)
     if (!content) return null
@@ -92,4 +107,4 @@ function buildResendPayload(media, buffer, caption = '') {
     }
 }
 
-module.exports = { MEDIA_TYPES, VIEW_ONCE_WRAPPERS, unwrapMessage, findMedia, downloadMediaContent, downloadRawMedia, buildResendPayload }
+module.exports = { MEDIA_TYPES, VIEW_ONCE_WRAPPERS, unwrapMessage, findMedia, downloadMediaContent, downloadRawMedia, buildResendPayload, isViewOnceMessage }

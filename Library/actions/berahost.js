@@ -281,11 +281,17 @@ const deleteWebDeployment = async (id) => {
 const pollWebDeployment = async (id, maxWait = 120000, interval = 5000) => {
     const deadline = Date.now() + maxWait
     let current = await getWebDeployment(id)
-    while (current.success && Date.now() < deadline) {
-        const status = current.deployment?.status
-        if (!['queued', 'building', 'deploying', 'starting', 'installing'].includes(status)) break
+    while (Date.now() < deadline) {
+        if (current.success) {
+            const status = current.deployment?.status
+            if (!['queued', 'building', 'deploying', 'starting', 'installing'].includes(status)) break
+        }
+        // A failed fetch (BeraHost's API flakes at its database layer) must
+        // not abort the poll: keep the last good response and keep waiting,
+        // otherwise a mid-poll outage hands out a "queued" dead URL.
         await new Promise(resolve => setTimeout(resolve, interval))
-        current = await getWebDeployment(id)
+        const next = await getWebDeployment(id)
+        if (next.success) current = next
     }
     return current
 }

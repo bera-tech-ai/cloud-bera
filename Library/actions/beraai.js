@@ -363,7 +363,7 @@ const preDispatch = async (text, m, conn) => {
     const t = text.trim()
     const lc = t.toLowerCase()
 
-    const { parseMovieLookupTitle, parseWebSearchQuery, isGitHubStatusQuery, parseGroupInactiveRequest, parseMemberSearch, parseSayInVoice, parseImageQuestion, parseVoiceMode } = require('./command-intent')
+    const { parseMovieLookupTitle, parseWebSearchQuery, isGitHubStatusQuery, parseGroupInactiveRequest, parseMemberSearch, parseSayInVoice, parseImageQuestion, parseVoiceMode, parseViewOnceReveal } = require('./command-intent')
     const inactiveRequest = parseGroupInactiveRequest(t)
     if (inactiveRequest) {
         const result = await executeToolCall({ tool: 'wa_group_activity', days: inactiveRequest.days }, m?.chat || '', conn, m)
@@ -450,6 +450,32 @@ const preDispatch = async (text, m, conn) => {
             return { success: true, reply: '🎙️ Sent as a voice note.', skipVoice: true }
         } catch (e) {
             return { success: false, reply: `❌ Could not make a voice note: ${e.message}` }
+        }
+    }
+
+    // ── Reveal a quoted view-once message (owner-only) ─────────────────────
+    // The legacy menu advertised "vv / vv2 — Reveal view-once media" but no
+    // implementation existed. This is it: quote a view-once message and ask
+    // ("open this view once", "vv"). In a group the media goes to the
+    // owner's PM, never back into the group.
+    if (parseViewOnceReveal(t)) {
+        let isOwner = false
+        try { isOwner = require('../../Auth').isAuthorized(m?.sender || m?.key?.participant || '').isOwner === true } catch {}
+        if (!isOwner) return { success: false, reply: '⛔ View-once reveal is restricted to the bot owner.' }
+        if (!m?.quoted?.message) return { success: false, reply: '❌ Quote the view-once message you want me to open, then ask again.' }
+        try {
+            const { isViewOnceMessage, findMedia, downloadRawMedia, buildResendPayload } = require('../lib/baileys-media')
+            if (!isViewOnceMessage(m.quoted.message)) return { success: false, reply: '❌ That message is not a view-once message.' }
+            const media = findMedia(m.quoted.message)
+            if (!media) return { success: false, reply: '❌ That view-once message has no media I can reveal.' }
+            const buffer = await downloadRawMedia(m.quoted, media, conn)
+            if (!buffer?.length) return { success: false, reply: '❌ I could not download that view-once media. It may have expired.' }
+            const payload = buildResendPayload(media, buffer, '👁️ View-once revealed by Bera AI')
+            const target = m.isGroup ? (m.sender || m.key?.participant) : m.chat
+            await conn.sendMessage(target, payload)
+            return { success: true, reply: m.isGroup ? '👁️ Revealed — I sent it to your PM so it is not exposed in the group.' : '👁️ Here it is, as a normal message.' }
+        } catch (e) {
+            return { success: false, reply: `❌ Could not reveal that view-once: ${e.message}` }
         }
     }
 
