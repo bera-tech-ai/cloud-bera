@@ -12,12 +12,13 @@ const axios  = require('axios')
 const fs     = require('fs')
 const path   = require('path')
 const { exec } = require('child_process')
+const { safeChildEnv, validateShellCommand, runSandboxedShell } = require('../lib/agent-sandbox')
 const xcasper = require('./xcasper')
 
 const PROJECTS = '/tmp/projects'
 
 const sh = (cmd, timeout = 60000) => new Promise(resolve => {
-    exec(cmd, { timeout, maxBuffer: 1024 * 1024 * 10 }, (err, stdout, stderr) => {
+    exec(cmd, { timeout, maxBuffer: 1024 * 1024 * 10, env: safeChildEnv() }, (err, stdout, stderr) => {
         const out = [(stdout || '').trim(), stderr ? '[err] ' + stderr.trim() : ''].filter(Boolean).join('\n')
         resolve({ success: !err, output: out.slice(0, 4000) || (err ? err.message : 'ok') })
     })
@@ -571,8 +572,28 @@ const zipTools = async (action, target, dest = null) => {
 //     Run ordered commands with dependency checking, conditionals, and reports
 // ══════════════════════════════════════════════════════════════════════════════
 
-const multiShell = async (commands) => {
+const multiShell = async (commands, opts = {}) => {
     // commands = [{ cmd, desc, required: true/false, timeout: 30000, onlyIf: "previous_success" }]
+    // Phase 1 sandbox: every command must pass the agent shell allowlist
+    // (Library/lib/agent-sandbox.js) BEFORE anything runs, and each runs
+    // without a shell, inside the caller's workspace, with a clean env.
+    // A single rejected command fails the whole step — nothing executes.
+    const userId = opts.userId || 'shared'
+    const rejected = (commands || [])
+        .map(step => ({ step, validation: validateShellCommand(step.cmd || '', userId) }))
+        .filter(({ validation }) => validation.error)
+    if (rejected.length) {
+        const summary = rejected.map(({ step, validation }) =>
+            `❌ ${step.desc || step.cmd}\n   Rejected: ${validation.error}`
+        ).join('\n\n')
+        return {
+            success: false,
+            ok: 0, failed: rejected.length, skipped: (commands || []).length - rejected.length,
+            total: (commands || []).length,
+            summary: `🔧 *Multi-Shell rejected — no command ran:*\n\n${summary}`,
+            results: (commands || []).map(step => ({ ...step, status: 'skipped', output: 'Skipped — a command in this step was rejected by the shell allowlist' }))
+        }
+    }
     const results = []
     let aborted = false
 
@@ -582,7 +603,7 @@ const multiShell = async (commands) => {
             continue
         }
         const start = Date.now()
-        const r = await sh(step.cmd || '', step.timeout || 30000)
+        const r = await runSandboxedShell(step.cmd || '', { userId, timeout: step.timeout || 30000 })
         const elapsed = Date.now() - start
         const result = {
             desc: step.desc || step.cmd,

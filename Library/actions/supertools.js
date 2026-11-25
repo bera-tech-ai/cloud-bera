@@ -9,11 +9,13 @@ const fs     = require('fs')
 const path   = require('path')
 const crypto = require('crypto')
 const { exec } = require('child_process')
+const { safeChildEnv } = require('../lib/agent-sandbox')
 const xcasper = require('./xcasper')
 const PROJECTS   = '/tmp/projects'
 
 const runShell = (cmd, timeout = 60000) => new Promise(resolve => {
-    exec(cmd, { timeout, maxBuffer: 1024 * 1024 * 10 }, (err, stdout, stderr) => {
+    // Phase 1 sandbox: shell children never inherit bot credentials.
+    exec(cmd, { timeout, maxBuffer: 1024 * 1024 * 10, env: safeChildEnv() }, (err, stdout, stderr) => {
         const out = ((stdout || '').trim() + (stderr ? '\n[stderr]: ' + stderr.trim() : '')).slice(0, 4000)
         resolve({ success: !err, output: out || (err ? err.message : 'done') })
     })
