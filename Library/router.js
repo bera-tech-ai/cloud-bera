@@ -369,7 +369,7 @@ const detectIntent = (text) => {
     if (/\bwhois\b/.test(t) || /\b(domain info|who owns)\b.{0,15}\bdomain\b/.test(t)) return 'whois'
     if (/\b(lookup|check|info)\b.{0,15}\b(ip|ip address)\b/.test(t) || /\bip\b.{0,10}\b(location|country|city|isp)\b/.test(t)) return 'ip_lookup'
 
-    if (/\b(clone|redeploy|copy|duplicate)\b.{0,20}\b(bot|server)\b/.test(t) || /\bdeploy\s+(?:bot\s+)?[\w-]+\b/.test(t)) return 'bh_clone'
+    if (/\b(clone|redeploy|copy|duplicate)\b.{0,20}\b(bot|server)\b/.test(t) || /\bdeploy\s+(?:bot|server)\s+[\w-]+\b/.test(t)) return 'bh_clone'
     if (/\b(file|files|read file|list files|file manager)\b.{0,20}\b(server|berahost)\b/.test(t)) return 'bh_files'
     if (/\b(my bots|my servers|list my servers|show my bots|owner servers)\b/.test(t)) return 'bh_owner_list'
     if (/\b(reinstall|fresh install|clean install)\b.{0,20}\b(server|bot)\b/.test(t)) return 'bh_reinstall'
