@@ -15,7 +15,7 @@ handle.command = ['warn', 'warnuser',
                   'setinactive', 'inactivecheck',
                   'mutemember', 'slientkick',
                   'grouplock', 'lockfeature',
-                  'grouppoll', 'quickpoll',
+                  'grouppoll', 'quickpoll', 'groupvote', 'listvote',
                   'inviteinfo', 'joininfo',
                   'demoteall', 'removeallAdmins',
                   'groupannounce', 'gcannounce',
@@ -151,9 +151,12 @@ handle.all = async (m, { conn, command, args, prefix, reply, isOwner, isAdmin, i
         const dur    = durArg === '7d' ? 604800 : durArg === '30d' ? 2592000 : 86400 // default 24h
         const label  = dur === 604800 ? '7 days' : dur === 2592000 ? '30 days' : '24 hours'
         try {
-            await conn.sendMessage(chat, { pin: m.quoted.key, type: 1, time: dur })
+            const { execute } = require('../Library/lib/wa-actions')
+            const { PIN_ACCEPTED_MESSAGE } = require('../Library/lib/baileys-errors')
+            const result = await execute(conn, sender, { type: 'pin', chat, key: m.quoted.key, time: dur })
+            if (!result.ok) return reply('❌ Could not pin: ' + result.error)
             await conn.sendMessage(chat, { react: { text: '📌', key: m.key } }).catch(() => {})
-            return reply('📌 Message pinned for *' + label + '*!')
+            return reply(PIN_ACCEPTED_MESSAGE + ` (requested duration: ${label})`)
         } catch (e) {
             return reply('❌ Could not pin: ' + e.message)
         }
@@ -221,23 +224,35 @@ handle.all = async (m, { conn, command, args, prefix, reply, isOwner, isAdmin, i
         })
     }
 
-    // ── .grouppoll <Q>;<A>;<B>;<C> — button poll with single_select ───────────
+    // ── .grouppoll <Q>;<A>;<B>;<C> — native WhatsApp poll (spec §11) ───────
+    // .groupvote keeps the old button-list UI, explicitly a list vote, not a poll.
     else if (['grouppoll', 'quickpoll'].includes(command)) {
+        if (!isGroup) return reply('❌ Groups only.')
+        const parts    = (args.join(' ')).split(/[;,|]+/).map(x => x.trim()).filter(Boolean)
+        if (parts.length < 3) return reply('❌ Usage: ' + p + 'grouppoll Question; Option 1; Option 2; ...')
+        const { execute } = require('../Library/lib/wa-actions')
+        const result = await execute(conn, sender, { type: 'poll', chat, question: parts[0], options: parts.slice(1) })
+        if (!result.ok) return reply('❌ Poll failed: ' + result.error)
+        return reply('✅ Poll request accepted by Baileys: *' + parts[0] + '*')
+    }
+
+    // ── .groupvote — button-list vote (NOT a native poll) ───────────────────
+    else if (['groupvote', 'listvote'].includes(command)) {
         if (!isGroup) return reply('❌ Groups only.')
         const { sendList } = require('../Library/actions/btns')
         const parts    = (args.join(' ')).split(/[;,|]+/).map(x => x.trim()).filter(Boolean)
-        if (parts.length < 3) return reply('❌ Usage: ' + p + 'grouppoll Question; Option 1; Option 2; ...')
+        if (parts.length < 3) return reply('❌ Usage: ' + p + 'groupvote Question; Option 1; Option 2; ...\nThis sends a button list for voting — it is not a native WhatsApp poll. Use ' + p + 'grouppoll for a native poll.')
         const question = parts[0]
         const options  = parts.slice(1)
         const rows     = options.map((opt, i) => ({
-            id:          'gpoll_' + i + '_' + opt.slice(0, 12),
+            id:          'gvote_' + i + '_' + opt.slice(0, 12),
             title:       ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'][i] + ' ' + opt,
             description: 'Tap to vote for this option'
         }))
         await sendList(conn, chat, {
-            title:      '🗳️ Group Poll',
+            title:      '🗳️ Group Vote (list)',
             text:       '*' + question + '*\n\nChoose your answer from the list below:',
-            footer:     'Bera AI — Poll System',
+            footer:     'Bera AI — List Vote (not a native poll)',
             buttonText: '🗳️ Vote Now',
             sections: [{ title: 'Options', rows }]
         })

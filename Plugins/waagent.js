@@ -1,8 +1,8 @@
 'use strict'
 
 const {
-    normalizeNumber,
     checkNumber,
+    resolveTarget,
     stage,
     cancel,
     getPending,
@@ -10,6 +10,7 @@ const {
     formatPreview,
     getAudit,
 } = require('../Library/lib/wa-actions')
+const { PIN_ACCEPTED_MESSAGE, BAILEYS_ACCEPTED_MESSAGE } = require('../Library/lib/baileys-errors')
 
 const HELP = `📱 *Bera WhatsApp Control*
 
@@ -19,7 +20,14 @@ const HELP = `📱 *Bera WhatsApp Control*
 • *.wact send <number|reply|tag|this pm> | <message>* — preview a message
 • *.wact story <text>* — preview a text story
 • *.wact groupstory <text>* — preview a story for the current group
-• *.wact confirm <token>* — execute a pending send/story
+• *.wact react <emoji|remove>* — react to the quoted message (empty removes)
+• *.wact pin [1d|7d|30d]* — pin the quoted message
+• *.wact unpin* — unpin the quoted message
+• *.wact edit <new text>* — edit a quoted bot message
+• *.wact delete* — delete the quoted message
+• *.wact poll <Question | Option 1 | Option 2>* — create a native poll
+• *.wact forward <number|reply|tag|this pm>[, <number>]* — preview a forward (authorized users, confirmation token)
+• *.wact confirm <token>* — execute a pending send/story/forward
 • *.wact cancel <token>* — cancel a pending action
 • *.wact audit* — show recent action results
 
@@ -35,30 +43,11 @@ const mentionedJids = (m) => m?.mentionedJid
     || m?.message?.extendedTextMessage?.contextInfo?.mentionedJid
     || []
 
-const resolveTarget = async (conn, m, spec, sender) => {
-    const target = String(spec || '').trim().toLowerCase()
-    const replyJid = m?.quoted?.sender || m?.quoted?.key?.participant || null
-    const tagJid = mentionedJids(m)[0] || null
-    if (['reply', 'replied', 'quoted', 'this user', 'replied user'].includes(target)) {
-        if (!replyJid) throw new Error('Reply to a user’s message first.')
-        return { jid: replyJid, number: replyJid.split('@')[0].split(':')[0] }
-    }
-    if (['tag', 'tagged', 'mention', 'mentioned', 'tagged user'].includes(target)) {
-        if (!tagJid) throw new Error('Tag a user first.')
-        return { jid: tagJid, number: tagJid.split('@')[0].split(':')[0] }
-    }
-    if (['this pm', 'this chat', 'current pm', 'private chat'].includes(target)) {
-        if (m?.isGroup || !m?.chat || m.chat.endsWith('@g.us')) throw new Error('This is a group chat. Use reply or tag to choose a private recipient.')
-        return { jid: m.chat, number: m.chat.split('@')[0].split(':')[0] }
-    }
-    if (['me', 'myself', 'owner'].includes(target)) return { jid: sender, number: sender.split('@')[0].split(':')[0] }
-    const checked = await checkNumber(conn, spec)
-    if (checked.exists === false) throw new Error(`+${checked.number} is not registered on WhatsApp.`)
-    return checked
-}
-
 const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, isOwner, sender } = {}) => {
-    if (!ownerOnly(isOwner, reply)) return
+    // Forwarding is confirmation-gated for authorized users (spec §12), not
+    // owner-only; Handler already blocks unauthorized callers before dispatch.
+    const _earlySub = String(args[0] || '').toLowerCase()
+    if (_earlySub !== 'forward' && !ownerOnly(isOwner, reply)) return
     const alias = String(command || '').toLowerCase()
     const aliasSub = {
         wacontact: 'check',
@@ -136,6 +125,65 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
         const action = { type: 'groupstory', groupJid: m.chat, text: story }
         const token = stage(sender, action)
         return reply(formatPreview(action, token))
+    }
+
+    if (sub === 'react') {
+        const key = m?.quoted?.key || m?.key
+        if (!key) return reply('❓ Quote the message to react to.')
+        const emojiArg = (args[1] || '').trim()
+        const emoji = /^(remove|none|clear)$/i.test(emojiArg) ? '' : (emojiArg || '👍')
+        const result = await execute(conn, sender, { type: 'react', chat: m?.chat, key, emoji })
+        return reply(result.ok ? (emoji ? `✅ Reaction request accepted by Baileys: ${emoji}` : '✅ Reaction removed. Request accepted by Baileys.') : `❌ Reaction failed: ${result.error}`)
+    }
+
+    if (sub === 'pin' || sub === 'unpin') {
+        const key = m?.quoted?.key || m?.key
+        if (!key) return reply('❓ Quote the message to pin or unpin.')
+        const durations = { '1d': 86400, '7d': 604800, '30d': 2592000 }
+        const time = sub === 'pin' ? (durations[String(args[1] || '').toLowerCase()] || 604800) : 0
+        const result = await execute(conn, sender, { type: sub, chat: m?.chat, key, ...(sub === 'pin' ? { time } : {}) })
+        return reply(result.ok ? (sub === 'pin' ? PIN_ACCEPTED_MESSAGE : '✅ Unpinned successfully as requested.') : `❌ Failed to ${sub}: ${result.error}`)
+    }
+
+    if (sub === 'edit') {
+        const key = m?.quoted?.key
+        const replacement = rest.replace(/^edit\s*/i, '').trim()
+        if (!key) return reply('❓ Quote the bot message to edit.')
+        if (!replacement) return reply('❓ Usage: *.wact edit <new text>* (quote a bot message)')
+        const result = await execute(conn, sender, { type: 'edit', chat: m?.chat, key, text: replacement })
+        return reply(result.ok ? `✅ ${BAILEYS_ACCEPTED_MESSAGE}` : `❌ Edit failed: ${result.error}`)
+    }
+
+    if (sub === 'delete' || sub === 'del') {
+        const key = m?.quoted?.key
+        if (!key) return reply('❓ Quote the message to delete.')
+        const result = await execute(conn, sender, { type: 'delete', chat: m?.chat, key })
+        return reply(result.ok ? '✅ Delete request accepted by Baileys.' : `❌ Delete failed: ${result.error}`)
+    }
+
+    if (sub === 'poll') {
+        const raw = rest.replace(/^poll\s*/i, '').trim()
+        const parts = raw.split('|').map(x => x.trim()).filter(Boolean)
+        if (parts.length < 3) return reply('❓ Usage: *.wact poll Question | Option 1 | Option 2*')
+        const result = await execute(conn, sender, { type: 'poll', chat: m?.chat, question: parts[0], options: parts.slice(1) })
+        return reply(result.ok ? `✅ Poll request accepted by Baileys: *${parts[0]}*` : `❌ Poll failed: ${result.error}`)
+    }
+
+    if (sub === 'forward') {
+        const qMsg = m?.quoted?.message ? m.quoted : null
+        if (!qMsg) return reply('❓ Quote the message to forward, then run *.wact forward 254712345678*')
+        const specs = rest.replace(/^forward\s*/i, '').split(/[,;]/).map(x => x.trim()).filter(Boolean)
+        if (!specs.length) return reply('❓ Usage: *.wact forward 254712345678* (quote a message first)')
+        try {
+            const targets = []
+            for (const spec of specs) targets.push(await resolveTarget(conn, m, spec))
+            if (targets.length === 1) {
+                const token = stage(sender, { type: 'forward', jid: targets[0].jid, number: targets[0].number, message: m.quoted })
+                return reply(`⚠️ *Forward preview*\n\nTo: +${targets[0].number}\n\nReply with *.wact confirm ${token}* within 2 minutes to forward it.`)
+            }
+            const tokens = targets.map(t => stage(sender, { type: 'forward', jid: t.jid, number: t.number, message: m.quoted }))
+            return reply(`⚠️ *Forward preview (${targets.length} destinations)*\n\n${targets.map((t, i) => `• +${t.number} — confirm ${tokens[i]}`).join('\n')}\n\nReply with *.wact confirm <token>* within 2 minutes for each destination.`)
+        } catch (error) { return reply(`❌ ${error.message}`) }
     }
 
     if (sub === 'confirm') {

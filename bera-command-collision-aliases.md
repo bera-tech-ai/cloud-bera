@@ -1,5 +1,17 @@
 # Imported command-name collisions with Bera
 
+> **Status (Phase 2, 2026-11-24): resolved-via-registry.** `Library/lib/command-registry.js`
+> now owns collision handling: `buildCommandMap()` fails loudly
+> (`RegistryCollisionError`, or a loud log + first-handler-wins at startup
+> while pre-existing Bera-vs-Bera collisions remain — see
+> `test/phase2-registry.test.js`) instead of silently replacing a handler
+> with a later `map.set()`, and `resolveImportedRoute()` resolves each
+> imported command below to its direct alias or `.beraextra <source-path>`.
+> This inventory is the data source for that resolution
+> (`loadCollisionAliases()`); the routes in the table remain the effective
+> routes for imported commands.
+
+
 Generated from the current Bera command map and imported command registration. **104 source declarations** have a canonical command name already owned by Bera; those represent **96 unique command names**.
 
 The colliding canonical name continues to invoke Bera’s command. Use a listed direct alias to invoke the imported implementation. If the alias column says “None”, use `.beraextra <source-path>` instead. These alternatives do not bypass owner/admin gates or other command restrictions.

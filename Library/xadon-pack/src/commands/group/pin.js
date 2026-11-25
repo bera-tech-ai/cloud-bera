@@ -15,9 +15,13 @@ module.exports = {
 
         // ── UNPIN ────────────────────────────────────────────────
         if (sub === 'unpin' || sub === 'remove') {
+            // Spec §8 unpin payload: { pin: targetKey, type: 0, time: 0 }.
+            // Target is the quoted message, not the command message itself.
+            const unpinTarget = quoted || m.quoted;
+            if (!unpinTarget) return reply('`✘ Reply to the pinned message with .unpin`');
             try {
                 const sent = await sock.sendMessage(m.chat, {
-                    pin: m.key,
+                    pin: unpinTarget.key,
                     type: 0, // 0 = unpin
                     time: 0, // spec §8 unpin payload: { pin, type: 0, time: 0 }
                 });

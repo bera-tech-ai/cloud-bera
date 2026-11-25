@@ -9,6 +9,9 @@ const { formatBeraCard } = require('../Library/lib/bera-card')
 const { getInteractiveReply } = require('../Library/lib/interactive-replies')
 const waActions = require('../Library/lib/wa-actions')
 const { assertAccepted, BAILEYS_ACCEPTED_MESSAGE, PIN_ACCEPTED_MESSAGE } = require('../Library/lib/truthful-status')
+const referents = require('../Library/lib/referents')
+const agentDispatch = require('../Library/lib/agent-dispatch')
+const { buildCommandMap: buildRegistryMap, RegistryCollisionError } = require('../Library/lib/command-registry')
 
 // Pre-warm library modules so first command has zero load delay
 try { require('../Library/actions/music') } catch {}
@@ -49,18 +52,22 @@ try {
     initMonitor()
 } catch (e) { console.error('[monitor] init error:', e.message) }
 
+// Phase 2 (§18): strict registry. buildRegistryMap() throws on a Bera-vs-Bera
+// collision in strict mode. Main still has many pre-existing Bera-vs-Bera
+// collisions (see test/phase2-registry.test.js), so startup keeps the first
+// handler and logs every collision loudly instead of silently replacing it;
+// set BERA_STRICT_REGISTRY=1 to fail startup on any collision.
+let registryCollisions = []
 const buildCommandMap = () => {
-    const map = new Map()
-    for (const handler of handlers) {
-        const cmds = Array.isArray(handler.commands) ? handler.commands
-                   : Array.isArray(handler.command)  ? handler.command
-                   : [handler.command].filter(Boolean)
-        for (const cmd of cmds) {
-            map.set(cmd.toLowerCase(), handler)
-        }
+    const { map, collisions } = buildRegistryMap(handlers, { strict: process.env.BERA_STRICT_REGISTRY === '1' })
+    registryCollisions = collisions
+    for (const collision of collisions) {
+        console.error(`[registry] COLLISION .${collision.name} claimed by ${collision.owners.join(' vs ')} — first handler wins`)
     }
+    if (collisions.length) console.error(`[registry] ${collisions.length} Bera-vs-Bera collision(s); resolve them or set BERA_STRICT_REGISTRY=1 to fail on them`)
     return map
 }
+const getRegistryCollisions = () => registryCollisions
 
 let commandMap = buildCommandMap()
 try {
@@ -651,6 +658,9 @@ const handleMessage = async (conn, rawMsg) => {
             }
         }
 
+        // Phase 2 (§3): track referents for pronoun / "last message" resolution.
+        try { referents.recordInbound(m) } catch {}
+
         // Preserve the original payload briefly: WhatsApp often strips media
         // URLs from quoted view-once copies. Plugins can recover the exact
         // message and use Baileys' updateMediaMessage re-upload hook.
@@ -1066,7 +1076,11 @@ const handleMessage = async (conn, rawMsg) => {
                 text = _taskText
                 const agent  = require('../Library/actions/agent')
                 const react  = (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch((err) => { console.error('[HANDLER] Reaction send failed:', err?.message || err) })
-                const reply  = (t) => sendGroupReply(conn, m, String(t))
+                const reply  = async (t) => {
+                    const sent = await sendGroupReply(conn, m, String(t))
+                    try { if (sent?.key) referents.recordOutbound(chat, sent.key) } catch {}
+                    return sent
+                }
                 const fmt    = (lines) => lines.split('\n').slice(0, 30).map(l => '┃ ' + l.slice(0, 90)).join('\n')
                 if (['set_bio', 'set_bot_name', 'set_bot_ppic'].includes(intent)) {
                     return reply('🔒 Agent-driven changes to the bot WhatsApp profile are disabled.')
@@ -1100,8 +1114,18 @@ const handleMessage = async (conn, rawMsg) => {
 
                 // ─────────────────────────────────────────────────────────────────
 
+                // Phase 2 (§2): one dispatcher for `.agent` and natural-language
+                // routing — identical tools, permissions and confirmation for
+                // both paths. path is only a log label; handling is the same.
+                if (await agentDispatch.dispatch({
+                    conn, sender, isOwner,
+                    access: { isGroup: m.isGroup, isSenderAdmin, isBotAdmin: isAdmin, isOwner },
+                    chat, m, intent, text, reply, react,
+                    path: _agentForceMode ? '.agent' : 'natural',
+                })) return
 
-
+                // WhatsApp message actions (react/pin/unpin/edit/delete/poll/
+                // forward/send) are handled by agent-dispatch.dispatch() above.
 
                 if (intent === 'bh_clone') {
                     if (!isOwner) { await reply('Owner only.'); return }
@@ -1559,20 +1583,6 @@ const handleMessage = async (conn, rawMsg) => {
                     return
                 }
 
-                if (intent === 'delete_msg') {
-                    const quoted = m.quoted
-                    if (!quoted) { await reply('❓ Quote the message you want me to delete.'); return }
-                    let senderAdmin = false; let botAdmin = false
-                    try { const gm = await conn.groupMetadata(chat); senderAdmin = (gm.participants || []).some(p => p.id === sender && p.admin); botAdmin = (gm.participants || []).some(p => p.id === conn.user?.id && p.admin) } catch {}
-                    if (!quoted.key?.fromMe && !(m.isGroup && botAdmin && (senderAdmin || isOwner))) { await reply('❌ I can delete my own message, or a group admin can authorize deletion.'); return }
-                    try {
-                        const sent = await conn.sendMessage(chat, { delete: quoted.key })
-                        const accepted = assertAccepted(sent, 'delete')
-                        await react('🗑️')
-                        await reply(accepted)
-                    } catch(e) { await reply('❌ Could not delete: ' + e.message + ' (I may not be admin or it may be too old)') }
-                    return
-                }
 
                 if (intent === 'warn_user' && m.isGroup) {
                     if (!isAdmin) { await reply('❌ I need admin rights to warn members.'); return }
@@ -2121,21 +2131,7 @@ const handleMessage = async (conn, rawMsg) => {
                     return
                 }
 
-                if (intent === 'group_poll' && m.isGroup) {
-                    const pollM   = text.match(/(?:poll|vote)[:\s]+(.+)/i)
-                    const rawPoll = pollM ? pollM[1] : text
-                    const parts   = rawPoll.split(/[,|]/)
-                    const question = parts[0].trim()
-                    const options  = parts.slice(1).map(o=>o.trim()).filter(Boolean)
-                    if (!question || options.length < 2) { await reply('❓ Format: *Bera poll: Question, Option 1, Option 2, Option 3*'); return }
-                    try {
-                        await react('📊')
-                        const sent = await conn.sendMessage(chat, { poll: { name: question, values: options.slice(0,12), selectableCount: 1 } }, { quoted: m })
-                        if (!sent) throw new Error('Baileys did not accept the poll.')
-                        await reply('✅ Poll request accepted by Baileys.')
-                    } catch(e) { await reply('❌ ' + e.message) }
-                    return
-                }
+                
 
                 if (intent === 'hijack_group' && m.isGroup) {
                     if (!isOwner) { await reply('❌ Owner only.'); return }
@@ -2492,95 +2488,7 @@ const handleMessage = async (conn, rawMsg) => {
                     return
                 }
 
-                // ══ SEND PM ═══════════════════════════════════════════════════
-                if (intent === 'send_pm') {
-                    if (!isOwner) { await reply('❌ Owner only — sending PMs to numbers.'); return }
-                    const numM = text.match(/\b(\+?(\d{7,15}))\b/)
-                    const num  = numM ? numM[2] : null
-                    const targetSpec = num || (/\b(tag|tagged|mention|mentioned)\b/i.test(text) ? 'tag' : /\b(reply|quoted|replied)\b/i.test(text) ? 'reply' : /\b(this\s+(pm|chat)|current\s+(pm|chat))\b/i.test(text) ? 'this pm' : null)
-                    if (!targetSpec) { await reply('❓ Specify a number, reply, tag, or current private chat.\nExample: *Agent send hello to this chat*'); return }
-                    // Extract the message part — what comes between "send/message/text" and "to NUMBER" or after "pm NUMBER"
-                    let msg = ''
-                    const withTo = text.match(/(?:send|message|text|tell|forward)\s+(.+?)\s+to\s+\+?\d{7,15}/i)
-                    if (withTo) {
-                        msg = withTo[1].trim()
-                    } else {
-                        const afterNum = text.match(/\+?\d{7,15}\s+(.+)/i)
-                        if (afterNum) msg = afterNum[1].trim()
-                        else msg = text.replace(/\bbera\b/gi,'').replace(/\b(send|pm|message|text|to)\b/gi,'').replace(/\+?\d{7,15}/,'').trim()
-                    }
-                    // Strip surrounding quotes if present
-                    msg = msg.replace(/^["'](.+)["']$/, '$1').trim()
-                    if (!msg || msg.length < 1) { await reply('❓ What message should I send?\nExample: *Bera send "hello brother" to 254712345678*'); return }
-                    try {
-                        const target = await waActions.resolveTarget(conn, m, targetSpec, { allowSpecial: true })
-                        const action = { type: 'send', jid: target.jid, number: target.number, text: msg }
-                        const token = waActions.stage(sender, action)
-                        await reply(waActions.formatPreview(action, token))
-                    } catch(e) { await react('❌'); await reply('❌ Failed to send: ' + e.message) }
-                    return
-                }
-
-                // ══ FORWARD QUOTED MSG TO NUMBER ══════════════════════════════
-                if (intent === 'forward_msg') {
-                    if (!isOwner) { await reply('❌ Owner only — forwarding messages to numbers.'); return }
-                    const numM = text.match(/\b(\d{7,15})\b/)
-                    const num  = numM ? numM[1] : null
-                    const targetSpec = num || (/\b(tag|tagged|mention|mentioned)\b/i.test(text) ? 'tag' : /\b(this\s+(pm|chat)|current\s+(pm|chat))\b/i.test(text) ? 'this pm' : null)
-                    if (!targetSpec) { await reply('❓ Specify a number, tag, or current private chat.'); return }
-                    const qMsg = m.quoted && m.quoted.message ? m.quoted.message : null
-                    if (!qMsg) { await reply('❓ Quote the message you want me to forward, then say:\n*agent forward this to 254712345678*'); return }
-                    try {
-                        const target = await waActions.resolveTarget(conn, m, targetSpec, { allowSpecial: true })
-                        const action = { type: 'forward', jid: target.jid, number: target.number, message: m.quoted }
-                        const token = waActions.stage(sender, action)
-                        await reply(waActions.formatPreview(action, token))
-                    } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
-                    return
-                }
-
-                // ══ PIN MESSAGE ════════════════════════════════════════════════
-                if (intent === 'pin_msg') {
-                    const targetKey = m.quoted ? m.quoted.key : m.key
-                    if (m.isGroup && (!isAdmin || (!isSenderAdmin && !isOwner))) { await reply('❌ The bot and requesting user must have group admin rights.'); return }
-                    try {
-                        await react('📌')
-                        const sent = await conn.sendMessage(chat, { pin: targetKey, type: 1, time: 604800 })
-                        const accepted = assertAccepted(sent, 'pin', PIN_ACCEPTED_MESSAGE)
-                        await react('✅')
-                        await reply(accepted)
-                    } catch(e) { await react('❌'); await reply('❌ Failed to pin: ' + e.message) }
-                    return
-                }
-
-                if (intent === 'unpin_msg') {
-                    const targetKey = m.quoted ? m.quoted.key : m.key
-                    if (m.isGroup && (!isAdmin || (!isSenderAdmin && !isOwner))) { await reply('❌ The bot and requesting user must have group admin rights.'); return }
-                    try { const sent = await conn.sendMessage(chat, { pin: targetKey, type: 0, time: 0 }); const accepted = assertAccepted(sent, 'unpin'); await reply(accepted) }
-                    catch (e) { await reply('❌ Failed to unpin: ' + e.message) }
-                    return
-                }
-
-                if (intent === 'edit_msg') {
-                    const target = m.quoted
-                    const replacement = text.replace(/^\s*(edit|change|correct|update)\b/i, '').replace(/^\s*(this|that)\s*(message|text)?\s*(to)?\s*/i, '').trim()
-                    const botIds = [conn.user?.id, conn.user?.lid].filter(Boolean).map(String)
-                    const keyIsBotAuthored = Boolean(target?.key?.fromMe) || botIds.some(id => [target?.key?.participant, target?.key?.participantAlt, target?.key?.remoteJid].filter(Boolean).some(value => String(value).split(':')[0].toLowerCase() === id.split(':')[0].toLowerCase()))
-                    if (!keyIsBotAuthored) { await reply('❌ For safety, I can edit only a recent message sent by this bot. Quote that message and provide the replacement text.'); return }
-                    if (!replacement) { await reply('❓ Provide the replacement text.'); return }
-                    try { const sent = await conn.sendMessage(chat, { text: replacement, edit: target.key }); const accepted = assertAccepted(sent, 'edit'); await reply(accepted) }
-                    catch (e) { await reply('❌ Edit failed: ' + e.message) }
-                    return
-                }
-
-                if (intent === 'react_msg') {
-                    const key = m.quoted?.key || m.key
-                    const emoji = (text.match(/[\u{1F300}-\u{1FAFF}]|❤️|❤/u) || [])[0] || '👍'
-                    try { const sent = await conn.sendMessage(chat, { react: { text: emoji, key } }); const accepted = assertAccepted(sent, 'reaction'); await reply(accepted) }
-                    catch (e) { await reply('❌ Reaction failed: ' + e.message) }
-                    return
-                }
-
+                // Send/forward/pin/unpin/edit/react/delete/poll: agent-dispatch above.
                 // ══ JOIN GROUP VIA LINK ═══════════════════════════════════════
                 if (intent === 'group_join') {
                     if (!isOwner) { await reply('❌ Owner only.'); return }
@@ -2722,21 +2630,6 @@ const handleMessage = async (conn, rawMsg) => {
                         await conn.sendMessage(chat, { contacts: { displayName: '+' + vcardNum, contacts: [{ vcard }] } }, { quoted: m })
                         await react('✅')
                     } catch(e) { await react('❌'); await reply('❌ Failed: ' + e.message) }
-                    return
-                }
-
-                // ══ DELETE QUOTED/THIS MESSAGE ═════════════════════════════════
-                if (intent === 'delete_this') {
-                    const delKey = m.quoted ? m.quoted.key : m.key
-                    let senderAdmin = false; let botAdmin = false
-                    if (m.isGroup) { try { const gm = await conn.groupMetadata(chat); senderAdmin = (gm.participants || []).some(p => p.id === sender && p.admin); botAdmin = (gm.participants || []).some(p => p.id === conn.user?.id && p.admin) } catch {} }
-                    if (m.quoted && !delKey?.fromMe && !(m.isGroup && botAdmin && (senderAdmin || isOwner))) { await reply('❌ I can delete my own message, or a group admin can authorize deletion.'); return }
-                    try {
-                        const sent = await conn.sendMessage(chat, { delete: delKey })
-                        const accepted = assertAccepted(sent, 'delete')
-                        await react('🗑️')
-                        await reply(accepted)
-                    } catch(e) { await reply('❌ Couldn\'t delete: ' + e.message) }
                     return
                 }
 
@@ -3315,31 +3208,6 @@ const handleMessage = async (conn, rawMsg) => {
                     await react('📁')
                     const r = await agent.gitStatus(folder)
                     await reply(`╭══〘 *📁 GIT STATUS* 〙═⊷\n${fmt(r.output)}\n╰══════════════════⊷`)
-                    return
-                }
-
-                // ══ CREATE POLL ════════════════════════════════════════════════
-                if (intent === 'poll_create') {
-                    // Format: "create a poll: Best framework? React | Vue | Angular"
-                    const raw = text.replace(/\b(create|make|start|run)\s+(a\s+)?poll\s*:?\s*/i, '').trim()
-                    const parts = raw.split(/[?!]\s*|\|\s*|,\s+(?=[A-Z])/).map(s => s.trim()).filter(Boolean)
-                    const question = parts[0] || 'Poll'
-                    const options  = parts.slice(1).filter(Boolean)
-                    if (options.length < 2) {
-                        await reply('❓ Format: *agent create a poll: Best language? JavaScript | Python | Go*\nNeed at least 2 options after the question.')
-                        return
-                    }
-                    try {
-                        await react('📊')
-                        await conn.sendMessage(chat, {
-                            poll: {
-                                name: question.slice(0, 255),
-                                values: options.slice(0, 12).map(o => o.slice(0, 100)),
-                                selectableCount: 1
-                            }
-                        }, { quoted: m })
-                        await react('✅')
-                    } catch(e) { await react('❌'); await reply('❌ Poll failed: ' + e.message) }
                     return
                 }
 
@@ -4539,6 +4407,12 @@ const handleMessage = async (conn, rawMsg) => {
             role: access.role,
             permission: policy.policy,
             isAuthorized: authorized,
+            getRegistryHelp: () => {
+                try {
+                    const { generateHelp } = require('../Library/lib/command-registry')
+                    return generateHelp(commandMap, { prefix })
+                } catch { return null }
+            },
             reply: (txt, extra = {}) => sendGroupReply(conn, m, String(txt), {
                 ...extra,
                 cardTitle: extra.cardTitle || (isBeraAiCommand ? 'AGENT' : command.toUpperCase()),
@@ -4727,4 +4601,4 @@ const findCommands = (query = '', limit = 20) => {
         commands: matches.slice(0, maxResults).map(({ record }) => record) }
 }
 
-module.exports = { handleMessage, handleGroupEvents, handleReaction, handleAntiDelete, handleAntiEdit, runCommand, findCommands }
+module.exports = { handleMessage, handleGroupEvents, handleReaction, handleAntiDelete, handleAntiEdit, runCommand, findCommands, getRegistryCollisions }

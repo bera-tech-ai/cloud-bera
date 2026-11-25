@@ -254,6 +254,12 @@ const config = require('../Config')
       }
 
       if (['list','listmenu','listmen','cmds','allcmds'].includes(command)) {
+          // Phase 2 (§18): registry-generated list — generated from the
+          // effective command registry, not the hardcoded sections below.
+          if (String(args[0] || '').toLowerCase() === 'registry' && typeof ctx.getRegistryHelp === 'function') {
+              const generated = ctx.getRegistryHelp()
+              if (generated) return reply(generated)
+          }
           const S=(title,cmds)=>'\u256d\u2500\u2500\u2740 *'+title+'* \u2740\n'+cmds.map(([c,d])=>'\u2502\u2b25 *'+p+c+'* \u2014 '+d).join('\n')+'\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2022'
           const secs=[
               S('\ud83e\udde0 AI & AGENT',[['bera <msg>','Chat with Bera AI'],['agent <task>','Autonomous agent (140 tools)'],['imagine <desc>','Generate AI image'],['see / vision','Analyze image (quote it)'],['tts <text>','Text to voice note'],['transcribe','Audio/video to text'],['chatbot on/off','Auto AI replies'],['beratrigger <word>','Custom AI trigger'],['tagreply on/off','Reply when tagged'],['remember <k> <v>','Save agent memory'],['recall <key>','Recall memory'],['memories','List all memories'],['forget <key>','Delete memory'],['berahistory','View chat history'],['berareset','Clear history & memory'],['summarize <text>','Summarize text'],['explain <topic>','Explain a topic'],['improve <text>','Improve writing'],['proofread <text>','Fix grammar'],['rewrite <text>','Rephrase text'],['eli5 <topic>',"Explain like I'm 5"],['formal / casual <text>','Change tone'],['tweet <topic>','Write tweet'],['caption2 <desc>','Instagram caption'],['essay <topic>','Write essay'],['email <context>','Write email'],['cover <job>','Write cover letter'],['code2eng <code>','Explain code'],['eng2code <task>','Generate code'],['debugcode <code>','Debug code'],['sentiment <text>','Tone analysis'],['expand <text>','Expand content'],['roasttext <text>','Roast text'],['nameai <hint>','Generate names'],['sloganai <brand>','Generate slogans'],['bioai <info>','Write a bio'],['gpt / chatgpt','GPT model'],['gpt4','GPT-4 model'],['gpt4o','GPT-4o'],['gemini','Google Gemini'],['venice','Venice AI'],['giftedai / ai','Gifted AI'],['cron add <expr> <task>','Schedule task'],['apidocs <folder>','Generate API docs'],['codescan','Scan code for bugs'],['scaffold <name>','Scaffold project']]),
