@@ -182,12 +182,21 @@ const checkAutoReply = async (conn, m, text) => {
 }
 
 const sendOptInVoiceReply = async (conn, m, text, languagePreference = 'en') => {
-    if (!conn?.sendMessage || !m?.chat || m.isGroup || String(text || '').length > 1200) return false
+    if (!conn?.sendMessage || !m?.chat) return false
     const sender = String(m.sender || '').replace(/:\d+@/, '@').toLowerCase()
-    if (global.db?.data?.chatbera?.voiceReplies?.[sender] !== true) return false
+    const prefs = global.db?.data?.chatbera || {}
+    // PMs: per-user opt-in (.voice auto on / "from now on use voice").
+    // Groups: per-chat opt-in — only the owner can switch it on, so one
+    // member can't make the bot voice-note a whole group.
+    const voiceOn = m.isGroup ? prefs.voiceChats?.[m.chat] === true : prefs.voiceReplies?.[sender] === true
+    if (!voiceOn) return false
     try {
-        const { fetchTts, resolveSpeechLanguage } = require('../Library/actions/tts')
-        const audio = await fetchTts(text, resolveSpeechLanguage(text, languagePreference))
+        const { fetchTts, resolveSpeechLanguage, toSpeechText } = require('../Library/actions/tts')
+        // Speak the words, not the card frame: long/formatted replies and
+        // empty-after-cleaning replies fall back to text.
+        const speakable = toSpeechText(text)
+        if (!speakable || speakable.length > 1200) return false
+        const audio = await fetchTts(speakable, resolveSpeechLanguage(speakable, languagePreference))
         await conn.sendMessage(m.chat, { audio, mimetype: 'audio/ogg; codecs=opus', ptt: true }, { quoted: m })
         return true
     } catch (error) {
@@ -330,8 +339,10 @@ const handleReaction = async (conn, reactionMsg) => {
             } else if (orig.text && emoji === '🔍') {
                 await react('⏳')
                 const res = await webSearch(orig.text.slice(0, 200))
-                if (res.success) {
-                    await conn.sendMessage(chat, { text: `🔍 *${orig.text.slice(0, 60)}*\n\n${res.result}` }, { quoted: reactionMsg })
+                if (res.success && res.results?.length) {
+                    // web-search returns { results } (not `result`); format it.
+                    const { formatSearchResults } = require('../Library/actions/web-search')
+                    await conn.sendMessage(chat, { text: formatSearchResults(orig.text.slice(0, 200), res) }, { quoted: reactionMsg })
                     await react('✅')
                 } else await react('❌')
             }
@@ -2005,14 +2016,16 @@ const handleMessage = async (conn, rawMsg) => {
                     const query  = queryM ? queryM[1].trim() : text
                     try {
                         await react('🔍')
-                        const agent = require('../Library/actions/agent')
-                        const r = await agent.webScrape('https://duckduckgo.com/html/?q=' + encodeURIComponent(query))
-                        const snippets = (r.text||'').match(/class="result__snippet">([^<]+)</g)
-                        if (snippets && snippets.length) {
-                            const results = snippets.slice(0,4).map((s,i) => (i+1)+'. ' + s.replace(/class="[^"]+">|<\/[^>]+>/g,'').trim()).join('\n')
-                            await reply('╭══〘 *🔍 SEARCH: ' + query.slice(0,30) + '* 〙═⊷\n' + results.split('\n').map(l=>'┃ '+l).join('\n') + '\n╰══════════════════⊷')
+                        // Real provider chain (SearxNG → Brave → DuckDuckGo
+                        // Instant Answer) with the central search card (§17/§21),
+                        // instead of scraping DuckDuckGo HTML into a custom card.
+                        const { webSearch } = require('../Library/actions/web-search')
+                        const { formatSearchCard } = require('../Library/lib/bera-card')
+                        const res = await webSearch(query)
+                        if (res.success && res.results?.length) {
+                            await reply(formatSearchCard(query, res.results))
                         } else {
-                            await reply('❌ No results found for *' + query + '*')
+                            await reply(`❌ No results found for *${query}*${res.error ? `\n${res.error}` : ''}`)
                         }
                     } catch(e) { await reply('❌ Search failed: ' + e.message) }
                     return
@@ -4289,11 +4302,14 @@ const handleMessage = async (conn, rawMsg) => {
                     const cleaned = text.replace(/^\s*bera[, :\s]+/i, '').trim() || text
                     const result = await generateAdvancedReply(cleaned, chat, conn, m, { agentMode: true, MAX_LOOPS: 12, languagePreference })
                     if (result && result.success && result.reply) {
-                        await reply(result.reply)
-                        await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
+                        // Voice mode replaces the text reply when it works
+                        // (long replies still arrive as text). skipVoice is
+                        // set by preDispatch branches that already sent audio.
+                        const voiced = !result.skipVoice && await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
+                        if (!voiced) await reply(result.reply)
                     } else if (result && result.reply) {
-                        await reply(result.reply)
-                        await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
+                        const voiced = !result.skipVoice && await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
+                        if (!voiced) await reply(result.reply)
                     } else {
                         await reply('🤖 (no response)')
                     }
@@ -4381,7 +4397,7 @@ const handleMessage = async (conn, rawMsg) => {
         const access = await getAccessContext({ conn, chat, sender, isOwner, authorized })
         const policy = authorizeCommand(command, access)
         if (!policy.allowed) {
-            return sendGroupReply(conn, m, `⛔ ${policy.reason}`, { cardTitle: command.toUpperCase(), cardSubtitle: 'BOT PERMISSION' })
+            return sendGroupReply(conn, m, `⛔ ${policy.reason}`, { cardTitle: command.toUpperCase(), cardSubtitle: 'BOT PERMISSION', cardType: 'permission' })
         }
         const isGroup = access.isGroup
         const isAdmin = access.isAdmin

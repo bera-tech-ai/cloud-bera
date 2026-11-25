@@ -1,5 +1,5 @@
 const config = {
-    botName: 'Bera',
+    botName: 'Bera AI',
     prefix: '.',
     owner: process.env.OWNER_NUMBER || '254116763755',
     ownerNumber: process.env.OWNER_NUMBER || '254116763755',

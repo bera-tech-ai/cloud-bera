@@ -28,4 +28,12 @@ const cleaned = cleanAnswer('I am ChatGPT, developed by Gifted Tech and Maurice.
 assert.match(_sanitizeIdentity(cleaned), /Bera AI|Bera Tech/i)
 assert.doesNotMatch(_sanitizeIdentity(cleaned), /Gifted\s*Tech|\bMaurice\b/i)
 
+// Phase 3 (§1): one version (3.0.0) and no provider names in either prompt.
+for (const prompt of [PERSONALITY, SHORT_PERSONA]) {
+    assert.doesNotMatch(prompt, /Groq/i)
+    assert.doesNotMatch(prompt, /DeepSeek/i)
+    assert.doesNotMatch(prompt, /powered by/i)
+    assert.match(prompt, /Bera AI v3\.0\.0/)
+}
+
 console.log('bera identity tests passed')

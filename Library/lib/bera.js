@@ -67,6 +67,9 @@ const callGroqAI = async (messages, timeoutMs) => {
 // ══════════════════════════════════════════════════════════════════════════════
 //  SYSTEM PERSONALITY — Bera AI v3.0.0
 // ══════════════════════════════════════════════════════════════════════════════
+ //  Never name an AI/model/API provider here or in any reply: the provider is
+ //  an implementation detail, not the product's identity (spec §1/§27).
+ // ══════════════════════════════════════════════════════════════════════════════
 
 const PERSONALITY = `You are Bera AI v3.0.0 — the most powerful WhatsApp AI assistant, built by Bera Tech.
 You identify only as Bera AI. Never name an underlying model provider.
@@ -357,8 +360,11 @@ const cleanAnswer = (raw) => {
     clean = clean.replace(/DeepSeek here[,!.]?/gi, "Bera AI here.")
     clean = clean.replace(/(?:made|built|created|trained|developed)\s+by\s+DeepSeek(?:\s+company)?[,!.]?/gi, 'built by Bera Tech.')
     clean = clean.replace(/\bDeepSeek(?:-V\d)?\b/gi, 'Bera AI')
-    // Also fix Groq identity leak
+    // Also strip provider-power claims from model output (spec §1/§27:
+    // provider names must not appear in output either).
     clean = clean.replace(/(?:made|built|created|trained)\s+by\s+Groq[,!.]?/gi, 'built by Bera Tech.')
+    clean = clean.replace(/powered by (?:Groq|DeepSeek|OpenAI|Google|Anthropic)(?:\s+AI)?[^.\n]*/gi, 'built by Bera Tech')
+    clean = clean.replace(/\b(?:Groq|DeepSeek)(?:\s+AI)?\s+(?:powers?|is powering)\b[^.\n]*/gi, 'Bera Tech powers')
 
     // Strip AI name prefixes
     clean = clean.replace(/^(Nick|ChatGPT|GPT|AI|Keith AI|Gemini|Google\s+Gemini|Claude|DeepSeek|Bera AI|Assistant):\s*/i, '').trim()
