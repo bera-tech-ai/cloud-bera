@@ -52,11 +52,11 @@ test('remove-reaction sends an empty react', async () => {
     assert.match(replies[0], /Reaction removed/)
 })
 
-test('pin uses the spec wording; unpin uses time 0 via wa-actions', async () => {
+test('pin uses the plain success wording; unpin uses time 0 via wa-actions', async () => {
     const { ctx, replies, sent } = harness({ ctx: { intent: 'pin_msg', text: 'pin this for 7 days' } })
     assert.equal(await dispatch(ctx), true)
     assert.deepEqual(sent[0].content, { pin: { id: 'q-1', remoteJid: CHAT, fromMe: false }, type: 1, time: 604800 })
-    assert.match(replies[0], /Pin request accepted by Baileys\. Final device-side visibility depends on WhatsApp processing\./)
+    assert.match(replies[0], /✅ Pinned successfully as requested\./)
     const unpin = harness({ ctx: { intent: 'unpin_msg', text: 'unpin that' } })
     assert.equal(await dispatch(unpin.ctx), true)
     assert.deepEqual(unpin.sent[0].content, { pin: { id: 'q-1', remoteJid: CHAT, fromMe: false }, type: 0, time: 0 })
