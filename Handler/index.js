@@ -677,6 +677,10 @@ const handleMessage = async (conn, rawMsg) => {
         // message and use Baileys' updateMediaMessage re-upload hook.
         try { require('../Library/lib/view-once-store').remember(rawMsg) } catch {}
 
+        // Anti-viewonce: in chats where it is switched on, download view-once
+        // media at arrival (the only reliable moment) and re-send it openly.
+        try { require('../Library/lib/view-once-capture').captureOnArrival(conn, rawMsg) } catch {}
+
         // Persist user activity seen in live groups for read-only inactivity reports.
         // Replayed and duplicate messages have already been excluded above.
         if (m.isGroup) {
