@@ -48,6 +48,35 @@ const pathWithPackageManagers = () => {
     return parts.join(':')
 }
 
+// BeraHost sometimes fails a brand-new deployment while an earlier
+// deployment of the same project keeps running — and already serves the
+// updated repository. Find such a deployment (verified live over HTTP) so
+// a publish can fall back to its URL instead of handing out a dead one.
+const findRunningDeploymentForProject = async (name, excludeId) => {
+    try {
+        const listed = await berahost.listWebDeployments()
+        if (!listed.success) return null
+        const runningIds = new Set((listed.deployments || [])
+            .filter(d => String(d.id) !== String(excludeId) && /^running$/i.test(String(d.status || '')))
+            .map(d => String(d.id)))
+        if (!runningIds.size) return null
+        const state = loadState()
+        const candidates = Object.values(state.projects || {})
+            .filter(p => p.name === name && p.deployment && p.deployment.url && runningIds.has(String(p.deployment.id)))
+            .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+        for (const candidate of candidates) {
+            try {
+                const controller = new AbortController()
+                const timer = setTimeout(() => controller.abort(), 10000)
+                const response = await fetch(candidate.deployment.url, { signal: controller.signal })
+                clearTimeout(timer)
+                if (response.ok) return { id: candidate.deployment.id, status: 'running', url: candidate.deployment.url }
+            } catch {}
+        }
+        return null
+    } catch { return null }
+}
+
 const run = async (command, cwd, timeout = 120000) => {
     try {
         const r = await execFileAsync('/bin/sh', ['-lc', command], { cwd, timeout, maxBuffer: 8 * 1024 * 1024, env: { ...process.env, PATH: pathWithPackageManagers() } })
@@ -285,6 +314,22 @@ const lifecycle = async (options = {}) => {
                 if (final.success) {
                     const d = final.deployment || {}
                     record.deployment = { ...record.deployment, ...d, id: deployment.id, url: extractDeploymentUrl(d) || record.deployment.url }
+                }
+                if (!/^running$/i.test(String(record.deployment.status || ''))) {
+                    // The fresh deployment did not reach "running": it failed
+                    // on BeraHost's side, or their builder is stuck and the
+                    // poll window elapsed (deployments have hung in
+                    // "building" there). If an earlier deployment of this
+                    // project is live (verified over HTTP), hand out its URL
+                    // instead — it already serves the updated repository.
+                    // With no live fallback, a failed deployment is an honest
+                    // error; a still-building one keeps its URL as before.
+                    const fallback = await findRunningDeploymentForProject(name, deployment.id)
+                    if (fallback) {
+                        record.deployment = { ...fallback, production, replacedFailedDeployment: deployment.id }
+                    } else if (/fail|error|suspend/i.test(String(record.deployment.status || ''))) {
+                        throw new Error(`BeraHost deployment failed (status: ${record.deployment.status}). The code was pushed to GitHub, but the site is not live.`)
+                    }
                 }
                 if (record.deployment.url) {
                     const shot = await takeScreenshot(record.deployment.url)
