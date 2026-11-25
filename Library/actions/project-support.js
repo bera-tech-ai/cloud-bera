@@ -295,6 +295,16 @@ const publishApprovedCase = async (entry, project, source, publishMode) => {
     entry.updatedAt = Date.now()
     await persist()
     if (!deployed.success) throw new Error(`Project approval is recorded, but publishing did not complete: ${deployed.error || 'unknown error'}`)
+    // Screenshot the deployed site so the approval reply can send it with
+    // the live URL and repo link. Kept on a non-enumerable field (set after
+    // persist) so the image bytes never land in the database.
+    if (publishMode === 'deploy' && entry.publishResult?.url) {
+        try {
+            const { takeScreenshot } = require('./browser')
+            const shot = await takeScreenshot(entry.publishResult.url)
+            if (shot.success && Buffer.isBuffer(shot.buffer)) Object.defineProperty(entry, 'publishScreenshot', { value: { mimetype: shot.mimetype || 'image/png', buffer: shot.buffer }, enumerable: false, writable: true })
+        } catch {}
+    }
     return entry
 }
 
@@ -465,12 +475,17 @@ const handleCommand = async (raw, ctx = {}) => {
                 ? publishMode === 'deploy' ? 'approved, pushed, and deployed' : 'approved and pushed to GitHub'
                 : 'approved and applied locally'
             const liveUrl = result.publishResult?.url
-            const urlNote = liveUrl
-                ? `\nLive: ${liveUrl}`
-                : result.state === 'published' && publishMode === 'deploy'
-                    ? '\nBeraHost reported deployment success but returned no recognized live URL.'
-                    : ''
-            return reply(`Revision ${actionLabel} for *${project.name}*.${urlNote}`)
+            const repoUrl = agentOs.get(project.id)?.github?.url || null
+            const urlNote = [
+                liveUrl ? `Live: ${liveUrl}` : result.state === 'published' && publishMode === 'deploy' ? 'BeraHost reported deployment success but returned no recognized live URL.' : null,
+                repoUrl ? `Repo: ${repoUrl}` : null
+            ].filter(Boolean).join('\n')
+            await reply(`Revision ${actionLabel} for *${project.name}*.${urlNote ? `\n${urlNote}` : ''}`)
+            // Send the deployed-site screenshot with the links.
+            if (result.state === 'published' && liveUrl && result.publishScreenshot?.buffer && conn?.sendMessage) {
+                try { await conn.sendMessage(chat, { image: result.publishScreenshot.buffer, mimetype: result.publishScreenshot.mimetype || 'image/png', caption: `*${project.name}*\n${urlNote}` }, { quoted: m }) } catch {}
+            }
+            return result
         }
         if (action === 'undo') {
             const result = await undoCase(entry, project, ctx)
