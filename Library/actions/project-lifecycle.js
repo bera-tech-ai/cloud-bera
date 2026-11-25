@@ -36,9 +36,21 @@ const updateRecord = (record, patch) => {
     return record
 }
 
+const pathWithPackageManagers = () => {
+    // Same PATH hardening as agent-os: a service manager can start the bot
+    // with a minimal PATH that lacks npm, which broke publish-time installs.
+    const parts = String(process.env.PATH || '').split(':').filter(Boolean)
+    const candidates = [path.dirname(process.execPath), '/opt/hatch-image/bin', '/usr/local/bin', '/opt/homebrew/bin']
+    for (const dir of candidates) {
+        if (parts.includes(dir)) continue
+        try { if (fs.existsSync(path.join(dir, 'npm'))) parts.unshift(dir) } catch {}
+    }
+    return parts.join(':')
+}
+
 const run = async (command, cwd, timeout = 120000) => {
     try {
-        const r = await execFileAsync('/bin/sh', ['-lc', command], { cwd, timeout, maxBuffer: 8 * 1024 * 1024, env: process.env })
+        const r = await execFileAsync('/bin/sh', ['-lc', command], { cwd, timeout, maxBuffer: 8 * 1024 * 1024, env: { ...process.env, PATH: pathWithPackageManagers() } })
         return { success: true, output: `${r.stdout || ''}${r.stderr ? `\n${r.stderr}` : ''}`.trim().slice(-12000) }
     } catch (e) {
         return { success: false, output: `${e.stdout || ''}${e.stderr ? `\n${e.stderr}` : ''}`.trim().slice(-12000), error: e.message }
