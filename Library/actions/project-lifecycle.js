@@ -125,8 +125,17 @@ const pushToGitHub = async (dir, owner, repo, branch = 'main', message = 'feat: 
         if (!commit.success) return { success: false, error: commit.output || commit.error }
         await run(`git remote remove origin 2>/dev/null || true; git remote add origin https://github.com/${owner}/${repo}.git`, dir, 30000)
         await git(['branch', '-M', branch], dir, env)
-        const pushed = await git(['push', '-u', 'origin', branch], dir, env)
-        return { success: true, output: String(pushed.stdout || '').slice(-2000) }
+        try {
+            const pushed = await git(['push', '-u', 'origin', branch], dir, env)
+            return { success: true, output: String(pushed.stdout || '').slice(-2000) }
+        } catch (pushError) {
+            // A rebuilt project has fresh local history, so a plain push is
+            // rejected as non-fast-forward. These repositories are generated
+            // and written only by Bera, and a rebuild supersedes the previous
+            // generation, so retry once with force.
+            const forced = await git(['push', '-u', 'origin', branch, '--force'], dir, env)
+            return { success: true, output: String(forced.stdout || '').slice(-2000) }
+        }
     } catch (e) {
         return { success: false, error: e.stderr || e.message }
     } finally { try { fs.unlinkSync(askpass) } catch {} }
