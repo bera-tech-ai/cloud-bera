@@ -56,6 +56,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     const repoRequested = deployRequested || /\b(github|repository|repo|push\s+(?:the\s+)?(?:code|project))\b/i.test(text)
     const repositoryVisibility = repositoryVisibilityFromRequest(text)
     await replyProgress('🏗️ I’ll build and validate the project locally first. Any GitHub push or deployment will wait for a separate owner approval tied to this exact build.')
+    const progressSent = new Set()
     const result = await agentOs.run({
         action: 'run',
         userId,
@@ -68,61 +69,28 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         private: repositoryVisibility !== 'public',
         skipUnapprovedShell: true,
         onProgress: async progress => {
-            if (progress.phase === 'planning') {
-                await replyProgress('🧠 Planning the project locally and contacting the AI planner...')
-            } else if (progress.phase === 'ai_provider' && progress.stage === 'trying') {
-                const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
-                await replyProgress(`🔌 AI planner: trying ${label} (${progress.index + 1}/${progress.total})...`)
-            } else if (progress.phase === 'planning_complete') {
-                const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
-                await replyProgress(`✅ AI planner responded via ${label}; preparing the project files.`)
-            } else if (progress.phase === 'planner_json_recovery') {
-                await replyProgress('🔧 Planner output was not valid JSON; asking the planner to correct its format before rebuilding the plan.')
-            } else if (progress.phase === 'planner_json_local_repair') {
-                await replyProgress('🔧 Planner JSON needed formatting; repairing the response locally before continuing.')
-            } else if (progress.phase === 'planner_json_regeneration') {
-                await replyProgress('🔄 The planner response could not be repaired; generating a fresh plan from your original request.')
-            } else if (progress.phase === 'planner_json_regeneration_provider' && progress.stage === 'trying') {
-                const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
-                await replyProgress(`🔌 Fresh-plan recovery: trying ${label} (${progress.index + 1}/${progress.total})...`)
-            } else if (progress.phase === 'execute') {
-                const { index, total, action } = progress
-                if (index === 0 || index === total - 1 || (index + 1) % 4 === 0) {
-                    await replyProgress(`⚙️ Building locally: step ${index + 1}/${total} (${String(action || 'work').replace(/_/g, ' ')}). Repository creation and deployment remain after build validation.`)
-                }
-            } else if (progress.phase === 'validation') {
-                await replyProgress('🧪 Project files are generated; installing dependencies and running available build/tests now.')
-            } else if (progress.phase === 'shell_skipped') {
-                await replyProgress('⏭️ Skipped a planner shell command that is not allowlisted. General shell access stays disabled; Bera will rely on managed install/build/test validation.')
-            } else if (progress.phase === 'repair') {
-                await replyProgress(`🛠️ A local check failed; attempting repair ${progress.attempt}/${progress.total} before retrying validation.`)
-            } else if (progress.phase === 'repair_provider' && progress.stage === 'trying') {
-                const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
-                await replyProgress(`🔌 Repair planner: trying ${label} (${progress.index + 1}/${progress.total})...`)
-            } else if (progress.phase === 'repair_json_recovery') {
-                await replyProgress('🧩 Repair response was not valid JSON; requesting a corrected repair plan.')
-            } else if (progress.phase === 'repair_json_local_repair') {
-                await replyProgress('🔧 Repair plan formatting is still invalid; attempting local JSON repair.')
-            } else if (progress.phase === 'repair_json_regeneration') {
-                await replyProgress('🔄 Repair plan could not be recovered; generating a fresh repair plan from the failed check.')
-            } else if (['repair_json_recovery_provider', 'repair_json_regeneration_provider'].includes(progress.phase) && progress.stage === 'trying') {
-                const label = ({ deepseek: 'DeepSeek', publicai: 'PublicAI', gemini: 'Gemini', keithai: 'KeithAI' })[progress.provider] || progress.provider
-                await replyProgress(`🔌 Repair recovery: trying ${label} (${progress.index + 1}/${progress.total})...`)
-            } else if (progress.phase === 'repair_external_action_skipped') {
-                await replyProgress(`⏭️ Ignored the repair planner’s ${progress.action} step; repairs stay local and cannot deploy or publish.`)
-            } else if (progress.phase === 'repair_root_entrypoint_fallback') {
-                await replyProgress('🧩 The repair plan still lacked a runnable root app; created a safe local index.html fallback and will validate it before any approval request.')
-            } else if (progress.phase === 'checkpoint') {
-                await replyProgress('💾 Checks passed; saving the local build checkpoint. No GitHub push or deployment is happening yet.')
-            } else if (progress.phase === 'preview') {
-                await replyProgress('🖥️ Starting a local preview and attempting a screenshot...')
+            // One short message per build stage at most. Provider tries,
+            // plan steps, JSON repairs and retries stay silent; the final
+            // summary reports the outcome.
+            const milestones = {
+                planning: '🧠 Planning the project...',
+                execute: '⚙️ Building the project files...',
+                validation: '🧪 Files are ready; checking the build...',
+                repair: '🛠️ A check failed; fixing it and re-checking...',
+                preview: '🖥️ Starting a local preview...'
             }
+            const text = milestones[progress.phase]
+            if (!text || progressSent.has(text)) return
+            if (progress.phase === 'execute' && progress.index !== 0) return
+            progressSent.add(text)
+            await replyProgress(text)
         }
     })
     const record = result.record || {}
     const failureDetails = validationFailureDetails(result, record)
     const failureMessage = [result.error, failureDetails].filter(Boolean).join(' | ').slice(0, 1800)
     const buildValidated = Boolean(record.checkpoint) && (record.checks || []).length > 0 && (record.checks || []).every(check => check.success)
+    const usedFallback = Boolean(record.usedFallback)
     let approvalCase = null
     if (record.id) {
         try {
@@ -136,7 +104,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         }
     }
     const parts = [
-        buildValidated ? '✅ Project built and validated locally.' : `❌ Project build failed: ${failureMessage || 'validation or checkpoint did not pass; no diagnostic was returned'}`,
+        buildValidated ? (usedFallback ? '⚠️ The AI planner could not generate the requested design, so this is a starter template — the requested content is missing. Review it before approving.' : '✅ Project built and validated locally.') : `❌ Project build failed: ${failureMessage || 'validation or checkpoint did not pass; no diagnostic was returned'}`,
         !result.success && buildValidated ? `⚠️ Publishing/deployment did not finish: ${result.error || 'unknown error'}` : null,
         record.name ? `Project: ${record.name}` : null,
         record.dir ? `Workspace: ${record.dir}` : null,
@@ -157,11 +125,12 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
                 `Project: ${record.name || record.id}`,
                 `Action: ${mode}`,
                 'The project was validated locally. No repository push or deployment happens unless an authorized project owner approves.',
+                usedFallback ? '⚠️ This build fell back to a starter template; the requested content is not in it. Only approve if you want to publish the template as-is.' : null,
                 repositoryVisibility === 'public'
                     ? 'The requested repository visibility is public. Confirm that source code is safe to expose before approving.'
                     : 'Repository visibility stays private by default. Bera will not make the source public automatically; BeraHost must already have authorized access to clone a private repository.',
                 'Reply directly to this message with 1 to approve or 2 to decline.'
-            ].join('\n')
+            ].filter(Boolean).join('\n')
             const sent = await conn.sendMessage(chat, { text: prompt }, message ? { quoted: message } : {})
             const support = require('./project-support')
             await support.recordApprovalPromptMessage(approvalCase.id, {
