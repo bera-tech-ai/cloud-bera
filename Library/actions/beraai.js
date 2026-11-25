@@ -363,7 +363,7 @@ const preDispatch = async (text, m, conn) => {
     const t = text.trim()
     const lc = t.toLowerCase()
 
-    const { parseMovieLookupTitle, parseWebSearchQuery, isGitHubStatusQuery, parseGroupInactiveRequest } = require('./command-intent')
+    const { parseMovieLookupTitle, parseWebSearchQuery, isGitHubStatusQuery, parseGroupInactiveRequest, parseMemberSearch, parseSayInVoice, parseImageQuestion, parseVoiceMode } = require('./command-intent')
     const inactiveRequest = parseGroupInactiveRequest(t)
     if (inactiveRequest) {
         const result = await executeToolCall({ tool: 'wa_group_activity', days: inactiveRequest.days }, m?.chat || '', conn, m)
@@ -386,6 +386,100 @@ const preDispatch = async (text, m, conn) => {
     if (searchQuery) {
         const result = await webSearch(searchQuery)
         return { success: result.success, reply: formatSearchResults(searchQuery, result) }
+    }
+
+    // ── Group member search / list ──────────────────────────────────────────
+    // Deterministic: the LLM kept answering "I can't list members" even
+    // after the wa_group_members tool was added to its prompt (2026-11-24,
+    // TECH SPACE / Casper) — a ~7.8k-token system prompt buries the tool.
+    // Answer from the tool directly instead of hoping the model calls it.
+    const memberSearch = parseMemberSearch(t)
+    if (memberSearch && m?.isGroup && m?.chat?.endsWith('@g.us')) {
+        const result = await executeToolCall({ tool: 'wa_group_members' }, m.chat, conn, m)
+        const list = String(result || '')
+        if (/^❌/.test(list)) return { success: false, reply: list }
+        if (memberSearch.list) return { success: true, reply: list }
+        const name = memberSearch.name
+        const lines = list.split('\n').filter((l) => /^\d+\.\s/.test(l))
+        const hits = lines.filter((l) => l.toLowerCase().includes(name.toLowerCase()))
+        if (hits.length === 1) return { success: true, reply: `✅ Yes — ${hits[0].replace(/^\d+\.\s*/, '')} is in this group.` }
+        if (hits.length > 1) return { success: true, reply: `🔍 ${hits.length} members match "${name}":\n${hits.join('\n')}` }
+        return { success: true, reply: `🔍 I checked all ${lines.length} members and found no one called "${name}".\nNames come from WhatsApp usernames (@handle), members Bera has seen speak, or names you taught with "remember <name> is <number>" — anyone else shows as their number only, so "${name}" may be here under a number I don't recognise.\n\nFull list:\n${list}` }
+    }
+
+    // ── Voice mode: "from now on use voice to communicate" ────────────────
+    // Persistent reply mode (owner only): from here on, the bot answers
+    // with voice notes instead of text, in this chat (PM) or this group.
+    // The mode is stored in db.data.chatbera (voiceReplies per user for
+    // PMs, voiceChats per chat for groups) and honoured by the Handler's
+    // sendOptInVoiceReply. Same switch as `.voice auto on|off`.
+    const voiceMode = parseVoiceMode(t)
+    if (voiceMode) {
+        try {
+            const { isAuthorized } = require('../../Auth')
+            if (!isAuthorized(m?.sender)?.isOwner) return { success: false, reply: '🔊 Only Bera can switch voice mode.' }
+            if (!global.db?.data) return { success: false, reply: '🔊 The database is not ready — try again in a moment.' }
+            if (!global.db.data.chatbera) global.db.data.chatbera = {}
+            const chatbera = global.db.data.chatbera
+            if (m?.isGroup) {
+                chatbera.voiceChats = chatbera.voiceChats || {}
+                chatbera.voiceChats[m.chat] = voiceMode.on
+            } else {
+                const senderKey = String(m?.sender || '').replace(/:\d+@/, '@').toLowerCase()
+                chatbera.voiceReplies = chatbera.voiceReplies || {}
+                chatbera.voiceReplies[senderKey] = voiceMode.on
+            }
+            await global.db.write().catch(() => {})
+            return { success: true, reply: voiceMode.on ? '🔊 From now on I\u2019ll answer you with voice notes. Say "use text again" any time to switch back.' : '💬 Back to text replies.' }
+        } catch (e) {
+            return { success: false, reply: `❌ Could not switch voice mode: ${e.message}` }
+        }
+    }
+
+    // ── "Say X in voice" — send a real voice note ──────────────────────────
+    // The tts tool exists in the prompt but the model often answers in text
+    // instead of calling it. Do it directly: Google TTS works live (verified
+    // 2026-11-24). The voice note is sent as a side effect; the text reply
+    // is just the short confirmation.
+    const sayInVoice = parseSayInVoice(t)
+    if (sayInVoice) {
+        try {
+            const { fetchTts, resolveSpeechLanguage } = require('./tts')
+            const audio = await fetchTts(sayInVoice.text, resolveSpeechLanguage(sayInVoice.text, 'en'))
+            await conn.sendMessage(m.chat, { audio, mimetype: 'audio/ogg; codecs=opus', ptt: true }, { quoted: m })
+            return { success: true, reply: '🎙️ Sent as a voice note.', skipVoice: true }
+        } catch (e) {
+            return { success: false, reply: `❌ Could not make a voice note: ${e.message}` }
+        }
+    }
+
+    // ── "What do you see" on a quoted / attached image ─────────────────────
+    // The agent loop only receives text, so a quoted image never reaches the
+    // model — it used to deflect to group/workspace talk. Download the image
+    // and OCR it (Tesseract works locally). True vision is down: the Xcasper
+    // provider 401s on its own auth, verified live again 2026-11-24 — so say
+    // so plainly instead of inventing a description.
+    const imageQuestion = parseImageQuestion(t)
+    const quotedImage = m?.quoted && (/image/.test(m.quoted?.mimetype || '') || !!m.quoted?.message?.imageMessage)
+    const ownImage = !!m?.message?.imageMessage
+    if (imageQuestion && (quotedImage || ownImage)) {
+        try {
+            const { downloadMediaMessage } = require('@whiskeysockets/baileys')
+            const target = quotedImage ? m.quoted : m
+            const buf = (target?.key && target?.message)
+                ? await downloadMediaMessage({ key: target.key, message: target.message }, 'buffer', {}).catch(() => null)
+                : await downloadMediaMessage(target, 'buffer', {}).catch(() => null)
+            if (!buf) return { success: false, reply: '❌ I could not download that image. Try sending it again.' }
+            const Tesseract = require('tesseract.js')
+            const { data: { text } } = await Tesseract.recognize(buf, 'eng', { logger: () => {} })
+            const found = String(text || '').trim()
+            if (found) {
+                return { success: true, reply: `👁️ *What I can read in this image:*\n\n${found.slice(0, 1500)}\n\n_I can't truly see images — my vision provider is down (its own login fails, checked today). What I did was read the text in the picture. If it has no words in it, describe it yourself and ask me about that._` }
+            }
+            return { success: true, reply: '👁️ I can\'t see this image properly — my vision provider is down (its own login fails, checked today), and there is no readable text in it for me to read instead.\n\nIf it has words in it, try `.ocr` on it. Otherwise describe what is in it and ask me about that.' }
+        } catch (e) {
+            return { success: false, reply: `❌ Could not read that image: ${e.message}` }
+        }
     }
 
     const PING_RX = /^ping\s+([\w.\-]+)$/i
@@ -625,7 +719,7 @@ IMAGE & MEDIA GENERATION
 ══════════════════════════════════════════════
 WHATSAPP GROUP MANAGEMENT  ← VERY IMPORTANT — READ CAREFULLY
 ══════════════════════════════════════════════
-CRITICAL: The bot IS ALREADY an admin in most groups. NEVER say "I need to be an admin" or "I don't have permission". Just call the tool directly. The tool will handle errors if they occur.
+CRITICAL: Do NOT assume you are a group admin. You usually are NOT an admin in groups you were just added to. Check wa_group_info / the tool result first; if a tool reports you are not an admin, or an action fails for permissions, say so plainly instead of claiming admin status or telling the user to make you one. Just call the tool directly and report what it returns.
 
 GROUP SETTINGS (open/close/lock/unlock):
 {"tool":"wa_group_setting","action":"close"} → lock group — ONLY admins can send (aka mute/close/lock)
@@ -635,6 +729,8 @@ GROUP SETTINGS (open/close/lock/unlock):
 
 GROUP INFO & IDENTITY:
 {"tool":"wa_group_info"} → get group name, description, member count, admins list
+{"tool":"wa_group_members"} → list ALL group members with numbers, admin flags, and known display names; use it for "list members", "who is in this group", and "who is <name> in this group". Never invent a name for a member — if the tool shows only a number, say you only know their number.
+Never paste raw JIDs (like 120363210534568276@g.us) in replies — use the group name or the person's name/number instead.
 {"tool":"wa_group_activity","days":30} → list current members with no message observed in the requested period; read-only; never removes members
 {"tool":"wa_group_subject","name":"New Group Name"} → rename/change group name/subject
 {"tool":"wa_group_desc","description":"New description here"} → change group description
@@ -1953,6 +2049,45 @@ try {
                 `*Restricted:* ${meta.announce ? 'Yes (only admins can send)' : 'No'}`,
             ].join('\n')
         } catch (e) { return `❌ Could not get group info: ${e.message}` }
+    }
+
+    // ── wa_group_members: full member list for "who is X in this group" ────
+    // wa_group_info only returns a count + first 5 admins, so the agent loop
+    // used to answer "I couldn't pull individual member names or numbers"
+    // (2026-11-24, TECH SPACE). This lists every participant with number,
+    // admin flag, and any name the bot knows, from three sources: the
+    // member's WhatsApp username (@handle, from groupMetadata when they
+    // have set one), pushNames learned from inbound messages + user-taught
+    // aliases via referents.nameForJid. WhatsApp does not expose the user's
+    // saved contact names to a linked companion, and there is no directory
+    // lookup from a username alone (Baileys can only fetch the username OF
+    // a known JID, not the reverse) — so members with no username who the
+    // bot has never seen show as bare numbers; say that plainly instead of
+    // inventing a name.
+    if (t === 'wa_group_members') {
+        if (!conn) return 'ERROR: no connection'
+        const group = tc.group || chatId
+        if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
+        try {
+            const meta = await conn.groupMetadata(group)
+            // referents.js arrives with PR #4; until then names are unavailable
+            // and members show as numbers only — the tool still works.
+            let referents = null
+            try { referents = require('../lib/referents') } catch {}
+            const lines = (meta.participants || []).map((p, i) => {
+                const rawId = p?.id || p?.jid || p?.lid || ''
+                const number = String(rawId).split('@')[0].split(':')[0]
+                const name = referents?.nameForJid?.(rawId)
+                const username = String(p?.username || '').replace(/^@/, '')
+                const handle = username ? ` (@${username})` : ''
+                const label = name ? `${name}${handle} (+${number})` : (username ? `+${number}${handle}` : (number ? `+${number}` : 'Unknown member'))
+                return `${i + 1}. ${label}${p?.admin ? ' — admin' : ''}`
+            })
+            const total = meta.participants?.length || 0
+            const shown = lines.slice(0, 100).join('\n')
+            const overflow = total > 100 ? `\n…and ${total - 100} more.` : ''
+            return `📋 *Members of ${meta.subject || 'this group'}* (${total}):\n${shown}${overflow}\n\nNames are shown from WhatsApp usernames (@handle), members Bera has seen speak, or names you taught with "remember <name> is <number>" — anyone else shows as their number only.`
+        } catch (e) { return `❌ Could not list group members: ${e.message}` }
     }
 
     // ── wa_group_activity: read-only report; never changes group membership ───
