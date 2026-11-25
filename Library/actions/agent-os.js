@@ -245,7 +245,7 @@ const parsePlannerJson = (raw, repairMalformed = false) => {
 }
 
 const makePlan = async (record, task, options = {}) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Stack contract for ANY server app or system: the plan MUST include a package.json at the project ROOT whose start script runs a server entrypoint file that is ALSO at the project ROOT (server.js) — never put the only entrypoint inside src/. Use ONLY plain Node.js (built-in http or Express) with static HTML/CSS/JS; never use Vue, React, Angular, Svelte, TypeScript, .vue/.jsx/.tsx files, SQL schema files, bundlers, or any build/compilation step — the app is deployed exactly as written. Never invent deployment tools or commands (no surf, vercel, netlify, or firebase CLIs). Dependency versions: only use real, well-known versions (express ^4.19.2, dotenv ^16.4.5, cors ^2.8.5); never invent a version number — if unsure, use "*" as the version. Only list dependencies the code actually imports, and only packages that really exist on npm (express, dotenv, cors, morgan, bcrypt, jsonwebtoken and similar well-known ones); never invent package names. All .js files use CommonJS (require/module.exports) — never ESM import/export syntax. Do not plan test files or a test script unless the task explicitly asks for tests. Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Stack contract for ANY server app or system: the plan MUST include a package.json at the project ROOT whose start script runs a server entrypoint file that is ALSO at the project ROOT (server.js) — never put the only entrypoint inside src/. SINGLE-FILE BACKEND RULE: put ALL backend code in that one root server.js — every route, middleware, helper and the data access live in that file; store data in a JSON file under data/ (or in memory). Never split the backend into src/, routes/, models/, controllers/ or middleware/ files, and never require a relative path that is not a file the plan itself creates at exactly that path — multi-file backends generated file-by-file disagree about paths and crash on boot (Cannot find module). Static frontend files (public/*.html/css/js) may be separate. Use ONLY plain Node.js (built-in http or Express) with static HTML/CSS/JS; never use Vue, React, Angular, Svelte, TypeScript, .vue/.jsx/.tsx files, SQL schema files, bundlers, or any build/compilation step — the app is deployed exactly as written. Never invent deployment tools or commands (no surf, vercel, netlify, or firebase CLIs). Dependency versions: only use real, well-known versions (express ^4.19.2, dotenv ^16.4.5, cors ^2.8.5); never invent a version number — if unsure, use "*" as the version. Only list dependencies the code actually imports, and only packages that really exist on npm (express, dotenv, cors, morgan, bcrypt, jsonwebtoken and similar well-known ones); never invent package names. All .js files use CommonJS (require/module.exports) — never ESM import/export syntax. Do not plan test files or a test script unless the task explicitly asks for tests. Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
         timeout: 45000,
@@ -811,6 +811,26 @@ const scriptBinary = raw => {
     if (tokens[i] === 'npx') i++
     return (tokens[i] || '').replace(/^.*\//, '')
 }
+const TEST_RUNNER_BINARIES = new Set(['jest', 'vitest', 'mocha', 'ava', 'tap'])
+const projectHasTestFiles = root => {
+    const stack = [root]
+    let visited = 0
+    while (stack.length && visited < 400) {
+        const dir = stack.pop()
+        let entries = []
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { continue }
+        for (const entry of entries) {
+            visited += 1
+            if (entry.isDirectory()) {
+                if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
+                if (entry.name === '__tests__') return true
+                stack.push(path.join(dir, entry.name))
+            } else if (/\.(test|spec)\.[cm]?[jt]s$/.test(entry.name)) return true
+        }
+    }
+    return false
+}
+
 const sanitizeGeneratedScripts = record => {
     try {
         const root = record.dir
@@ -826,7 +846,11 @@ const sanitizeGeneratedScripts = record => {
             const binary = scriptBinary(raw)
             if (!binary || ['node', 'npm', 'npx', 'echo', 'true'].includes(binary)) continue
             if (BUNDLER_BINARIES.has(binary) && !hasBundlerConfig) { delete pkg.scripts[key]; removed.push(key); continue }
-            if (!deps.has(binary)) { delete pkg.scripts[key]; removed.push(key) }
+            if (!deps.has(binary)) { delete pkg.scripts[key]; removed.push(key); continue }
+            // A test runner with no test files exits 1 ("No tests found")
+            // and fails validation for an app that never asked for tests
+            // (EduTrack rebuild #10). The script is decorative — drop it.
+            if (key === 'test' && TEST_RUNNER_BINARIES.has(binary) && !projectHasTestFiles(root)) { delete pkg.scripts[key]; removed.push(key) }
         }
         if (removed.length) {
             fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))

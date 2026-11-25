@@ -118,6 +118,7 @@ test('sanitizeGeneratedScripts drops unbacked toolchain scripts, keeps real ones
             dependencies: { jest: '^29.0.0', webpack: '^5.0.0' },
         }),
         'server.js': 'require("http").createServer().listen(3000)',
+        'app.test.js': 'test("x", () => {})',
     })
     // webpack IS a dependency but there is no webpack config anywhere.
     assert.deepEqual(sanitizeGeneratedScripts({ dir, name: 'x' }), ['build'])
@@ -156,4 +157,21 @@ test('bootCheck passes a server that answers HTTP and fails one that crashes on 
     const badRes = await bootCheck({ dir: bad, name: 'x' }, 'server.js', { bootTimeout: 6000 })
     assert.equal(badRes.success, false)
     assert.match(badRes.output, /Cannot find module/)
+})
+
+test('sanitizeGeneratedScripts drops a jest test script when the project has no test files, keeps it when it does', () => {
+    const noTests = tmpProject({
+        'server.js': 'require("http").createServer((q,s)=>s.end("ok")).listen(3000)',
+        'package.json': JSON.stringify({ name: 'x', scripts: { start: 'node server.js', test: 'jest' }, devDependencies: { jest: '^29.0.0' } }),
+    })
+    const removedA = sanitizeGeneratedScripts({ id: 'x', dir: noTests, name: 'x' })
+    assert.ok(removedA.includes('test'))
+    assert.equal(JSON.parse(fs.readFileSync(path.join(noTests, 'package.json'), 'utf8')).scripts.test, undefined)
+    const withTests = tmpProject({
+        'server.js': 'require("http").createServer((q,s)=>s.end("ok")).listen(3000)',
+        'a.test.js': 'test("x", () => {})',
+        'package.json': JSON.stringify({ name: 'x', scripts: { start: 'node server.js', test: 'jest' }, devDependencies: { jest: '^29.0.0' } }),
+    })
+    const removedB = sanitizeGeneratedScripts({ id: 'x', dir: withTests, name: 'x' })
+    assert.ok(!removedB.includes('test'))
 })
