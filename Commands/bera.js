@@ -2317,6 +2317,12 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, isOwner }
         if (!isOwner) return reply(`⛔ Owner only.`)
         if (!text) return reply(`Usage: ${prefix}setghtoken <github_personal_access_token>`)
         process.env.GITHUB_TOKEN = text.trim()
+        // Persist it too: the env-only assignment above is lost on the next
+        // restart (setenv.js resets GITHUB_TOKEN at boot). Save to settings
+        // so the token survives restarts, like .setgittoken does.
+        if (!global.db.data.settings) global.db.data.settings = {}
+        global.db.data.settings.githubToken = text.trim()
+        await global.db.write()
         return reply(`✅ GitHub token set.`)
     }
 
