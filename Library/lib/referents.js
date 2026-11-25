@@ -32,6 +32,22 @@ const learnName = (jid, name) => {
     if (!names.has(key)) names.set(key, { jid: id, name: String(name).trim(), source: 'pushName', at: Date.now() })
     while (names.size > MAX_NAMES) names.delete(names.keys().next().value)
 }
+// Reverse lookup: the display name (pushName or user-taught alias) known for
+// a JID, or null. Used by the wa_group_members tool so a member list can
+// show names instead of bare numbers. Matches on the full JID and on the
+// bare number part, so LID and phone JIDs for the same person both hit.
+const nameForJid = (jid) => {
+    const id = normalizeJid(jid)
+    if (!id) return null
+    const bare = String(id).split('@')[0].split(':')[0]
+    for (const entry of names.values()) {
+        if (!entry?.jid) continue
+        const entryBare = String(entry.jid).split('@')[0].split(':')[0]
+        if (entry.jid === id || entryBare === bare) return entry.name
+    }
+    return null
+}
+
 const loadAliases = () => {
     try {
         const saved = global.db?.data?.nameAliases
@@ -230,6 +246,7 @@ module.exports = {
     learnName,
     rememberAlias,
     resolveName,
+    nameForJid,
     normalizeName,
     _store: store,
     _names: names,

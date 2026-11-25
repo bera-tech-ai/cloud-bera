@@ -89,7 +89,7 @@ test('poll parses question and options and checks acceptance', async () => {
     assert.match(replies[0], /Poll request accepted by Baileys/)
 })
 
-test('forward stages a confirmation token and sends nothing yet', async () => {
+test('forward runs immediately with a short success reply (no confirmation)', async () => {
     const { ctx, sent, replies } = harness({
         ctx: {
             intent: 'forward_msg', text: 'forward this to 254722222222',
@@ -97,12 +97,10 @@ test('forward stages a confirmation token and sends nothing yet', async () => {
         },
     })
     assert.equal(await dispatch(ctx), true)
-    assert.equal(sent.length, 0)
-    assert.match(replies[0], /Preview only — nothing was forwarded/)
-    const token = replies[0].match(/confirm ([A-F0-9]{8})/)[1]
-    const action = waActions.consume(SENDER, token)
-    assert.equal(action.type, 'forward')
-    assert.equal(action.jid, '254722222222@s.whatsapp.net')
+    assert.equal(sent.length, 1)
+    assert.equal(sent[0].jid, '254722222222@s.whatsapp.net')
+    assert.deepEqual(sent[0].forwarded, { key: { id: 'q-1' }, message: { conversation: 'hi' } })
+    assert.match(replies[0], /Forwarded to \+254722222222 successfully\./)
 })
 
 test('close-friends requests get the unsupported reply', () => {

@@ -410,7 +410,7 @@ const detectIntent = (text) => {
     if (/\b(?:tag|mention|ping)\s+(?:all|everyone|everybody)/i.test(t) || /\bhidetag/i.test(t)) return 'tag_all'
     if (/\b(?:leave|exit|quit)\s+(?:thes+)?group/i.test(t) || /\bgroup\s+(?:leave|exit)/i.test(t)) return 'leave_group'
     if (/\bgroup\s+(?:info|details|stats|members|list)\b/i.test(t) || /\b(?:who(?:'?s)?)\s+in\s+(?:thes+)?group/i.test(t)) return 'group_info'
-    if (/\b(?:delete|remove|clear)\s+(?:that|this|the)s+(?:message|msg)/i.test(t) || /\bdelete\s+(?:quoted|replied)\b/i.test(t)) return 'delete_msg'
+    if (/\b(?:delete|remove|clear)\s+(?:that|this|the)\s+(?:message|msg)/i.test(t) || /\bdelete\s+(?:quoted|replied)\b/i.test(t)) return 'delete_msg'
     if (/\b(?:warn|caution)\s+@/i.test(t) || /\b(?:warn|caution)\s+(?:that|this)s+(?:person|user)/i.test(t)) return 'warn_user'
 
     // ── Anti-features toggle ────────────────────────────────────────────
@@ -751,7 +751,14 @@ const detectIntent = (text) => {
     if (/\b(send|share)\b.{0,15}\b(contact|vcard|v-card|phone\s+contact)\b/i.test(t)) return 'send_vcard'
 
     // ── Delete message ────────────────────────────────────────────────────────
-    if (/\b(delete|remove|unsend|retract)\s+(this|that|the\s+last|quoted)?\s*(message|msg)\b/i.test(t)) return 'delete_this'
+    // Bare "delete this" / "remove that" (no word "message") also means delete
+    // the quoted message — the dispatcher asks the user to quote one if there
+    // is none, and enforces the group-admin rules. This must sit above the
+    // group_kick patterns and the semantic fallback: "delete this" used to
+    // fall through to the semantic router, which matched the "debug this"
+    // bug_finder example on the single shared word "this" and ran a bug scan
+    // on the quoted message instead of deleting it (2026-11-24, TECH SPACE).
+    if (/\b(delete|remove|unsend|retract)\s+(this|that|the\s+last|quoted)?\s*(message|msg)\b/i.test(t) || /\b(delete|remove|unsend|retract)\s+(this|that|the\s+last|quoted)\b/i.test(t)) return 'delete_this'
 
     // ── Create a poll ─────────────────────────────────────────────────────────
     if (/\b(create|make|start|run)\b.{0,15}\b(a\s+)?poll\b/i.test(t) ||

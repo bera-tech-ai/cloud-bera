@@ -88,6 +88,34 @@ const normalizeJid = (value) => {
     return `${normalizeNumber(raw)}@s.whatsapp.net`
 }
 
+const resolveNameFromGroup = async (conn, chat, name) => {
+    // A name the directory doesn't know may still be sitting in the group
+    // the message came from: match it against the participants' WhatsApp
+    // usernames (@handle, from groupMetadata) and any display name the bot
+    // knows. Same matching as the "who is X" member search — exact first,
+    // then substring — and never a silent guess when several match.
+    if (typeof conn?.groupMetadata !== 'function' || !chat?.endsWith('@g.us')) return null
+    const key = String(name || '').trim().toLowerCase().replace(/^@/, '')
+    if (!key) return null
+    let meta
+    try { meta = await conn.groupMetadata(chat) } catch { return null }
+    const referents = require('./referents')
+    const matches = []
+    for (const p of meta?.participants || []) {
+        const rawId = p?.id || p?.jid || p?.lid || ''
+        if (!rawId) continue
+        const username = String(p?.username || '').replace(/^@/, '').toLowerCase()
+        const display = String(referents.nameForJid(rawId) || '').toLowerCase()
+        if (username === key || display === key || username.includes(key) || display.includes(key)) {
+            matches.push({ jid: rawId, name: username || display || rawId })
+        }
+    }
+    const deduped = [...new Map(matches.map(x => [x.jid, x])).values()]
+    if (deduped.length === 1) return { jid: deduped[0].jid }
+    if (deduped.length > 1) return { ambiguous: true, candidates: deduped }
+    return null
+}
+
 const resolveTarget = async (conn, m, spec, options = {}) => {
     const value = String(spec || '').trim()
     const lower = value.toLowerCase()
@@ -127,7 +155,21 @@ const resolveTarget = async (conn, m, spec, options = {}) => {
             const resolved = referents.resolveName(name)
             if (resolved?.ambiguous) throw new Error(referents.clarificationReply(resolved.candidates.map(c => c.jid)))
             if (resolved?.jid) jid = resolved.jid
-            else throw new Error(`I don't know who "${name}" is yet. I can't see your phone contacts — tag them, reply to one of their messages, or give me their number (e.g. forward this to 254712345678). To teach me, say: remember ${name} is 254712345678`)
+            else {
+                // Not in the name directory — but if the message came from a
+                // group, the roster itself may know the member. This is the
+                // 2026-11-24 TECH SPACE bug: "who is baba" found
+                // @baba.hany from the roster while "send hello to baba"
+                // said it didn't know him, because the send path only
+                // consulted the directory. A roster match is a real
+                // WhatsApp fact, so it is also learned for later use.
+                const groupResolved = await resolveNameFromGroup(conn, m?.chat, name)
+                if (groupResolved?.ambiguous) throw new Error(referents.clarificationReply(groupResolved.candidates.map(c => c.jid)))
+                if (groupResolved?.jid) {
+                    jid = groupResolved.jid
+                    try { referents.rememberAlias(name, jid) } catch {}
+                } else throw new Error(`I don't know who "${name}" is yet. I can't see your phone contacts — tag them, reply to one of their messages, or give me their number (e.g. forward this to 254712345678). To teach me, say: remember ${name} is 254712345678`)
+            }
         } catch (error) {
             if (error?.message?.includes('Which person did you mean') || error?.message?.includes("don't know who")) throw error
         }

@@ -207,29 +207,41 @@ const dispatch = async (ctx) => {
             return true
         }
 
-        // ── Forward (§12, confirmation-gated, multi-destination) ──────
+        // ── Forward (§12, immediate — no confirmation) ─────────────────────
+        // Owner decision 2026-11-24 (live test): forwarding runs straight
+        // away on the message the user replied to, with a short confirmation
+        // reply afterwards. This deliberately bypasses the stage() + token
+        // flow that `send` still uses — a forward is the user's own quoted
+        // message going to a named recipient, and the owner found the
+        // preview/token step annoying. Ambiguity/unknown recipients still
+        // error out in resolveTarget above, so nothing is ever sent blind.
         if (intent === 'forward_msg') {
             const qMsg = m?.quoted?.message ? m.quoted : null
             if (!qMsg) { await reply('❓ Quote the message you want me to forward, then say:\n*forward this to 254712345678*'); return true }
             const specs = parseTargets(text, m)
             if (!specs.length) { await reply('❓ Specify a number, tag, or current private chat to forward to.'); return true }
             const targets = []
+            const labels = []
             for (const spec of specs) {
                 try {
-                    targets.push(await waActions.resolveTarget(conn, m, spec, { allowSpecial: true }))
+                    const target = await waActions.resolveTarget(conn, m, spec, { allowSpecial: true })
+                    targets.push(target)
+                    labels.push(spec.startsWith('name:') ? spec.slice(5) : `+${target.number}`)
                 } catch (error) {
                     await reply(`❌ Failed: ${error.message}`)
                     return true
                 }
             }
-            if (targets.length === 1) {
-                const token = waActions.stage(sender, { type: 'forward', jid: targets[0].jid, number: targets[0].number, message: m.quoted })
-                await reply(`⏳ Preview only — nothing was forwarded.\nTarget: ${targets[0].jid}\nToken: ${token}\nReply: .wact confirm ${token} within 2 minutes to forward it.`)
-            } else {
-                const tokens = targets.map(t => waActions.stage(sender, { type: 'forward', jid: t.jid, number: t.number, message: m.quoted }))
-                const lines = targets.map((t, i) => `• ${t.jid} — token ${tokens[i]}`).join('\n')
-                await reply(`⏳ Preview only — nothing was forwarded.\n${lines}\n\nReply with .wact confirm <token> within 2 minutes for each destination.`)
+            try {
+                const result = targets.length === 1
+                    ? await waActions.execute(conn, sender, { type: 'forward', jid: targets[0].jid, message: m.quoted })
+                    : await waActions.execute(conn, sender, { type: 'forward', destinations: targets.map(t => t.jid), message: m.quoted })
+                if (result && result.ok === false) { await reply(`❌ Failed to forward: ${result.error || 'Baileys did not accept the forward.'}`); return true }
+            } catch (error) {
+                await reply(`❌ Failed to forward: ${error.message}`)
+                return true
             }
+            await reply(`✅ Forwarded to ${labels.join(', ')} successfully.`)
             return true
         }
 
