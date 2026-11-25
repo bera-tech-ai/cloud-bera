@@ -5,12 +5,13 @@ const {
     resolveTarget,
     stage,
     cancel,
+    execute,
     getPending,
     executeConfirmed,
     formatPreview,
     getAudit,
 } = require('../Library/lib/wa-actions')
-const { PIN_ACCEPTED_MESSAGE, BAILEYS_ACCEPTED_MESSAGE } = require('../Library/lib/baileys-errors')
+const { PIN_ACCEPTED_MESSAGE, BAILEYS_ACCEPTED_MESSAGE } = require('../Library/lib/truthful-status')
 
 const HELP = `📱 *Bera WhatsApp Control*
 

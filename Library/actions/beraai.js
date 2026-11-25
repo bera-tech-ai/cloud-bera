@@ -2072,14 +2072,11 @@ try {
         if (!group?.endsWith('@g.us')) return '❌ Not in a group.'
         try {
             const meta = await conn.groupMetadata(group)
-            // referents.js arrives with PR #4; until then names are unavailable
-            // and members show as numbers only — the tool still works.
-            let referents = null
-            try { referents = require('../lib/referents') } catch {}
+            const referents = require('../lib/referents')
             const lines = (meta.participants || []).map((p, i) => {
                 const rawId = p?.id || p?.jid || p?.lid || ''
                 const number = String(rawId).split('@')[0].split(':')[0]
-                const name = referents?.nameForJid?.(rawId)
+                const name = referents.nameForJid(rawId)
                 const username = String(p?.username || '').replace(/^@/, '')
                 const handle = username ? ` (@${username})` : ''
                 const label = name ? `${name}${handle} (+${number})` : (username ? `+${number}${handle}` : (number ? `+${number}` : 'Unknown member'))
