@@ -245,7 +245,7 @@ const parsePlannerJson = (raw, repairMalformed = false) => {
 }
 
 const makePlan = async (record, task, options = {}) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Stack contract for ANY server app or system: the plan MUST include a package.json at the project ROOT whose start script runs a server entrypoint file that is ALSO at the project ROOT (server.js) — never put the only entrypoint inside src/. Use ONLY plain Node.js (built-in http or Express) with static HTML/CSS/JS; never use Vue, React, Angular, Svelte, TypeScript, .vue/.jsx/.tsx files, SQL schema files, bundlers, or any build/compilation step — the app is deployed exactly as written. Never invent deployment tools or commands (no surf, vercel, netlify, or firebase CLIs). Dependency versions: only use real, well-known versions (express ^4.19.2, dotenv ^16.4.5, cors ^2.8.5); never invent a version number — if unsure, use "*" as the version. Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Stack contract for ANY server app or system: the plan MUST include a package.json at the project ROOT whose start script runs a server entrypoint file that is ALSO at the project ROOT (server.js) — never put the only entrypoint inside src/. Use ONLY plain Node.js (built-in http or Express) with static HTML/CSS/JS; never use Vue, React, Angular, Svelte, TypeScript, .vue/.jsx/.tsx files, SQL schema files, bundlers, or any build/compilation step — the app is deployed exactly as written. Never invent deployment tools or commands (no surf, vercel, netlify, or firebase CLIs). Dependency versions: only use real, well-known versions (express ^4.19.2, dotenv ^16.4.5, cors ^2.8.5); never invent a version number — if unsure, use "*" as the version. Only list dependencies the code actually imports, and only packages that really exist on npm (express, dotenv, cors, morgan, bcrypt, jsonwebtoken and similar well-known ones); never invent package names. Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
         timeout: 45000,
@@ -408,23 +408,55 @@ const sanitizeDependencyVersions = pkg => {
     return changed
 }
 const fixUnresolvableDependencies = (record, failureText) => {
-    const names = [...String(failureText || '').matchAll(/No matching version found for ([^@\s]+)@/g)].map(match => match[1])
-    if (!names.length || !record?.dir) return 0
+    const text = String(failureText || '')
+    // ETARGET: the package exists, the version does not → relax to "*".
+    const versionMisses = [...text.matchAll(/No matching version found for ([^@\s]+)@/g)].map(match => match[1])
+    // E404: the package does not exist on npm at all (invented names like
+    // "minimalistic-serverless-php-sdk-lambda") → "*" cannot help; the only
+    // heal is removing it. If the code truly imports it, the app could not
+    // run anyway — the package does not exist in the world.
+    const missing = [...text.matchAll(/'([^'@\s]+)@[^']*' is not in this registry/g)].map(match => match[1])
+    if ((!versionMisses.length && !missing.length) || !record?.dir) return 0
     const pkgPath = path.join(record.dir, 'package.json')
     if (!fs.existsSync(pkgPath)) return 0
     let pkg
     try { pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) } catch { return 0 }
     let fixed = 0
     for (const field of ['dependencies', 'devDependencies']) {
-        for (const name of names) {
+        for (const name of versionMisses) {
             if (pkg?.[field]?.[name] && pkg[field][name] !== '*') { pkg[field][name] = '*'; fixed++ }
+        }
+        for (const name of missing) {
+            if (pkg?.[field]?.[name]) { delete pkg[field][name]; fixed++ }
         }
     }
     if (fixed) {
         fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
-        event(record, 'unresolvable_dependency_fixed', { names })
+        event(record, 'unresolvable_dependency_fixed', { versionMisses, missing })
     }
     return fixed
+}
+
+// Generated package.json files often arrive with no start script, or a
+// main that points at a file the plan never wrote — the app then cannot be
+// run or deployed even though its code is fine. Guarantee a start script
+// that points at a real entrypoint file before validation.
+const ensureStartScript = record => {
+    try {
+        const root = record.dir
+        const pkgPath = path.join(root, 'package.json')
+        if (!root || !fs.existsSync(pkgPath)) return null
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+        if (pkg?.scripts?.start) return null
+        const candidates = [pkg?.main, 'server.js', 'index.js', 'app.js', 'main.js', 'src/server.js', 'src/index.js', 'src/app.js'].filter(Boolean)
+        const entry = candidates.find(candidate => fs.existsSync(path.join(root, candidate)))
+        if (!entry) return null
+        pkg.main = entry
+        pkg.scripts = { ...(pkg.scripts || {}), start: `node ${entry}` }
+        fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+        event(record, 'start_script_synthesised', { entry })
+        return entry
+    } catch { return null }
 }
 
 const normalizePackageJsonStart = content => {
@@ -997,6 +1029,7 @@ const run = async options => {
         }
     }
     ensureRootPackageJson(record)
+    ensureStartScript(record)
     await notifyProgress(options, { phase: 'validation' })
     let validation = await validate(record, options)
     let repairError = null
@@ -1038,4 +1071,4 @@ const run = async options => {
     return { success: true, record, validation, screenshot: previewScreenshot }
 }
 
-module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson, sanitizeDependencyVersions, fixUnresolvableDependencies }
+module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson, sanitizeDependencyVersions, fixUnresolvableDependencies, ensureStartScript }

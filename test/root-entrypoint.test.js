@@ -72,3 +72,26 @@ test('executeStep rejects placeholder paths and directory targets instead of cra
     const ok = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'src/new.js', content: 'module.exports = 1' })
     assert.equal(ok.success, true)
 })
+
+const { ensureStartScript } = require('../Library/actions/agent-os')
+
+test('fixUnresolvableDependencies removes packages that do not exist on npm', () => {
+    const dir = tmpProject({ 'package.json': JSON.stringify({ name: 'x', dependencies: { express: '^4.18.0', 'minimalistic-serverless-php-sdk-lambda': '^1.0.6' } }) })
+    const failure = "npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/minimalistic-serverless-php-sdk-lambda\nnpm error 404  'minimalistic-serverless-php-sdk-lambda@^1.0.6' is not in this registry."
+    assert.equal(fixUnresolvableDependencies({ dir, name: 'x' }, failure), 1)
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+    assert.equal(pkg.dependencies['minimalistic-serverless-php-sdk-lambda'], undefined)
+    assert.equal(pkg.dependencies.express, '^4.18.0')
+})
+
+test('ensureStartScript guarantees a start script pointing at a real entrypoint', () => {
+    const dir = tmpProject({
+        'package.json': JSON.stringify({ name: 'x', main: 'index.js', scripts: { test: 'jest' } }),
+        'server.js': 'require("http").createServer().listen(3000)',
+    })
+    assert.equal(ensureStartScript({ dir, name: 'x' }), 'server.js')
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+    assert.equal(pkg.scripts.start, 'node server.js')
+    assert.equal(pkg.main, 'server.js')
+    assert.equal(ensureStartScript({ dir, name: 'x' }), null)
+})
