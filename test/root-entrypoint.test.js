@@ -107,3 +107,30 @@ test('executeStep normalises extensionless module paths to real files', async ()
     assert.equal(nested.success, true)
     assert.equal(fs.existsSync(path.join(dir, 'src/config/index.js')), true)
 })
+
+const { sanitizeGeneratedScripts } = require('../Library/actions/agent-os')
+
+test('sanitizeGeneratedScripts drops unbacked toolchain scripts, keeps real ones', () => {
+    const dir = tmpProject({
+        'package.json': JSON.stringify({
+            name: 'x',
+            scripts: { start: 'node server.js', build: 'webpack --mode production', test: 'jest', serve: 'http-server .' },
+            dependencies: { jest: '^29.0.0', webpack: '^5.0.0' },
+        }),
+        'server.js': 'require("http").createServer().listen(3000)',
+    })
+    // webpack IS a dependency but there is no webpack config anywhere.
+    assert.deepEqual(sanitizeGeneratedScripts({ dir, name: 'x' }), ['build'])
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+    assert.equal(pkg.scripts.build, undefined)
+    assert.equal(pkg.scripts.test, 'jest')
+    assert.equal(pkg.scripts.start, 'node server.js')
+})
+
+test('sanitizeGeneratedScripts keeps a bundler build when its config exists', () => {
+    const dir = tmpProject({
+        'package.json': JSON.stringify({ name: 'x', scripts: { build: 'webpack --mode production' }, dependencies: { webpack: '^5.0.0' } }),
+        'webpack.config.js': 'module.exports = {}',
+    })
+    assert.deepEqual(sanitizeGeneratedScripts({ dir, name: 'x' }), [])
+})
