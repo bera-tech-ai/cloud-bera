@@ -1594,7 +1594,6 @@ const handleMessage = async (conn, rawMsg) => {
                     return
                 }
 
-
                 if (intent === 'warn_user' && m.isGroup) {
                     if (!isAdmin) { await reply('❌ I need admin rights to warn members.'); return }
                     const mentions = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []

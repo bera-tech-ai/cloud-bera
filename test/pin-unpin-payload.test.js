@@ -30,18 +30,27 @@ const run = (overrides = {}) => {
 }
 
 test('unpin sends the spec §8 payload including time: 0', async () => {
-    const { sock, m, ctx, sent, replies } = run({ args: ['unpin'] })
+    const target = { key: key('target-msg') }
+    const { sock, m, ctx, sent, replies } = run({ args: ['unpin'], quoted: target })
     await pinCommand.execute(sock, m, ctx)
     assert.equal(sent.length, 2) // unpin payload + confirmation reaction
-    assert.deepEqual(sent[0].content, { pin: m.key, type: 0, time: 0 })
+    assert.deepEqual(sent[0].content, { pin: target.key, type: 0, time: 0 })
     assert.equal(replies[0], BAILEYS_ACCEPTED_MESSAGE)
     assert.doesNotMatch(replies[0], /unpinned!/i)
 })
 
 test('unpin via the "remove" alias also includes time: 0', async () => {
-    const { sock, m, ctx, sent } = run({ args: ['remove'] })
+    const target = { key: key('target-msg') }
+    const { sock, m, ctx, sent } = run({ args: ['remove'], quoted: target })
     await pinCommand.execute(sock, m, ctx)
-    assert.deepEqual(sent[0].content, { pin: m.key, type: 0, time: 0 })
+    assert.deepEqual(sent[0].content, { pin: target.key, type: 0, time: 0 })
+})
+
+test('unpin with no quoted message asks for the pinned message instead of unpinning the command itself', async () => {
+    const { sock, m, ctx, sent, replies } = run({ args: ['unpin'] })
+    await pinCommand.execute(sock, m, ctx)
+    assert.equal(sent.length, 0)
+    assert.match(replies[0], /Reply to the pinned message/)
 })
 
 test('pin for 7 days sends { pin, type: 1, time: 604800 } and the plain pin wording', async () => {
@@ -65,8 +74,10 @@ test('pin defaults to 30 days when no duration is given', async () => {
 })
 
 test('a rejected unpin is reported as failure, never as success', async () => {
+    const target = { key: key('target-msg') }
     const { sock, m, ctx, replies } = run({
         args: ['unpin'],
+        quoted: target,
         failOn: (content) => content.pin !== undefined,
         failError: 'not admin',
     })

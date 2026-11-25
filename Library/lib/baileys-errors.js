@@ -5,19 +5,12 @@
 // Interprets Baileys/Boom errors instead of returning generic text, and
 // gives §13 user-vs-bot permission-failure wording.
 //
-// STOPGAP NOTE: BAILEYS_ACCEPTED_MESSAGE / PIN_ACCEPTED_MESSAGE /
-// assertAccepted() duplicate PR #3's Library/lib/truthful-status.js.
-// They are re-exported here so Phase 2 code has one import surface on
-// main; on rebase onto PR #3, delete the duplicates here and import
-// truthful-status.js instead (see PR description).
+// Acceptance wording / assertion live in PR #3's truthful-status.js —
+// re-exported here (single source of truth) so Phase 2 code keeps one
+// import surface; the duplicates that used to live in this file were
+// removed on the PR #2+#3+#4 merge.
 
-const BAILEYS_ACCEPTED_MESSAGE = 'Request accepted by Baileys. Final device-side visibility depends on WhatsApp processing.'
-const PIN_ACCEPTED_MESSAGE = 'Pin request accepted by Baileys. Final device-side visibility depends on WhatsApp processing.'
-
-const assertAccepted = (result, actionLabel, acceptedMessage = BAILEYS_ACCEPTED_MESSAGE) => {
-    if (!result) throw new Error(`Baileys did not accept the ${actionLabel || 'request'}.`)
-    return acceptedMessage
-}
+const { BAILEYS_ACCEPTED_MESSAGE, PIN_ACCEPTED_MESSAGE, assertAccepted } = require('./truthful-status')
 
 // Extract a Boom / HTTP status code from the many shapes Baileys errors take.
 const statusCodeOf = (error) => {
