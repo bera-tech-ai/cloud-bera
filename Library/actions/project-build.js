@@ -9,11 +9,16 @@ const looksLikeProjectBuild = text => {
 const projectName = text => {
     const value = String(text || '')
     const quoted = value.match(/\b(?:called|named)\s+(?:“([^”\n]{2,60})”|‘([^’\n]{2,60})’|"([^"\n]{2,60})"|'([^'\n]{2,60})')/i)
-    const unquoted = value.match(/\b(?:called|named)\s+([a-z0-9][a-z0-9 _'-]{1,50}?)(?=\s+(?:and\s+(?:deploy|publish|push|launch|create|make|ask|validate|test)\b|with\b|including\b)|[.!?]\s|$)/i)
+    const unquoted = value.match(/\b(?:called|named)\s+([a-z0-9][a-z0-9 _'-]{1,50}?)(?=\s+(?:and\s+(?:deploy|publish|push|launch|create|make|ask|validate|test)\b|with\b|including\b)|[.!?,]\s|$)/i)
     const explicit = quoted?.slice(1).find(Boolean) || unquoted?.[1]
     if (explicit) return explicit.trim().replace(/[.!?,;:]+$/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
     const hint = String(text || '').match(/\b(todo|task|expense|weather|portfolio|recipe|chat|blog|shop|tracker|dashboard|calculator|notes?)\b/i)?.[1]
     return `${(hint || 'bera').toLowerCase()}-app`
+}
+
+const explicitRepoName = text => {
+    const match = String(text || '').match(/\b(?:github\s+)?(?:repository|repo)\s+(?:named|called)\s+([a-z0-9][a-z0-9-_]{1,60})/i)
+    return match ? match[1].toLowerCase() : null
 }
 
 const repositoryVisibilityFromRequest = text => {
@@ -97,11 +102,19 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     const deployRequested = /\b(deploy|publish|launch\s+(?:it|the\s+app|the\s+site))\b/i.test(text)
     const repoRequested = deployRequested || /\b(github|repository|repo|push\s+(?:the\s+)?(?:code|project))\b/i.test(text)
     const repositoryVisibility = repositoryVisibilityFromRequest(text)
+    const repoName = explicitRepoName(text)
+    // A private repository can never be deployed on BeraHost — it has no
+    // GitHub account connected, so it cannot clone private repos. When the
+    // owner asks for both, honour the private repo, skip the doomed deploy,
+    // and say so plainly instead of reporting a failed deployment.
+    const deployBlockedByPrivate = deployRequested && repositoryVisibility === 'private'
     let requesterIsOwner = false
     try { requesterIsOwner = Boolean(require('../../Auth').isAuthorized(userId)?.isOwner) } catch {}
-    await replyProgress(deployRequested && requesterIsOwner
+    await replyProgress(deployRequested && requesterIsOwner && !deployBlockedByPrivate
         ? '🏗️ I’ll build and validate the project locally first, then push and deploy it as you asked.'
-        : '🏗️ I’ll build and validate the project locally first. Any GitHub push or deployment will wait for a separate owner approval tied to this exact build.')
+        : deployRequested && requesterIsOwner && deployBlockedByPrivate
+            ? '🏗️ I’ll build and validate the project locally first, then push it to the private GitHub repository as you asked.'
+            : '🏗️ I’ll build and validate the project locally first. Any GitHub push or deployment will wait for a separate owner approval tied to this exact build.')
     const progressSent = new Set()
     const result = await agentOs.run({
         action: 'run',
@@ -151,7 +164,7 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
             if (result.success && buildValidated && repoRequested) {
                 if (skipApproval) {
                     try {
-                        directPublish = await agentOs.run({ action: 'publish', projectId: record.id, userId, private: repositoryVisibility !== 'public', deploy: true, approveProduction: true, ownerAuthorized: true })
+                        directPublish = await agentOs.run({ action: 'publish', projectId: record.id, userId, private: repositoryVisibility !== 'public', deploy: !deployBlockedByPrivate, repoName: repoName || undefined, approveProduction: true, ownerAuthorized: true })
                     } catch (error) {
                         directPublish = { success: false, error: error.message }
                     }
@@ -175,12 +188,13 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
         record.dir ? `Workspace: ${record.dir}` : null,
         record.checks?.length ? `Checks: ${record.checks.map(c => `${c.name} ${c.success ? 'passed' : 'failed'}`).join(', ')}` : null,
         record.github?.url ? `GitHub: ${record.github.url}` : null,
-        record.deployment?.url ? `Live site: ${record.deployment.url}` : null,
+        record.deployment?.url && !/fail|error|suspend/i.test(record.deployment?.status || '') ? `Live site: ${record.deployment.url}` : null,
         record.deployment?.status === 'approval_required' ? 'Production deployment needs approval.' : null,
-        directPublish?.success ? '🚀 Published and deployed as you asked — no separate approval needed.' : null,
+        directPublish?.success && !deployBlockedByPrivate ? '🚀 Published and deployed as you asked — no separate approval needed.' : null,
+        directPublish?.success && deployBlockedByPrivate ? '📦 Pushed to the private GitHub repository as you asked. ⚠️ It was NOT deployed: BeraHost cannot clone private repositories (it has no GitHub account connected), so a private site cannot go live there. Make the repository public and tell me to deploy, and it will go live.' : null,
         directPublish && !directPublish.success ? `⚠️ You asked me to deploy it, but publishing/deployment did not finish: ${directPublish.error || 'unknown error'}` : null,
         approvalCase ? `Owner approval is pending. Reply directly to the separate approval prompt with 1 to approve or 2 to decline (case ${approvalCase.id}).` : null,
-        !approvalCase && !directPublish?.success && (repoRequested || deployRequested) && buildValidated ? 'No repository or deployment was created; project approval metadata was not recorded.' : null
+        !approvalCase && !directPublish && (repoRequested || deployRequested) && buildValidated ? 'No repository or deployment was created; project approval metadata was not recorded.' : null
     ].filter(Boolean)
     await replyProgress(parts.join('\n'))
     if (approvalCase && conn?.sendMessage && chat) {
@@ -317,7 +331,7 @@ const runProjectRevision = async (text, { userId, conn, chat, message } = {}) =>
         result.revision?.files?.length ? `Files changed: ${result.revision.files.join(', ')}` : null,
         record.checks?.length ? `Checks: ${record.checks.map(c => `${c.name} ${c.success ? 'passed' : 'failed'}`).join(', ')}` : null,
         record.github?.url ? `GitHub: ${record.github.url}` : null,
-        record.deployment?.url ? `Live site: ${record.deployment.url}` : null,
+        record.deployment?.url && !/fail|error|suspend/i.test(record.deployment?.status || '') ? `Live site: ${record.deployment.url}` : null,
         directPublish?.success ? '🚀 Updated site published and deployed as you asked — no separate approval needed.' : null,
         directPublish && !directPublish.success ? `⚠️ You asked me to deploy it, but publishing/deployment did not finish: ${directPublish.error || 'unknown error'}` : null,
         approvalCase ? `Owner approval is pending to publish this change. Reply directly to the separate approval prompt with 1 to approve or 2 to decline (case ${approvalCase.id}).` : null,
@@ -360,4 +374,4 @@ const runProjectRevision = async (text, { userId, conn, chat, message } = {}) =>
     return result
 }
 
-module.exports = { looksLikeProjectBuild, runProjectBuild, validationFailureDetails, repositoryVisibilityFromRequest, projectName, looksLikeProjectRevision, parseProjectRevision, runProjectRevision, userProjectsByName }
+module.exports = { looksLikeProjectBuild, runProjectBuild, validationFailureDetails, repositoryVisibilityFromRequest, projectName, looksLikeProjectRevision, parseProjectRevision, runProjectRevision, userProjectsByName, explicitRepoName }

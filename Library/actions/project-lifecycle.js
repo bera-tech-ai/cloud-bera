@@ -287,6 +287,7 @@ const lifecycle = async (options = {}) => {
 
         if (options.deploy !== false) {
             const production = options.environment === 'production'
+            const repoIsPrivate = typeof repo.private === 'boolean' ? repo.private : options.private === true
             if (production && !options.approveProduction) {
                 record.deployment = { status: 'approval_required', production: true }
                 updateRecord(record, { status: 'awaiting_approval', stage: 'deployment_approval' })
@@ -302,7 +303,6 @@ const lifecycle = async (options = {}) => {
                 })
                 if (!deployment.success) {
                     const deploymentError = String(deployment.error || 'unknown error')
-                    const repoIsPrivate = typeof repo.private === 'boolean' ? repo.private : options.private === true
                     const privateCloneHint = repoIsPrivate && /404|not found|download failed/i.test(deploymentError)
                         ? ' The GitHub repository is private, and Bera’s BeraHost request does not configure a dedicated GitHub clone credential. This 404 is consistent with BeraHost lacking access. Bera kept the repository private; configure BeraHost’s supported private-repository access or explicitly approve making the source public.'
                         : ''
@@ -328,7 +328,8 @@ const lifecycle = async (options = {}) => {
                     if (fallback) {
                         record.deployment = { ...fallback, production, replacedFailedDeployment: deployment.id }
                     } else if (/fail|error|suspend/i.test(String(record.deployment.status || ''))) {
-                        throw new Error(`BeraHost deployment failed (status: ${record.deployment.status}). The code was pushed to GitHub, but the site is not live.`)
+                        const privateHint = repoIsPrivate ? ' The repository is private, and BeraHost cannot clone private repositories (it has no GitHub account connected) — this failure is consistent with that. Make the repository public to deploy it.' : ''
+                        throw new Error(`BeraHost deployment failed (status: ${record.deployment.status}). The code was pushed to GitHub, but the site is not live.${privateHint}`)
                     }
                 }
                 if (record.deployment.url) {
