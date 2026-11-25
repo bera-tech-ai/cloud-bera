@@ -580,7 +580,32 @@ const executeStep = async (record, step, options = {}) => {
         }
         if (path.basename(target) === 'package.json') {
             try { JSON.parse(content) } catch (error) {
-                return { success: false, output: `Refused to write ${step.path}: not valid JSON (${error.message}).` }
+                // Providers sometimes append commentary or a second object
+                // after the JSON. If the content's first balanced object
+                // parses cleanly, write that instead of refusing the file
+                // (rebuild #13 died on exactly this trailing junk).
+                const start = content.indexOf('{')
+                let extracted = null
+                if (start >= 0) {
+                    let depth = 0, inString = false, escaped = false
+                    for (let i = start; i < content.length; i++) {
+                        const ch = content[i]
+                        if (inString) {
+                            if (escaped) escaped = false
+                            else if (ch === '\\') escaped = true
+                            else if (ch === '"') inString = false
+                            continue
+                        }
+                        if (ch === '"') inString = true
+                        else if (ch === '{') depth++
+                        else if (ch === '}') { depth--; if (depth === 0) { extracted = content.slice(start, i + 1); break } }
+                    }
+                }
+                let recovered = false
+                if (extracted) { try { JSON.parse(extracted); content = extracted; recovered = true } catch {} }
+                if (!recovered) {
+                    return { success: false, output: `Refused to write ${step.path}: not valid JSON (${error.message}).` }
+                }
             }
         }
         try {
