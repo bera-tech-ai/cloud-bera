@@ -502,8 +502,23 @@ const executeStep = async (record, step, options = {}) => {
     const root = record.dir
     const action = step.action
     if (['write_file', 'mkdir'].includes(action)) {
-        const target = path.resolve(root, step.path || '')
+        let target = path.resolve(root, step.path || '')
         if (!inside(root, target)) return { success: false, output: 'Blocked path outside project workspace.' }
+        // Planners regularly emit extensionless module paths
+        // ("src/database/models" for the models file). Left alone, that
+        // either writes an extensionless blob or collides with a directory
+        // of the same name and kills the step. Normalise to the file Node
+        // would resolve anyway: models.js, or models/index.js when a
+        // directory already sits there.
+        if (action === 'write_file' && step.path) {
+            const base = path.basename(step.path)
+            if (!base.includes('.') && !/^(dockerfile|makefile|procfile|license)$/i.test(base)) {
+                const asDir = fs.existsSync(target) && fs.statSync(target).isDirectory()
+                step = { ...step, path: asDir ? `${step.path}/index.js` : `${step.path}.js` }
+                target = path.resolve(root, step.path)
+                if (!inside(root, target)) return { success: false, output: 'Blocked path outside project workspace.' }
+            }
+        }
         // Models sometimes copy the prompt's own placeholder ("relative
         // path from the project root") as the literal path — that created a
         // junk directory and then crashed the build with EISDIR when a
@@ -667,9 +682,17 @@ const repair = async (record, failure, options) => {
     if (!normalizedSteps.length) return { success: false, error: 'Repair plan contained no safe local actions; external deployment/publishing actions are never executed during repair.' }
     record.repairs.push({ at: now(), reason: plan.reason || 'automatic repair', failure: String(failure).slice(-3000) })
     update(record, { stage: 'repairing', status: 'repairing' })
+    // One bad step must not kill the whole repair: planners re-emit the
+    // same broken path alongside good steps. Run them all; the repair only
+    // fails when every step failed — validation afterwards judges whether
+    // the problem is actually fixed.
+    const stepFailures = []
     for (const step of normalizedSteps) {
         const result = await executeStep(record, step, options)
-        if (!result.success) return { success: false, error: result.output }
+        if (!result.success) stepFailures.push(result.output)
+    }
+    if (stepFailures.length && stepFailures.length === normalizedSteps.length) {
+        return { success: false, error: stepFailures.join('\n') }
     }
     if (/No runnable application entrypoint found at the project root/i.test(String(failure))) {
         const entrypoint = checkProjectEntrypoint(record.dir, inspect(record.dir))
