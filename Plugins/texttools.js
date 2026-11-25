@@ -48,7 +48,7 @@ handle.help = [
     'vaporwave <text>      — ａｅｓｔｈｅｔｉｃ',
     'zalgo <text>          — Z̶a̶l̶g̶o̶ text',
     'base32 <text>         — Base32 encode',
-    'remind <mins> <msg>   — Set a reminder',
+    'remind <when> <msg>  — Set a persistent reminder',
     'timer <seconds>       — Countdown timer',
     'repeat <n> <text>     — Repeat text N times',
     'textinfo <text>       — Full text analysis',
@@ -77,8 +77,8 @@ const toBase32  = text => {
     return out + '='.repeat((8 - out.length % 8) % 8)
 }
 
-// Active reminders & timers store (in-memory, per bot session)
-const activeReminders = new Map()
+// (Reminders are persistent now — see Library/actions/reminders.js. The old
+// in-memory activeReminders map was removed with the setTimeout version.)
 
 handle.all = async (m, { conn, command, args, prefix, reply, sender } = {}) => {
     const text = args.join(' ').trim()
@@ -233,35 +233,32 @@ handle.all = async (m, { conn, command, args, prefix, reply, sender } = {}) => {
     }
 
     // ── REMIND ───────────────────────────────────────────────────────────────
+    // Persistent reminder (Library/actions/reminders.js). This used to be an
+    // in-memory setTimeout that was lost on restart; it now writes to
+    // db.reminders like the canonical .remind in Commands/media.js.
     if (['remind','reminder','remindme'].includes(command)) {
+        const { parseReminderRequest, createReminder, formatNairobi, repeatLabel } = require('../Library/actions/reminders')
         if (args.length < 2) return reply(
-            '❌ Usage: ' + prefix + 'remind <minutes> <message>\n\n' +
+            '❌ Usage: ' + prefix + 'remind <when> <message>\n\n' +
             'Examples:\n' +
             prefix + 'remind 5 Check the oven\n' +
             prefix + 'remind 30 Take medicine\n' +
-            prefix + 'remind 60 Meeting starts'
+            prefix + 'remind tomorrow at 9am Call mum\n' +
+            prefix + 'remind every Monday at 9am Review goals'
         )
-        const mins = parseFloat(args[0])
-        if (isNaN(mins) || mins <= 0 || mins > 1440) return reply('❌ Minutes must be between 1 and 1440 (24 hours)')
-        const msg = args.slice(1).join(' ')
-        const ms  = mins * 60 * 1000
-        const key = sender + '_' + Date.now()
-        const eta = new Date(Date.now() + ms).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-
-        reply('⏰ *Reminder set!*\n\n📝 Message: *' + msg + '*\n⏱️ In: *' + mins + ' minute(s)*\n🕐 At: *' + eta + '*')
-
-        const timeout = setTimeout(async () => {
-            try {
-                await conn.sendMessage(m.chat, {
-                    text: '🔔 *REMINDER!*\n\n📝 ' + msg + '\n\n_(Set ' + mins + ' min ago)_',
-                    mentions: [sender]
-                })
-            } catch {}
-            activeReminders.delete(key)
-        }, ms)
-
-        activeReminders.set(key, timeout)
-        return
+        const parsed = parseReminderRequest(text)
+        if (parsed.error) return reply('❌ ' + parsed.error)
+        let created
+        try {
+            created = createReminder({ chat: m.chat, jid: sender, msg: parsed.msg, fireAt: parsed.fireAt, repeat: parsed.repeat })
+        } catch (e) { return reply('❌ ' + e.message) }
+        return reply(
+            '⏰ *Reminder set!* [#' + created.id + ']\n\n' +
+            '📝 Message: *' + created.msg + '*\n' +
+            '🕐 At: *' + formatNairobi(created.fireAt) + '* (Africa/Nairobi)' +
+            (created.repeat ? '\n🔁 Repeats: ' + repeatLabel(created.repeat) : '') +
+            '\n\nDone early? ' + prefix + 'done ' + created.id + ' · Snooze? ' + prefix + 'snooze ' + created.id + ' 10m'
+        )
     }
 
     // ── TIMER / COUNTDOWN ────────────────────────────────────────────────────

@@ -135,38 +135,79 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
     }
 
     // ── remind ────────────────────────────────────────────────────────────────
+    // Persistent reminders (Library/actions/reminders.js): saved in
+    // db.reminders, delivered by the loop in Connection/start.js, so they
+    // survive a restart. This is the canonical .remind command.
     if (command === 'remind' || command === 'reminder') {
-        if (!text) return reply(
-            `❌ Usage: ${prefix}remind <time> <message>\n\n` +
+        const { parseReminderRequest, createReminder, cancelReminder, listReminders, formatNairobi, formatDelay, repeatLabel } = require('../Library/actions/reminders')
+        const sub = (text || '').trim()
+        const usage =
+            `❌ Usage: ${prefix}remind <when> <message>\n\n` +
             `Examples:\n` +
             `• ${prefix}remind 30m call the client\n` +
             `• ${prefix}remind 2h send invoice\n` +
-            `• ${prefix}remind 1d backup server`
-        )
-        const timeMatch = text.match(/^(\d+)(s|m|h|d)\s+(.+)/i)
-        if (!timeMatch) return reply(`❌ Invalid format.\nExamples: ${prefix}remind 30m call client | ${prefix}remind 2h check server`)
+            `• ${prefix}remind tomorrow at 9am call mum\n` +
+            `• ${prefix}remind every Monday at 9am review goals\n` +
+            `• ${prefix}remind 2026-11-25 09:00 team standup\n\n` +
+            `Manage them: ${prefix}reminders · ${prefix}remind cancel <id> · ${prefix}done <id> · ${prefix}snooze <id> 10m`
+        if (!sub) return reply(usage)
 
-        const amount = parseInt(timeMatch[1])
-        const unit   = timeMatch[2].toLowerCase()
-        const msg    = timeMatch[3].trim()
+        const firstWord = sub.split(/\s+/)[0].toLowerCase()
+        if (firstWord === 'list') {
+            const mine = listReminders(sender)
+            if (!mine.length) return reply(`📭 You have no pending reminders.`)
+            const lines = mine.map((r) => {
+                const when = r.fireAt <= Date.now() ? 'due now' : formatNairobi(r.fireAt)
+                const waiting = r.status === 'fired' ? ` (waiting — reply ${prefix}done ${r.id})` : ''
+                return `• [#${r.id}] ⏰ _${r.msg}_ — ${when}${r.repeat ? ` (${repeatLabel(r.repeat)})` : ''}${waiting}`
+            }).join('\n')
+            return reply(`⏰ *Your reminders (${mine.length}):*\n\n${lines}\n\nCancel one with: ${prefix}remind cancel <id>`)
+        }
+        if (firstWord === 'cancel') {
+            const id = sub.split(/\s+/)[1]
+            if (!id) return reply(`❌ Usage: ${prefix}remind cancel <id>\nSee your ids with ${prefix}reminders`)
+            const r = cancelReminder(id, sender)
+            return reply(r.success ? `✅ Reminder [#${r.reminder.id}] cancelled: _${r.reminder.msg}_` : `❌ ${r.error}`)
+        }
 
-        const ms = unit === 's' ? amount * 1000
-            : unit === 'm' ? amount * 60000
-            : unit === 'h' ? amount * 3600000
-            : amount * 86400000
-
-        const fireAt = Date.now() + ms
-        const label  = unit === 's' ? `${amount}s`
-            : unit === 'm' ? `${amount} min`
-            : unit === 'h' ? `${amount} hour${amount > 1 ? 's' : ''}`
-            : `${amount} day${amount > 1 ? 's' : ''}`
-
-        if (!global.db.data.reminders) global.db.data.reminders = []
-        global.db.data.reminders.push({ jid: sender, chat: m.chat, msg, fireAt, set: Date.now() })
-        await global.db.write()
+        const parsed = parseReminderRequest(sub)
+        if (parsed.error) return reply(`❌ ${parsed.error}\n\n${usage}`)
+        let created
+        try {
+            created = createReminder({ chat: m.chat, jid: sender, msg: parsed.msg, fireAt: parsed.fireAt, repeat: parsed.repeat })
+        } catch (e) { return reply(`❌ ${e.message}`) }
 
         await react(conn, m, '⏰')
-        return reply(`⏰ *Reminder set!*\nI'll remind you in *${label}*:\n_"${msg}"_`)
+        return reply(
+            `⏰ *Reminder set!* [#${created.id}]\n` +
+            `I'll remind you ${formatDelay(created.fireAt - Date.now())} — *${formatNairobi(created.fireAt)}* (Africa/Nairobi):\n` +
+            `_"${created.msg}"_` +
+            (created.repeat ? `\n🔁 Repeats: ${repeatLabel(created.repeat)}` : '') +
+            `\n\nDone early? ${prefix}done ${created.id} · Snooze? ${prefix}snooze ${created.id} 10m`
+        )
+    }
+
+    // ── done / snooze ─────────────────────────────────────────────────────────
+    if (command === 'done') {
+        const { doneReminder } = require('../Library/actions/reminders')
+        const id = (text || '').trim().split(/\s+/)[0]
+        if (!id) return reply(`❌ Usage: ${prefix}done <id>\nSee your ids with ${prefix}reminders`)
+        const r = doneReminder(id, sender)
+        return reply(r.success ? `✅ Done: _${r.reminder.msg}_` : `❌ ${r.error}`)
+    }
+    if (command === 'snooze') {
+        const { snoozeReminder, parseReminderTime } = require('../Library/actions/reminders')
+        const parts = (text || '').trim().split(/\s+/)
+        const id = parts[0]
+        if (!id) return reply(`❌ Usage: ${prefix}snooze <id> [10m]\nSee your ids with ${prefix}reminders`)
+        const when = parts[1] || '10m'
+        const parsed = parseReminderTime(when)
+        if (parsed.error) return reply(`❌ ${parsed.error}`)
+        const minutes = Math.max(1, Math.round((parsed.fireAt - Date.now()) / 60000))
+        const r = snoozeReminder(id, sender, minutes)
+        return reply(r.success
+            ? `😴 Snoozed for ${minutes}m: _${r.reminder.msg}_\nNext: ${require('../Library/actions/reminders').formatNairobi(r.reminder.fireAt)} (snooze ${r.reminder.snoozeCount}/3)`
+            : `❌ ${r.error}`)
     }
 
     // ── poststatus / setstatus ────────────────────────────────────────────────
@@ -214,17 +255,15 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
 
     // ── listreminders ─────────────────────────────────────────────────────────
     if (command === 'reminders' || command === 'listreminders') {
-        const mine = (global.db.data.reminders || []).filter(r => r.jid === sender)
+        const { listReminders, formatNairobi, repeatLabel } = require('../Library/actions/reminders')
+        const mine = listReminders(sender)
         if (!mine.length) return reply(`📭 You have no pending reminders.`)
-        const now = Date.now()
-        const lines = mine.map((r, i) => {
-            const left = r.fireAt - now
-            const mins = Math.round(left / 60000)
-            const hrs  = Math.round(left / 3600000)
-            const label = left < 60000 ? 'soon' : left < 3600000 ? `${mins}m` : `${hrs}h`
-            return `${i + 1}. ⏰ _${r.msg}_ (in ${label})`
+        const lines = mine.map((r) => {
+            const when = r.fireAt <= Date.now() ? 'due now' : formatNairobi(r.fireAt)
+            const waiting = r.status === 'fired' ? ` (waiting — reply ${prefix}done ${r.id})` : ''
+            return `• [#${r.id}] ⏰ _${r.msg}_ — ${when}${r.repeat ? ` (${repeatLabel(r.repeat)})` : ''}${waiting}`
         }).join('\n')
-        return reply(`⏰ *Your reminders (${mine.length}):*\n\n${lines}`)
+        return reply(`⏰ *Your reminders (${mine.length}):*\n\n${lines}\n\nCancel one with: ${prefix}remind cancel <id>`)
     }
 }
 
@@ -234,7 +273,7 @@ handle.command = [
     'imagine', 'draw', 'gen', 'generate',
     'see', 'vision', 'describe',
     'search', 'google', 'web',
-    'remind', 'reminder', 'reminders', 'listreminders',
+    'remind', 'reminder', 'reminders', 'listreminders', 'done', 'snooze',
     'poststatus', 'setstatus', 'status',
     'antispam'
 ]
