@@ -245,7 +245,7 @@ const parsePlannerJson = (raw, repairMalformed = false) => {
 }
 
 const makePlan = async (record, task, options = {}) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Stack contract for ANY server app or system: the plan MUST include a package.json at the project ROOT whose start script runs a server entrypoint file that is ALSO at the project ROOT (server.js) — never put the only entrypoint inside src/. Use ONLY plain Node.js (built-in http or Express) with static HTML/CSS/JS; never use Vue, React, Angular, Svelte, TypeScript, .vue/.jsx/.tsx files, SQL schema files, bundlers, or any build/compilation step — the app is deployed exactly as written. Never invent deployment tools or commands (no surf, vercel, netlify, or firebase CLIs). Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
         timeout: 45000,
@@ -600,6 +600,50 @@ const repair = async (record, failure, options) => {
     return { success: true }
 }
 
+// Deterministic safety net: planners sometimes put every file under src/
+// (server included) and forget the root package.json entirely, which makes
+// the project-entrypoint check fail and the whole build fall back to the
+// starter template. If the project has a JS entrypoint but no root
+// package.json and no root index.html, synthesise the package.json from the
+// entrypoint's own requires so the app is runnable and deployable as-is.
+const NODE_BUILTINS = new Set(['fs', 'path', 'http', 'https', 'url', 'os', 'crypto', 'util', 'events', 'stream', 'querystring', 'child_process', 'net', 'tls', 'zlib', 'buffer', 'assert'])
+const ensureRootPackageJson = record => {
+    try {
+        const root = record.dir
+        if (!root || fs.existsSync(path.join(root, 'package.json')) || fs.existsSync(path.join(root, 'index.html'))) return null
+        const candidates = ['server.js', 'index.js', 'app.js', 'main.js', 'src/server.js', 'src/index.js', 'src/app.js', 'src/main.js']
+        let entry = candidates.find(candidate => fs.existsSync(path.join(root, candidate)))
+        if (!entry) {
+            for (const sub of ['src', '.']) {
+                const dir = path.join(root, sub)
+                if (!fs.existsSync(dir)) continue
+                const hit = fs.readdirSync(dir).find(name => name.endsWith('.js') && /listen\(|createServer/.test(fs.readFileSync(path.join(dir, name), 'utf8')))
+                if (hit) { entry = sub === '.' ? hit : `${sub}/${hit}`; break }
+            }
+        }
+        if (!entry) return null
+        const source = fs.readFileSync(path.join(root, entry), 'utf8')
+        const dependencies = {}
+        for (const match of source.matchAll(/require\(['"]([^'"]+)['"]\)/g)) {
+            const name = match[1]
+            if (name.startsWith('.') || name.startsWith('/')) continue
+            const pkgName = name.startsWith('@') ? name.split('/').slice(0, 2).join('/') : name.split('/')[0]
+            if (!NODE_BUILTINS.has(pkgName)) dependencies[pkgName] = '*'
+        }
+        const pkg = {
+            name: record.name || 'bera-app',
+            version: '1.0.0',
+            private: true,
+            main: entry,
+            scripts: { start: `node ${entry}` },
+            ...(Object.keys(dependencies).length ? { dependencies } : {}),
+        }
+        fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(pkg, null, 2))
+        event(record, 'root_package_json_synthesised', { entry, dependencies: Object.keys(dependencies) })
+        return pkg
+    } catch { return null }
+}
+
 const validate = async (record, options = {}) => {
     const info = inspect(record.dir)
     const entrypoint = checkProjectEntrypoint(record.dir, info)
@@ -899,6 +943,7 @@ const run = async options => {
             if (!fixed.success) { update(record, { status: 'failed', stage: 'failed' }); return { success: false, error: result.output || result.error, record } }
         }
     }
+    ensureRootPackageJson(record)
     await notifyProgress(options, { phase: 'validation' })
     let validation = await validate(record, options)
     let repairError = null
@@ -934,4 +979,4 @@ const run = async options => {
     return { success: true, record, validation, screenshot: previewScreenshot }
 }
 
-module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart }
+module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson }
