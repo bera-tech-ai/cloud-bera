@@ -143,7 +143,7 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
         const durations = { '1d': 86400, '7d': 604800, '30d': 2592000 }
         const time = sub === 'pin' ? (durations[String(args[1] || '').toLowerCase()] || 604800) : 0
         const result = await execute(conn, sender, { type: sub, chat: m?.chat, key, ...(sub === 'pin' ? { time } : {}) })
-        return reply(result.ok ? (sub === 'pin' ? PIN_ACCEPTED_MESSAGE : '✅ Unpin request accepted by Baileys.') : `❌ Failed to ${sub}: ${result.error}`)
+        return reply(result.ok ? (sub === 'pin' ? PIN_ACCEPTED_MESSAGE : '✅ Unpinned successfully as requested.') : `❌ Failed to ${sub}: ${result.error}`)
     }
 
     if (sub === 'edit') {

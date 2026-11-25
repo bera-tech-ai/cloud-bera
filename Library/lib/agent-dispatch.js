@@ -138,7 +138,7 @@ const dispatch = async (ctx) => {
                 ...(isUnpin ? {} : { time: parseDuration(text) }),
             })
             if (!result.ok) { await reply(`❌ Failed to ${isUnpin ? 'unpin' : 'pin'}: ${interpretBaileysError(result.error, { access, actionLabel: isUnpin ? 'unpin this message' : 'pin this message' })}`); return true }
-            await reply(isUnpin ? '✅ Unpin request accepted by Baileys.' : PIN_ACCEPTED_MESSAGE)
+            await reply(isUnpin ? '✅ Unpinned successfully as requested.' : PIN_ACCEPTED_MESSAGE)
             return true
         }
 

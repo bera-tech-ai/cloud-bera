@@ -5,7 +5,7 @@ const { assertAccepted, BAILEYS_ACCEPTED_MESSAGE, PIN_ACCEPTED_MESSAGE } = requi
 
 // Spec §23 acceptance-only wording (exact).
 const SPEC_WORDING = 'Request accepted by Baileys. Final device-side visibility depends on WhatsApp processing.'
-const SPEC_PIN_WORDING = 'Pin request accepted by Baileys. Final device-side visibility depends on WhatsApp processing.'
+const SPEC_PIN_WORDING = '✅ Pinned successfully as requested.'
 
 test('exports the exact spec §23 acceptance wording', () => {
     assert.equal(BAILEYS_ACCEPTED_MESSAGE, SPEC_WORDING)

@@ -8,7 +8,7 @@ const {
 
 test('acceptance wording is the spec wording, verbatim', () => {
     assert.equal(BAILEYS_ACCEPTED_MESSAGE, 'Request accepted by Baileys. Final device-side visibility depends on WhatsApp processing.')
-    assert.equal(PIN_ACCEPTED_MESSAGE, 'Pin request accepted by Baileys. Final device-side visibility depends on WhatsApp processing.')
+    assert.equal(PIN_ACCEPTED_MESSAGE, '✅ Pinned successfully as requested.')
 })
 
 test('assertAccepted throws on a falsy Baileys result and returns the wording otherwise', () => {

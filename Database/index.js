@@ -5,7 +5,7 @@ const low = require('lowdb')
 const FileSync = require('lowdb/adapters/FileSync')
 const path = require('path')
 const fs = require('fs')
-const { resolveDbSchema, qualified, quoteIdent, searchPathOption } = require('../Library/lib/db-schema')
+const { resolveDbSchema, qualified, quoteIdent } = require('../Library/lib/db-schema')
 const { recordWriteSuccess, recordWriteFailure, getWriteHealth } = require('../Library/lib/db-health')
 const { resolveTenantId } = require('../Library/lib/tenant')
 
@@ -284,11 +284,14 @@ const initPostgres = async () => {
             connectionString: process.env.DATABASE_URL,
             max: Number(process.env.DB_POOL_MAX || 5),
             idleTimeoutMillis: 30000,
-            connectionTimeoutMillis: 15000,
-            // Phase 4: explicit search_path (belt and braces next to the
-            // schema-qualified table names above) so no query can silently
-            // resolve to public.bera_state on a default deployment.
-            options: searchPathOption(dbSchema),
+            connectionTimeoutMillis: 30000,
+            // NOTE (2026-11-25): do NOT pass search_path as a Pool `options`
+            // startup parameter — the Neon pooler rejects it outright
+            // ("unsupported startup parameter in options: search_path"),
+            // which made every boot fall back to JSON storage. Tenant
+            // isolation does not need it: every table name in this file is
+            // schema-qualified via qualified()/beraStateTable, so no query
+            // can silently resolve to public.bera_state.
             ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false }
         })
 

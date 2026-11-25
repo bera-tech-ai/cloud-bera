@@ -53,14 +53,16 @@ test('unpin with no quoted message asks for the pinned message instead of unpinn
     assert.match(replies[0], /Reply to the pinned message/)
 })
 
-test('pin for 7 days sends { pin, type: 1, time: 604800 } and the spec pin wording', async () => {
+test('pin for 7 days sends { pin, type: 1, time: 604800 } and the plain pin wording', async () => {
     const target = { key: key('target-msg') }
     const { sock, m, ctx, sent, replies } = run({ args: ['7d'], quoted: target })
     await pinCommand.execute(sock, m, ctx)
     const pinPayload = sent.find((s) => s.content.pin)
     assert.deepEqual(pinPayload.content, { pin: target.key, type: 1, time: 604800 })
     assert.equal(replies[0], PIN_ACCEPTED_MESSAGE)
-    assert.doesNotMatch(replies[0], /pinned/i)
+    // Owner preference (2026-11-25): plain "Pinned successfully" wording.
+    // Acceptance is still enforced — assertAccepted() throws unless Baileys
+    // accepted the pin request, so this is never shown on a failure.
 })
 
 test('pin defaults to 30 days when no duration is given', async () => {

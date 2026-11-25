@@ -12,8 +12,10 @@
 // Spec §23 acceptance-only wording.
 const BAILEYS_ACCEPTED_MESSAGE = 'Request accepted by Baileys. Final device-side visibility depends on WhatsApp processing.'
 
-// Spec §8 pin wording (same acceptance level, pin-specific sentence).
-const PIN_ACCEPTED_MESSAGE = 'Pin request accepted by Baileys. Final device-side visibility depends on WhatsApp processing.'
+// Spec §8 pin wording — owner preference (2026-11-25): plain success wording,
+// no "by Baileys" qualifier. Baileys acceptance is still enforced by
+// assertAccepted() before this string is ever returned.
+const PIN_ACCEPTED_MESSAGE = '✅ Pinned successfully as requested.'
 
 const assertAccepted = (result, actionLabel, acceptedMessage = BAILEYS_ACCEPTED_MESSAGE) => {
     if (!result) {
