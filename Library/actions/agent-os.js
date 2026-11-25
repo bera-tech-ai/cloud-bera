@@ -13,8 +13,22 @@ const { takeScreenshot } = require('./browser')
 
 const execFileAsync = promisify(execFile)
 const NPM_REGISTRY = 'https://registry.npmjs.org/'
+const pathWithPackageManagers = () => {
+    // A service manager can start the bot with a minimal PATH that lacks
+    // the package managers (npm lives beside node, or in a tool bin dir),
+    // which made validation fail with "npm: not found" for good projects.
+    // Prepend any candidate dir that actually contains npm.
+    const parts = String(process.env.PATH || '').split(':').filter(Boolean)
+    const candidates = [path.dirname(process.execPath), '/opt/hatch-image/bin', '/usr/local/bin', '/opt/homebrew/bin']
+    for (const dir of candidates) {
+        if (parts.includes(dir)) continue
+        try { if (fs.existsSync(path.join(dir, 'npm'))) parts.unshift(dir) } catch {}
+    }
+    return parts.join(':')
+}
 const packageManagerEnv = () => ({
     ...process.env,
+    PATH: pathWithPackageManagers(),
     npm_config_registry: NPM_REGISTRY,
     NPM_CONFIG_REGISTRY: NPM_REGISTRY,
     YARN_NPM_REGISTRY_SERVER: NPM_REGISTRY
@@ -33,7 +47,7 @@ const inside = (root, target) => { const r = path.resolve(root), t = path.resolv
 
 const command = async (cmd, cwd, timeout = 120000) => {
     try {
-        const r = await execFileAsync('/bin/sh', ['-lc', cmd], { cwd, timeout, maxBuffer: 8 * 1024 * 1024, env: process.env })
+        const r = await execFileAsync('/bin/sh', ['-lc', cmd], { cwd, timeout, maxBuffer: 8 * 1024 * 1024, env: { ...process.env, PATH: pathWithPackageManagers() } })
         return { success: true, output: `${r.stdout || ''}${r.stderr ? `\n${r.stderr}` : ''}`.trim().slice(-12000) }
     } catch (e) {
         return { success: false, output: `${e.stdout || ''}${e.stderr ? `\n${e.stderr}` : ''}`.trim().slice(-12000), error: e.message }
@@ -300,38 +314,75 @@ const makePlan = async (record, task, options = {}) => {
     return { success: true, plan }
 }
 
-const cleanGeneratedFile = (text, filePath) => {
+const cleanGeneratedFile = (text, filePath, forContinuation = false) => {
     let value = String(text || '').trim()
     const fence = value.match(/^```[a-zA-Z0-9_-]*\n([\s\S]*?)\n?```$/)
     if (fence) value = fence[1].trim()
     // Xcasper sometimes rewrites URLs as Markdown links: [https://x](https://x)
     value = value.replace(/\[((?:https?:\/\/)[^\]\s]+)\]\(\1\)/g, '$1')
-    if (/\.html?$/i.test(String(filePath || '')) && value && !value.startsWith('<')) {
+    if (!forContinuation && /\.html?$/i.test(String(filePath || '')) && value && !value.startsWith('<')) {
         const firstTag = value.indexOf('<')
         if (firstTag > 0) value = value.slice(firstTag).trim()
     }
     return value
 }
 
+const trimOverlap = (existing, chunk) => {
+    const max = Math.min(240, existing.length, chunk.length)
+    for (let len = max; len >= 24; len--) {
+        if (existing.slice(-len) === chunk.slice(0, len)) return chunk.slice(len)
+    }
+    return chunk
+}
+
 const generateFileContent = async (record, step, options = {}) => {
     const brief = String(step.brief || step.reason || '').trim()
-    const prompt = [
-        `Write the complete file "${step.path}" for this project.`,
-        `Project task: ${String(record.task || '').slice(0, 2000)}`,
-        brief ? `File brief: ${brief}` : 'The file must fully serve the project task.',
-        'Write real content (real names, prices and text) — never placeholder or lorem ipsum, and never copy the task text into the file.',
-        'Return ONLY the complete file content: no explanations, no Markdown fences.'
-    ].join('\n')
-    const result = await xcasper.chat([{ role: 'user', content: prompt }], {
+    const isHtml = /\.html?$/i.test(String(step.path || ''))
+    const ask = prompt => xcasper.chat([{ role: 'user', content: prompt }], {
         timeout: 90000,
         providerTimeout: 90000,
         maxChars: 8000,
         onProviderProgress: progress => notifyProgress(options, { phase: 'file_provider', ...progress })
     })
-    if (!result.success) return { success: false, error: `File generation failed for ${step.path}: ${result.error}` }
-    const text = cleanGeneratedFile(result.text, step.path)
+    const finishHtml = value => {
+        const idx = value.search(/<\/html>/i)
+        return idx >= 0 ? value.slice(0, idx + 7) : null
+    }
+    const first = await ask([
+        `Write the complete file "${step.path}" for this project.`,
+        `Project task: ${String(record.task || '').slice(0, 2000)}`,
+        brief ? `File brief: ${brief}` : 'The file must fully serve the project task.',
+        'Write real content (real names, prices and text) — never placeholder or lorem ipsum, and never copy the task text into the file.',
+        'Return ONLY the complete file content: no explanations, no Markdown fences.'
+    ].join('\n'))
+    if (!first.success) return { success: false, error: `File generation failed for ${step.path}: ${first.error}` }
+    let text = cleanGeneratedFile(first.text, step.path)
     if (!text) return { success: false, error: `File generation returned empty content for ${step.path}.` }
-    return { success: true, text }
+    if (!isHtml) return { success: true, text }
+    const finished = finishHtml(text)
+    if (finished) return { success: true, text: finished }
+    // Providers cut long files off mid-stream. Ask for continuations and
+    // append them until the file actually reaches </html>, instead of
+    // writing a page that stops halfway through its own stylesheet.
+    for (let attempt = 0; attempt < 4; attempt++) {
+        const next = await ask([
+            `Continue writing the file "${step.path}" for this project. It was cut off mid-stream.`,
+            `Project task: ${String(record.task || '').slice(0, 2000)}`,
+            brief ? `File brief: ${brief}` : null,
+            'The file so far ends with these exact characters:',
+            '---',
+            text.slice(-600),
+            '---',
+            'Continue EXACTLY from those characters. Do not repeat anything already written, do not explain, and do not use Markdown fences. Output only the continuation, and finish the file completely (end with </html>).'
+        ].filter(Boolean).join('\n'))
+        if (!next.success) return { success: false, error: `File generation for ${step.path} was cut off and the continuation failed: ${next.error}` }
+        const chunk = cleanGeneratedFile(next.text, step.path, true)
+        if (!chunk) return { success: false, error: `File generation for ${step.path} returned an empty continuation.` }
+        text += trimOverlap(text, chunk)
+        const done = finishHtml(text)
+        if (done) return { success: true, text: done }
+    }
+    return { success: false, error: `File generation for ${step.path} stayed incomplete after several continuations (no closing </html> tag).` }
 }
 
 const executeStep = async (record, step, options = {}) => {
@@ -532,7 +583,7 @@ const previewStart = async (record, options = {}) => {
     const port = Number(options.port || 3000)
     const log = path.join(record.dir, '.bera-preview.log')
     const out = fs.openSync(log, 'a')
-    const child = spawn('/bin/sh', ['-lc', `${info.startCommand} -- --port ${port}`], { cwd: record.dir, detached: true, stdio: ['ignore', out, out], env: { ...process.env, PORT: String(port) } })
+    const child = spawn('/bin/sh', ['-lc', `${info.startCommand} -- --port ${port}`], { cwd: record.dir, detached: true, stdio: ['ignore', out, out], env: { ...process.env, PATH: pathWithPackageManagers(), PORT: String(port) } })
     child.unref()
     const base = process.env.BERA_PREVIEW_BASE_URL || `http://127.0.0.1:${port}`
     record.preview = { pid: child.pid, port, url: `${base.replace(/\/$/, '')}`, log, startedAt: now(), status: 'starting' }
