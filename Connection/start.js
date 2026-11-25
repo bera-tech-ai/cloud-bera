@@ -409,6 +409,23 @@ const startBot = async () => {
         }
     }
 
+    // ── WhatsApp socket via the runtime egress proxy ──────────────────────
+    // Baileys' websocket connects directly by default, and direct wss
+    // stalls from a systemd service on this host (outbound 443 is
+    // intercepted; the handshake never completes — verified 2026-11-24:
+    // a raw ws timed out in 12s under systemd but opened instantly from
+    // a shell, while the same socket via a proxy agent opened in <1s).
+    // Route the socket through the egress proxy instead. The proxy URL
+    // comes from env (plain URL, no credentials stored here).
+    let waAgent = null
+    try {
+        const { HttpsProxyAgent } = require('https-proxy-agent')
+        const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || 'http://hatch-egress-proxy:3128'
+        if (proxyUrl) waAgent = new HttpsProxyAgent(proxyUrl)
+    } catch (e) {
+        console.log(chalk.yellow(`[BOT] Proxy agent unavailable, direct socket: ${e.message}`))
+    }
+
     const conn = makeWASocket({
         version,
         logger,
@@ -416,6 +433,7 @@ const startBot = async () => {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger)
         },
+        agent: waAgent,
         printQRInTerminal: false,
         browser: ['Ubuntu', 'Chrome', '22.0.0'],
         markOnlineOnConnect: true,
