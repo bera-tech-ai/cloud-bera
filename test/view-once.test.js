@@ -57,3 +57,16 @@ test('the raw-message store survives a reload (restart persistence)', () => {
     delete process.env.BERA_VIEWONCE_STORE_FILE
     delete require.cache[storePath]
 })
+
+test('downloadViewOnceFirst fails honestly when the media cannot be served', async () => {
+    const { downloadViewOnceFirst, findMedia } = require('../Library/lib/baileys-media')
+    const raw = {
+        key: { remoteJid: '123@s.whatsapp.net', id: 'VO1' },
+        message: { viewOnceMessageV2: { message: { imageMessage: { mediaKey: 'aGVsbG8td29ybGQtdGVzdA==' } } } },
+    }
+    const media = findMedia(raw.message)
+    assert.equal(media.kind, 'image')
+    const sock = { updateMediaMessage: async () => { throw new Error('sender device did not respond') } }
+    await assert.rejects(() => downloadViewOnceFirst(raw, media, sock))
+    await assert.rejects(() => downloadViewOnceFirst(raw, null, sock), /No original raw message/)
+})

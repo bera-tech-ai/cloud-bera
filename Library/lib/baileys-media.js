@@ -108,6 +108,30 @@ async function downloadRawMedia(raw, media, sock) {
     return downloadMediaContent(media)
 }
 
+// View-once-first download (owner request, 2026-11-25): try the fork's
+// downloadViewOnceMessage BEFORE the official path. The fork re-requests
+// media that has a key but no URL/directPath from the sender's device
+// first — the case that failed live with "No valid media URL or
+// directPath present in message". Falls back to downloadRawMedia
+// (official, with the fork as an internal last resort) when the fork is
+// absent, refuses (not view-once), or fails.
+async function downloadViewOnceFirst(raw, media, sock) {
+    if (!raw?.message || !media) throw new Error('No original raw message is available')
+    try {
+        const fork = await loadViewOnceFork()
+        if (fork?.downloadViewOnceMessage) {
+            const reuploadRequest = async message => {
+                if (typeof sock?.updateMediaMessage !== 'function') throw new Error('Media re-upload is unavailable')
+                return sock.updateMediaMessage(message)
+            }
+            const logger = { info() {}, warn() {}, error() {}, debug() {}, trace() {}, child() { return this } }
+            const buffer = await fork.downloadViewOnceMessage(raw, 'buffer', {}, { reuploadRequest, logger })
+            if (buffer?.length) return buffer
+        }
+    } catch {}
+    return downloadRawMedia(raw, media, sock)
+}
+
 async function downloadMediaContent(media) {
     if (!media?.content || !media.kind) throw new Error('No downloadable media content found')
     const stream = await downloadContentFromMessage(media.content, media.kind)
@@ -139,4 +163,4 @@ function buildResendPayload(media, buffer, caption = '') {
     }
 }
 
-module.exports = { MEDIA_TYPES, VIEW_ONCE_WRAPPERS, unwrapMessage, findMedia, downloadMediaContent, downloadRawMedia, buildResendPayload, isViewOnceMessage, loadViewOnceFork }
+module.exports = { MEDIA_TYPES, VIEW_ONCE_WRAPPERS, unwrapMessage, findMedia, downloadMediaContent, downloadRawMedia, downloadViewOnceFirst, buildResendPayload, isViewOnceMessage, loadViewOnceFork }

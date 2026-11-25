@@ -1,12 +1,20 @@
 'use strict'
 
 const config = require('../Config')
-const { findMedia, downloadMediaContent, downloadRawMedia, buildResendPayload } = require('../Library/lib/baileys-media')
+const { findMedia, downloadMediaContent, downloadViewOnceFirst, buildResendPayload } = require('../Library/lib/baileys-media')
 const rawStore = require('../Library/lib/view-once-store')
 // Phase 4 (spec §25): view-once recovery is disabled by default. Only an
 // explicit owner opt-in (BERA_ALLOW_VIEWONCE_RECOVERY=1 or the
 // allowViewOnceRecovery setting) enables it; otherwise the command answers
-// with the standard unsupported response and recovers nothing.
+// with the standard unsupported response and recovers nothing. The owner
+// opted in on 2026-11-25 and the bot runs with the env flag set.
+//
+// Download strategy (2026-11-25): WhatsApp strips the media URL/directPath
+// from quoted view-once copies, and official Baileys throws on that before
+// it can re-upload — so recovery goes through downloadViewOnceFirst, which
+// tries the xspacesocket fork's downloadViewOnceMessage (re-requests the
+// media from the sender's device when only a mediaKey is present) before
+// the official download paths.
 const { isViewOnceRecoveryAllowed, VIEWONCE_RECOVERY } = require('../Library/lib/recovery-gate')
 
 if (typeof global.antivvEnabled === 'undefined') global.antivvEnabled = true
@@ -48,17 +56,29 @@ async function recover(sock, message, ctx) {
     const media = findMedia(raw?.message) || findMedia(quoted?.message) || findMedia(message.message)
     if (!media) throw new Error('Reply to a view-once image, video, audio, sticker, or document.')
 
-    let buffer
-    if (raw) {
-        try { buffer = await downloadRawMedia(raw, media, sock) } catch {}
+    // Candidates in order: the stored original (full media fields, captured
+    // when the message arrived) first, then the quoted copy itself (stripped
+    // by WhatsApp — recoverable only via the fork's reupload-first path).
+    const candidates = []
+    if (raw) candidates.push(raw)
+    if (quoted?.message && raw?.message !== quoted.message) candidates.push({ key: quoted.key, message: quoted.message })
+
+    let buffer = null
+    let lastError = null
+    for (const candidate of candidates) {
+        try { buffer = await downloadViewOnceFirst(candidate, media, sock) } catch (e) { lastError = e }
+        if (buffer?.length) break
     }
-    if (!buffer?.length) buffer = await downloadMediaContent(media)
+    if (!buffer?.length) {
+        try { buffer = await downloadMediaContent(media) } catch (e) { lastError = e }
+    }
+    if (!buffer?.length) throw lastError || new Error('Could not download that view-once media.')
     return { quoted, raw, media, buffer }
 }
 
 module.exports = {
     commands: ['vv', 'viewonce', 'open', 'openphoto', 'openvideo', 'vvphoto', 'vvsave', 'savevv', 'vvdm'],
-    description: 'Open view-once media this bot received while it was still viewable (disabled by default — see spec §25; enable with BERA_ALLOW_VIEWONCE_RECOVERY=1)',
+    description: 'Open view-once media (owner opt-in via BERA_ALLOW_VIEWONCE_RECOVERY=1; fork reupload-first download)',
     permission: 'owner',
     group: true,
     private: true,
