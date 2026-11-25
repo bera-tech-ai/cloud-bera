@@ -186,3 +186,13 @@ test('entrypoint check fails when package.json starts a file that does not exist
     assert.match(entry.output, /server\.js.*does not exist/)
     assert.equal(result.success, false)
 })
+
+test('executeStep recovers a package.json with trailing junk after the JSON object', async () => {
+    const dir = tmpProject({})
+    const record = { id: 'x', dir, name: 'x', events: [] }
+    const good = JSON.stringify({ name: 'x', scripts: { start: 'node server.js' } })
+    const step = { action: 'write_file', path: 'package.json', content: good + '\n\nHere is your file! Let me know if you need changes.' }
+    const r = await executeStep(record, step, {})
+    assert.equal(r.success, true)
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')), JSON.parse(good))
+})
