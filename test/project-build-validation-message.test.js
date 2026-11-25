@@ -9,11 +9,11 @@ test('project-build extracts the named project without trailing deployment instr
     assert.equal(projectName(request), 'zakayo-s-portfolio')
 })
 
-test('project-build honors explicit public/private repository visibility and defaults to private', () => {
+test('project-build honors explicit public/private repository visibility and defaults to public', () => {
     assert.equal(repositoryVisibilityFromRequest('Create a public GitHub repo called demo'), 'public')
     assert.equal(repositoryVisibilityFromRequest('Create a repo and make it public'), 'public')
     assert.equal(repositoryVisibilityFromRequest('Create a private repository called demo'), 'private')
-    assert.equal(repositoryVisibilityFromRequest('Create a GitHub repo called demo'), 'private')
+    assert.equal(repositoryVisibilityFromRequest('Create a GitHub repo called demo'), 'public')
     assert.equal(repositoryVisibilityFromRequest('Do not make the repo public'), 'private')
 })
 

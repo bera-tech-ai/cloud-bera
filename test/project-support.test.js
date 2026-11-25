@@ -166,7 +166,7 @@ test('numbered replies resolve only for the exact pending prompt and preserve ow
     const approval = await support.createBuildApproval(record, {
         userId: owner, chat: group, requestedPublish: true, requestedDeploy: true
     })
-    assert.equal(approval.repositoryVisibility, 'private')
+    assert.equal(approval.repositoryVisibility, 'public')
     const prompt = `Bera project approval request\nCase ID: ${approval.id}\nProject: test-project\nAction: GitHub publication and deployment`
 
     assert.equal(support.resolveApprovalReply({ text: '1', quotedText: prompt, quotedId: 'prompt-1', chat: group }), null,
