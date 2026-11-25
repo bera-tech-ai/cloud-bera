@@ -59,5 +59,19 @@ function get(chat, id) {
     prune()
     return entries.get(keyFor(chat, id))?.raw || null
 }
+function latestForChat(chat, predicate) {
+    load()
+    prune()
+    const prefix = `${chat}:`
+    const matches = []
+    for (const [key, entry] of entries) {
+        if (key.startsWith(prefix) && entry?.raw) matches.push(entry)
+    }
+    matches.sort((a, b) => Number(b.at || 0) - Number(a.at || 0))
+    for (const entry of matches) {
+        if (!predicate || predicate(entry.raw)) return entry.raw
+    }
+    return null
+}
 function clear() { entries.clear(); flush() }
-module.exports = { remember, get, clear, _entries: entries, _flush: flush }
+module.exports = { remember, get, latestForChat, clear, _entries: entries, _flush: flush }
