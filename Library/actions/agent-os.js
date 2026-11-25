@@ -472,6 +472,13 @@ const executeStep = async (record, step, options = {}) => {
     if (['write_file', 'mkdir'].includes(action)) {
         const target = path.resolve(root, step.path || '')
         if (!inside(root, target)) return { success: false, output: 'Blocked path outside project workspace.' }
+        // Models sometimes copy the prompt's own placeholder ("relative
+        // path from the project root") as the literal path — that created a
+        // junk directory and then crashed the build with EISDIR when a
+        // later step tried to write a file over it.
+        if (!step.path || step.path.trim() === '.' || /relative[ _]path/i.test(step.path)) {
+            return { success: false, output: `Invalid file path from the planner: "${step.path || ''}" is a placeholder, not a real path.` }
+        }
         if (action === 'mkdir') { fs.mkdirSync(target, { recursive: true }); return { success: true, output: `Created ${step.path}` } }
         let content = typeof step.content === 'string' ? step.content : ''
         if (!content.trim()) {
@@ -483,13 +490,20 @@ const executeStep = async (record, step, options = {}) => {
             if (!generated.success) return { success: false, output: generated.error }
             content = generated.text
         }
-        fs.mkdirSync(path.dirname(target), { recursive: true })
-        // Hosts like BeraHost assign the port (PORT env) and share it across
-        // tenants: a generated start script that hardcodes a port
-        // (http-server . -p 3000) dies with EADDRINUSE and the deployment
-        // fails. Normalise package.json start scripts to honour $PORT.
-        if (path.basename(target) === 'package.json') content = normalizePackageJsonStart(content)
-        fs.writeFileSync(target, content)
+        if (fs.existsSync(target) && fs.statSync(target).isDirectory()) {
+            return { success: false, output: `Cannot write a file over the directory ${step.path}; choose a file path inside it instead.` }
+        }
+        try {
+            fs.mkdirSync(path.dirname(target), { recursive: true })
+            // Hosts like BeraHost assign the port (PORT env) and share it across
+            // tenants: a generated start script that hardcodes a port
+            // (http-server . -p 3000) dies with EADDRINUSE and the deployment
+            // fails. Normalise package.json start scripts to honour $PORT.
+            if (path.basename(target) === 'package.json') content = normalizePackageJsonStart(content)
+            fs.writeFileSync(target, content)
+        } catch (error) {
+            return { success: false, output: `Writing ${step.path} failed: ${error.message}` }
+        }
         return { success: true, output: `Wrote ${step.path}` }
     }
     if (action === 'install') {
