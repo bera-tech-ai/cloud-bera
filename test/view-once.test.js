@@ -32,3 +32,28 @@ test('findMedia unwraps a view-once image', () => {
     const media = findMedia({ viewOnceMessageV2: { message: { imageMessage: { mimetype: 'image/jpeg' } } } })
     assert.equal(media.kind, 'image')
 })
+
+test('the view-once fork loader resolves safely (null or the fork API)', async () => {
+    const { loadViewOnceFork } = require('../Library/lib/baileys-media')
+    const fork = await loadViewOnceFork()
+    assert.ok(fork === null || typeof fork.downloadViewOnceMessage === 'function')
+})
+
+test('the raw-message store survives a reload (restart persistence)', () => {
+    const fs = require('node:fs')
+    const os = require('node:os')
+    const path = require('node:path')
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'vo-store-')), 'store.json')
+    process.env.BERA_VIEWONCE_STORE_FILE = file
+    const storePath = require.resolve('../Library/lib/view-once-store')
+    delete require.cache[storePath]
+    const first = require(storePath)
+    const raw = { key: { remoteJid: '123@s.whatsapp.net', id: 'ABC' }, message: { viewOnceMessage: { message: { imageMessage: { mediaKey: 'k' } } } } }
+    first.remember(raw)
+    first._flush()
+    delete require.cache[storePath]
+    const second = require(storePath)
+    assert.deepEqual(second.get('123@s.whatsapp.net', 'ABC'), raw)
+    delete process.env.BERA_VIEWONCE_STORE_FILE
+    delete require.cache[storePath]
+})

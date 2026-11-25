@@ -1,6 +1,20 @@
 'use strict'
 
+const path = require('node:path')
+const { pathToFileURL } = require('node:url')
 const { downloadContentFromMessage, downloadMediaMessage } = require('@whiskeysockets/baileys')
+
+// Optional view-once-only fork (xspacesocket), installed separately under
+// fork-deps/ so the bot's own dependency tree stays on official Baileys.
+// Loaded lazily; resolves to null when not installed.
+let viewOnceForkPromise = null
+function loadViewOnceFork() {
+    if (!viewOnceForkPromise) {
+        const entry = path.join(__dirname, '..', '..', 'fork-deps', 'node_modules', 'xspacesocket', 'lib', 'index.js')
+        viewOnceForkPromise = import(pathToFileURL(entry).href).catch(() => null)
+    }
+    return viewOnceForkPromise
+}
 
 const MEDIA_TYPES = {
     imageMessage: { kind: 'image', field: 'image' },
@@ -58,21 +72,39 @@ function findMedia(message) {
 
 async function downloadRawMedia(raw, media, sock) {
     if (!raw?.message || !media) throw new Error('No original raw message is available')
+    const reuploadRequest = async message => {
+        if (typeof sock?.updateMediaMessage !== 'function') throw new Error('Media re-upload is unavailable')
+        return sock.updateMediaMessage(message)
+    }
+    const candidates = [raw]
+    const unwrapped = unwrapMessage(raw.message)
+    if (unwrapped && unwrapped !== raw.message) candidates.push({ ...raw, message: unwrapped })
     if (typeof downloadMediaMessage === 'function') {
-        const candidates = [raw]
-        const unwrapped = unwrapMessage(raw.message)
-        if (unwrapped && unwrapped !== raw.message) candidates.push({ ...raw, message: unwrapped })
         for (const candidate of candidates) {
             try {
-                return await downloadMediaMessage(candidate, 'buffer', {}, {
-                    reuploadRequest: async message => {
-                        if (typeof sock?.updateMediaMessage !== 'function') throw new Error('Media re-upload is unavailable')
-                        return sock.updateMediaMessage(message)
-                    },
-                })
+                return await downloadMediaMessage(candidate, 'buffer', {}, { reuploadRequest })
             } catch {}
         }
     }
+    // Scoped fallback (owner request, 2026-11-25): the xspacesocket fork's
+    // downloadViewOnceMessage re-requests media that has a key but no
+    // URL/directPath BEFORE downloading — official Baileys throws first,
+    // which is exactly how view-once recovery failed live ("No valid media
+    // URL or directPath present in message"). The fork is an optional,
+    // separately installed dependency (fork-deps/); the connection and
+    // everything else stay on official Baileys. Absent or failing, fall
+    // through to the plain content download.
+    try {
+        const fork = await loadViewOnceFork()
+        if (fork?.downloadViewOnceMessage) {
+            const logger = { info() {}, warn() {}, error() {}, debug() {}, trace() {}, child() { return this } }
+            for (const candidate of candidates) {
+                try {
+                    return await fork.downloadViewOnceMessage(candidate, 'buffer', {}, { reuploadRequest, logger })
+                } catch {}
+            }
+        }
+    } catch {}
     return downloadMediaContent(media)
 }
 
@@ -107,4 +139,4 @@ function buildResendPayload(media, buffer, caption = '') {
     }
 }
 
-module.exports = { MEDIA_TYPES, VIEW_ONCE_WRAPPERS, unwrapMessage, findMedia, downloadMediaContent, downloadRawMedia, buildResendPayload, isViewOnceMessage }
+module.exports = { MEDIA_TYPES, VIEW_ONCE_WRAPPERS, unwrapMessage, findMedia, downloadMediaContent, downloadRawMedia, buildResendPayload, isViewOnceMessage, loadViewOnceFork }
