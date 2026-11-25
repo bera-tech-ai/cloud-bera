@@ -480,7 +480,7 @@ const handleCommand = async (raw, ctx = {}) => {
                 liveUrl ? `Live: ${liveUrl}` : result.state === 'published' && publishMode === 'deploy' ? 'BeraHost reported deployment success but returned no recognized live URL.' : null,
                 repoUrl ? `Repo: ${repoUrl}` : null
             ].filter(Boolean).join('\n')
-            await reply(`Revision ${actionLabel} for *${project.name}*.${urlNote ? `\n${urlNote}` : ''}`)
+            await reply(`${entry.sameProject ? 'Build' : 'Revision'} ${actionLabel} for *${project.name}*.${urlNote ? `\n${urlNote}` : ''}`)
             // Send the deployed-site screenshot with the links.
             if (result.state === 'published' && liveUrl && result.publishScreenshot?.buffer && conn?.sendMessage) {
                 try { await conn.sendMessage(chat, { image: result.publishScreenshot.buffer, mimetype: result.publishScreenshot.mimetype || 'image/png', caption: `*${project.name}*\n${urlNote}` }, { quoted: m }) } catch {}
