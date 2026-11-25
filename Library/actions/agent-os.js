@@ -245,7 +245,7 @@ const parsePlannerJson = (raw, repairMalformed = false) => {
 }
 
 const makePlan = async (record, task, options = {}) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Stack contract for ANY server app or system: the plan MUST include a package.json at the project ROOT whose start script runs a server entrypoint file that is ALSO at the project ROOT (server.js) — never put the only entrypoint inside src/. Use ONLY plain Node.js (built-in http or Express) with static HTML/CSS/JS; never use Vue, React, Angular, Svelte, TypeScript, .vue/.jsx/.tsx files, SQL schema files, bundlers, or any build/compilation step — the app is deployed exactly as written. Never invent deployment tools or commands (no surf, vercel, netlify, or firebase CLIs). Dependency versions: only use real, well-known versions (express ^4.19.2, dotenv ^16.4.5, cors ^2.8.5); never invent a version number — if unsure, use "*" as the version. Only list dependencies the code actually imports, and only packages that really exist on npm (express, dotenv, cors, morgan, bcrypt, jsonwebtoken and similar well-known ones); never invent package names. Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Stack contract for ANY server app or system: the plan MUST include a package.json at the project ROOT whose start script runs a server entrypoint file that is ALSO at the project ROOT (server.js) — never put the only entrypoint inside src/. Use ONLY plain Node.js (built-in http or Express) with static HTML/CSS/JS; never use Vue, React, Angular, Svelte, TypeScript, .vue/.jsx/.tsx files, SQL schema files, bundlers, or any build/compilation step — the app is deployed exactly as written. Never invent deployment tools or commands (no surf, vercel, netlify, or firebase CLIs). Dependency versions: only use real, well-known versions (express ^4.19.2, dotenv ^16.4.5, cors ^2.8.5); never invent a version number — if unsure, use "*" as the version. Only list dependencies the code actually imports, and only packages that really exist on npm (express, dotenv, cors, morgan, bcrypt, jsonwebtoken and similar well-known ones); never invent package names. All .js files use CommonJS (require/module.exports) — never ESM import/export syntax. Do not plan test files or a test script unless the task explicitly asks for tests. Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
         timeout: 45000,
@@ -348,16 +348,29 @@ const generateFileContent = async (record, step, options = {}) => {
         const idx = value.search(/<\/html>/i)
         return idx >= 0 ? value.slice(0, idx + 7) : null
     }
-    const first = await ask([
+    const promptLines = [
         `Write the complete file "${step.path}" for this project.`,
         `Project task: ${String(record.task || '').slice(0, 2000)}`,
         brief ? `File brief: ${brief}` : 'The file must fully serve the project task.',
         'Write real content (real names, prices and text) — never placeholder or lorem ipsum, and never copy the task text into the file.',
+        isHtml ? null : 'Use plain CommonJS (require/module.exports) — never ESM import/export syntax.',
         'Return ONLY the complete file content: no explanations, no Markdown fences.'
-    ].join('\n'))
+    ].filter(Boolean)
+    const first = await ask(promptLines.join('\n'))
     if (!first.success) return { success: false, error: `File generation failed for ${step.path}: ${first.error}` }
     let text = cleanGeneratedFile(first.text, step.path)
     if (!text) return { success: false, error: `File generation returned empty content for ${step.path}.` }
+    if (text.includes('\uFFFD')) {
+        // Providers occasionally return encoding-damaged text (a file that
+        // starts with a replacement character can never parse). One clean
+        // retry; after that, fail the step so the repair loop rewrites it.
+        const retry = await ask([...promptLines, 'Important: output clean UTF-8 text only, with no corrupted or replacement characters.'].join('\n'))
+        if (retry.success) {
+            const retryText = cleanGeneratedFile(retry.text, step.path)
+            if (retryText && !retryText.includes('\uFFFD')) text = retryText
+        }
+        if (text.includes('\uFFFD')) return { success: false, error: `File generation for ${step.path} returned corrupted text (invalid characters) twice.` }
+    }
     if (!isHtml) return { success: true, text }
     const finished = finishHtml(text)
     if (finished) return { success: true, text: finished }
@@ -394,7 +407,7 @@ const generateFileContent = async (record, step, options = {}) => {
 // whole build died). Two defences: cap absurd majors for packages whose
 // real version line is well known, and — for anything else — rewrite the
 // exact package npm rejected to "*" and re-validate (fixUnresolvableDependencies).
-const DEPENDENCY_MAJOR_CAPS = { express: [5, '^4.19.2'], 'socket.io': [4, '^4.7.5'], dotenv: [16, '^16.4.5'], cors: [2, '^2.8.5'], morgan: [1, '^1.10.0'], nodemon: [3, '^3.1.0'] }
+const DEPENDENCY_MAJOR_CAPS = { express: [5, '^4.19.2'], 'socket.io': [4, '^4.7.5'], dotenv: [16, '^16.4.5'], cors: [2, '^2.8.5'], morgan: [1, '^1.10.0'], nodemon: [3, '^3.1.0'], 'passport-jwt': [4, '^4.0.1'] }
 const sanitizeDependencyVersions = pkg => {
     let changed = false
     for (const field of ['dependencies', 'devDependencies']) {
@@ -540,6 +553,18 @@ const executeStep = async (record, step, options = {}) => {
         if (fs.existsSync(target) && fs.statSync(target).isDirectory()) {
             return { success: false, output: `Cannot write a file over the directory ${step.path}; choose a file path inside it instead.` }
         }
+        // Never let corrupted content overwrite a good file: providers and
+        // repair steps occasionally return encoding-damaged or binary junk
+        // (one repair wrote raw garbage over a valid package.json, which
+        // then failed every later check with a package_json_reader error).
+        if (content.includes('\uFFFD')) {
+            return { success: false, output: `Refused to write ${step.path}: the content is corrupted (invalid characters). Rewrite it as clean UTF-8 text.` }
+        }
+        if (path.basename(target) === 'package.json') {
+            try { JSON.parse(content) } catch (error) {
+                return { success: false, output: `Refused to write ${step.path}: not valid JSON (${error.message}).` }
+            }
+        }
         try {
             fs.mkdirSync(path.dirname(target), { recursive: true })
             // Hosts like BeraHost assign the port (PORT env) and share it across
@@ -586,7 +611,7 @@ const executeStep = async (record, step, options = {}) => {
 const repair = async (record, failure, options) => {
     if ((record.repairs || []).length >= (options.maxRepairs ?? 2)) return { success: false, error: 'Repair limit reached.' }
     const context = `Project task: ${record.task}\nFailure output:\n${String(failure).slice(-10000)}\nProject inspection:\n${JSON.stringify(inspect(record.dir))}`
-    const repairPrompt = 'You are a senior software repair planner. Return one valid JSON object only: {"steps":[{"action":"write_file","path":"relative path from the project root","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. Every step action MUST be exactly one of "write_file", "mkdir", "build", "test", or "install"; choose one value and never put alternatives, pipes, or lists in action. The repair phase is local-only: never return deploy, publish, push, git, repository creation, or other external side-effect actions. Use mkdir only for a needed directory with a relative path. When validation says there is no runnable application entrypoint, the repair MUST write a complete root-level index.html with <!doctype html>, <html>, <body>, and a meaningful <main> section, or a root package.json with a working start/build script and its root application entrypoint. Do not write only src/index.html, a bare doctype, or placeholder content. Do not create an extra project/project_root wrapper directory. Use contentBase64 for source files, never a literal content field. Never delete files or use secrets.'
+    const repairPrompt = 'You are a senior software repair planner. Return one valid JSON object only: {"steps":[{"action":"write_file","path":"relative path from the project root","contentBase64":"base64 file content with no line breaks"}],"reason":"..."}. Every step action MUST be exactly one of "write_file", "mkdir", "build", "test", or "install"; choose one value and never put alternatives, pipes, or lists in action. The repair phase is local-only: never return deploy, publish, push, git, repository creation, or other external side-effect actions. Use mkdir only for a needed directory with a relative path. When validation says there is no runnable application entrypoint, the repair MUST write a complete root-level index.html with <!doctype html>, <html>, <body>, and a meaningful <main> section, or a root package.json with a working start/build script and its root application entrypoint. Do not write only src/index.html, a bare doctype, or placeholder content. Do not create an extra project/project_root wrapper directory. Use contentBase64 for source files, never a literal content field. Never delete files or use secrets. The project is plain CommonJS Node: never use ESM import syntax in .js files — use require/module.exports.'
     const result = await xcasper.chat([{ role: 'system', content: repairPrompt }, { role: 'user', content: context }], {
         timeout: 45000,
         maxChars: 20000,
@@ -752,6 +777,86 @@ const ensureRootPackageJson = record => {
     } catch { return null }
 }
 
+// Generated package.json files invent toolchain scripts the project
+// cannot run: a webpack "build" with no webpack config anywhere, or a
+// script whose binary is not even a dependency (guaranteed "not found").
+// Those scripts make validation fail for reasons that have nothing to do
+// with the app itself, so they are removed before validation. Scripts
+// backed by a real dependency or a real config file are kept.
+const BUNDLER_BINARIES = new Set(['webpack', 'rollup', 'vite', 'parcel', 'esbuild', 'tsc', 'browserify', 'gulp', 'grunt'])
+const BUNDLER_CONFIGS = ['webpack.config.js', 'webpack.config.cjs', 'rollup.config.js', 'vite.config.js', 'vite.config.ts', 'tsconfig.json', 'babel.config.js']
+const scriptBinary = raw => {
+    const tokens = String(raw || '').trim().split(/\s+/)
+    let i = 0
+    while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=[^\s]*$/.test(tokens[i])) i++
+    if (tokens[i] === 'npx') i++
+    return (tokens[i] || '').replace(/^.*\//, '')
+}
+const sanitizeGeneratedScripts = record => {
+    try {
+        const root = record.dir
+        const pkgPath = path.join(root, 'package.json')
+        if (!root || !fs.existsSync(pkgPath)) return []
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+        const deps = new Set([...Object.keys(pkg.dependencies || {}), ...Object.keys(pkg.devDependencies || {})])
+        const hasBundlerConfig = BUNDLER_CONFIGS.some(file => fs.existsSync(path.join(root, file)))
+        const removed = []
+        for (const key of ['build', 'test']) {
+            const raw = pkg?.scripts?.[key]
+            if (typeof raw !== 'string' || !raw.trim()) continue
+            const binary = scriptBinary(raw)
+            if (!binary || ['node', 'npm', 'npx', 'echo', 'true'].includes(binary)) continue
+            if (BUNDLER_BINARIES.has(binary) && !hasBundlerConfig) { delete pkg.scripts[key]; removed.push(key); continue }
+            if (!deps.has(binary)) { delete pkg.scripts[key]; removed.push(key) }
+        }
+        if (removed.length) {
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+            event(record, 'generated_scripts_sanitised', { removed })
+        }
+        return removed
+    } catch { return [] }
+}
+
+// Boot check: actually start the app and probe it over HTTP. Syntax and
+// install checks cannot see cross-file mistakes (server.js requiring
+// './db' when the file lives at src/db.js, a route importing a models
+// layer that was never written) — those apps "passed" validation and then
+// died on BeraHost with "web process exited before opening its port".
+// A failed boot gives the repair loop the real runtime error to fix.
+const bootCheck = async (record, rootScript, options = {}) => {
+    const port = 4300 + Math.floor(Math.random() * 400)
+    const timeoutMs = options.bootTimeout || 9000
+    let child = null
+    let output = ''
+    let exited = false
+    let exitCode = null
+    try {
+        child = spawn('node', [rootScript], {
+            cwd: record.dir,
+            env: { PATH: pathWithPackageManagers(), HOME: process.env.HOME || '/home/hatch', PORT: String(port), NODE_ENV: 'test' },
+            stdio: ['ignore', 'pipe', 'pipe'],
+        })
+        child.stdout.on('data', d => { output = (output + d).slice(-4000) })
+        child.stderr.on('data', d => { output = (output + d).slice(-4000) })
+        child.on('exit', code => { exited = true; exitCode = code })
+        const deadline = Date.now() + timeoutMs
+        while (Date.now() < deadline) {
+            if (exited) break
+            try {
+                const res = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(1200) })
+                if (res && res.status) return { success: true, output: `Server booted and answered HTTP ${res.status} on its assigned port.` }
+            } catch {}
+            await new Promise(resolve => setTimeout(resolve, 400))
+        }
+        if (exited) return { success: false, output: `Server exited during boot (code ${exitCode}): ${output.slice(-1200) || '(no output)'}` }
+        return { success: false, output: `Server did not answer HTTP within ${Math.round(timeoutMs / 1000)}s of booting: ${output.slice(-1200) || '(no output)'}` }
+    } catch (error) {
+        return { success: false, output: `Boot check could not start the server: ${error.message}` }
+    } finally {
+        try { child?.kill('SIGKILL') } catch {}
+    }
+}
+
 const validate = async (record, options = {}) => {
     const info = inspect(record.dir)
     const entrypoint = checkProjectEntrypoint(record.dir, info)
@@ -760,6 +865,7 @@ const validate = async (record, options = {}) => {
         if (entrypoint.rootScript) checks.push({ name: 'javascript-syntax', ...(await command(`node --check ${JSON.stringify(entrypoint.rootScript)}`, record.dir, options.syntaxTimeout || 30000)) })
         if (entrypoint.pythonEntrypoint) checks.push({ name: 'python-syntax', ...(await command(`python3 -m py_compile ${JSON.stringify(entrypoint.pythonEntrypoint)}`, record.dir, options.syntaxTimeout || 30000)) })
         if (info.manager) checks.push({ name: 'install', ...(await installProjectDependencies(info.manager, record.dir, options.installTimeout || 180000)) })
+        if (entrypoint.rootScript) checks.push({ name: 'boot', ...(await bootCheck(record, entrypoint.rootScript, options)) })
         if (info.buildCommand) checks.push({ name: 'build', ...(await command(info.buildCommand, record.dir, options.buildTimeout || 180000)) })
         if (info.testCommand) checks.push({ name: 'test', ...(await command(info.testCommand, record.dir, options.testTimeout || 120000)) })
     }
@@ -1053,8 +1159,18 @@ const run = async options => {
     }
     ensureRootPackageJson(record)
     ensureStartScript(record)
+    sanitizeGeneratedScripts(record)
     await notifyProgress(options, { phase: 'validation' })
     let validation = await validate(record, options)
+    // Deterministic dependency heals get their own rounds before any LLM
+    // repair is spent: npm reports only one bad package per install
+    // attempt, so a manifest with several invented versions/packages
+    // needs several heal-and-recheck cycles.
+    for (let heal = 0; !validation.success && heal < 4; heal++) {
+        const failureText = validation.checks.filter(c => !c.success).map(c => c.output).join('\n')
+        if (!fixUnresolvableDependencies(record, failureText)) break
+        validation = await validate(record, options)
+    }
     let repairError = null
     for (let attempt = 0; !validation.success && attempt < (options.maxRepairs ?? 2); attempt++) {
         await notifyProgress(options, { phase: 'repair', attempt: attempt + 1, total: options.maxRepairs ?? 2 })
@@ -1094,4 +1210,4 @@ const run = async options => {
     return { success: true, record, validation, screenshot: previewScreenshot }
 }
 
-module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson, sanitizeDependencyVersions, fixUnresolvableDependencies, ensureStartScript }
+module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, bootCheck, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson, sanitizeDependencyVersions, fixUnresolvableDependencies, ensureStartScript, sanitizeGeneratedScripts }
