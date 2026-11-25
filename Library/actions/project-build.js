@@ -2,8 +2,8 @@
 
 const looksLikeProjectBuild = text => {
     const value = String(text || '')
-    return /\b(build|create|make|develop|scaffold|code)\b[\s\S]{0,180}\b(app(?:lication)?|website|web\s*app|site|project|dashboard|tracker|tool)\b/i.test(value) ||
-        /\b(app|website|web\s*app|site|project|dashboard|tracker)\b[\s\S]{0,180}\b(build|create|make|develop|scaffold|code)\b/i.test(value)
+    return /\b(build|create|make|develop|scaffold|code)\b[\s\S]{0,180}\b(apps?|applications?|websites?|web\s*apps?|sites?|projects?|dashboards?|trackers?|tools?|systems?|platforms?|portals?|software)\b/i.test(value) ||
+        /\b(app|website|web\s*app|site|project|dashboard|tracker|system|platform|portal)\b[\s\S]{0,180}\b(build|create|make|develop|scaffold|code)\b/i.test(value)
 }
 
 const projectName = text => {

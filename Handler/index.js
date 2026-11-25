@@ -1142,7 +1142,7 @@ const handleMessage = async (conn, rawMsg) => {
                 // WhatsApp message actions (react/pin/unpin/edit/delete/poll/
                 // forward/send) are handled by agent-dispatch.dispatch() above.
 
-                if (intent === 'bh_clone') {
+                if (intent === 'bh_clone' && !projectBuild.looksLikeProjectBuild(text)) {
                     if (!isOwner) { await reply('Owner only.'); return }
                     const bh = require('../Library/actions/berahost')
                     const words = text.split(/\s+/)
