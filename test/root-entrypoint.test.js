@@ -58,3 +58,17 @@ test('fixUnresolvableDependencies rewrites exactly the packages npm rejected', (
     assert.equal(pkg.dependencies.dotenv, '^16.4.5')
     assert.equal(fixUnresolvableDependencies({ dir, name: 'x' }, 'some other failure'), 0)
 })
+
+const { executeStep } = require('../Library/actions/agent-os')
+
+test('executeStep rejects placeholder paths and directory targets instead of crashing', async () => {
+    const dir = tmpProject({ 'src/keep.js': 'module.exports = {}' })
+    const placeholder = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'relative_path_from_project_root', content: 'x' })
+    assert.equal(placeholder.success, false)
+    assert.match(placeholder.output, /placeholder/i)
+    const overDir = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'src', content: 'x' })
+    assert.equal(overDir.success, false)
+    assert.match(overDir.output, /directory/i)
+    const ok = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'src/new.js', content: 'module.exports = 1' })
+    assert.equal(ok.success, true)
+})
