@@ -43,6 +43,7 @@ const defaultData = {
     },
     stats: { totalCommands: 0, startedAt: Date.now() },
     reminders: [],
+    cronJobs: [],
     // Pending WhatsApp confirmation tokens (Library/lib/wa-actions.js):
     // { token, owner, action, createdAt, expiresAt }. Written on every
     // stage/consume/cancel and pruned of expired entries on boot, so a
