@@ -231,7 +231,7 @@ const parsePlannerJson = (raw, repairMalformed = false) => {
 }
 
 const makePlan = async (record, task, options = {}) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"mkdir","path":"relative path","contentBase64":"base64 file content with no line breaks","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Do not use secrets or delete files; prefer write_file for source changes; encode every file body as contentBase64, never use a literal content field; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
         timeout: 45000,
@@ -243,7 +243,7 @@ const makePlan = async (record, task, options = {}) => {
     if (!parsed.success) {
         await notifyProgress(options, { phase: 'planner_json_recovery' })
         const recovery = await xcasper.chat([
-            { role: 'system', content: 'Repair the malformed planner response into exactly one valid JSON object. Each steps[].action must be exactly one of write_file, mkdir, install, build, test, or shell; choose one value, never copy an alternatives list into the field. Use separate path, contentBase64, and command fields. Preserve the original plan and every value; do not invent or omit steps. Return JSON only, with all strings correctly escaped, no comments, no trailing commas, and no Markdown fences.' },
+            { role: 'system', content: 'Repair the malformed planner response into exactly one valid JSON object. Each steps[].action must be exactly one of write_file, mkdir, install, build, test, or shell; choose one value, never copy an alternatives list into the field. Use separate path, brief, and command fields. Preserve the original plan and every value; do not invent or omit steps. Return JSON only, with all strings correctly escaped, no comments, no trailing commas, and no Markdown fences.' },
             { role: 'user', content: `Original project task: ${String(task || record.task).slice(0, 4000)}\nMalformed planner response:\n${String(result.text || '').slice(-18000)}` }
         ], {
             timeout: 45000,
@@ -300,6 +300,40 @@ const makePlan = async (record, task, options = {}) => {
     return { success: true, plan }
 }
 
+const cleanGeneratedFile = (text, filePath) => {
+    let value = String(text || '').trim()
+    const fence = value.match(/^```[a-zA-Z0-9_-]*\n([\s\S]*?)\n?```$/)
+    if (fence) value = fence[1].trim()
+    // Xcasper sometimes rewrites URLs as Markdown links: [https://x](https://x)
+    value = value.replace(/\[((?:https?:\/\/)[^\]\s]+)\]\(\1\)/g, '$1')
+    if (/\.html?$/i.test(String(filePath || '')) && value && !value.startsWith('<')) {
+        const firstTag = value.indexOf('<')
+        if (firstTag > 0) value = value.slice(firstTag).trim()
+    }
+    return value
+}
+
+const generateFileContent = async (record, step, options = {}) => {
+    const brief = String(step.brief || step.reason || '').trim()
+    const prompt = [
+        `Write the complete file "${step.path}" for this project.`,
+        `Project task: ${String(record.task || '').slice(0, 2000)}`,
+        brief ? `File brief: ${brief}` : 'The file must fully serve the project task.',
+        'Write real content (real names, prices and text) — never placeholder or lorem ipsum, and never copy the task text into the file.',
+        'Return ONLY the complete file content: no explanations, no Markdown fences.'
+    ].join('\n')
+    const result = await xcasper.chat([{ role: 'user', content: prompt }], {
+        timeout: 90000,
+        providerTimeout: 90000,
+        maxChars: 8000,
+        onProviderProgress: progress => notifyProgress(options, { phase: 'file_provider', ...progress })
+    })
+    if (!result.success) return { success: false, error: `File generation failed for ${step.path}: ${result.error}` }
+    const text = cleanGeneratedFile(result.text, step.path)
+    if (!text) return { success: false, error: `File generation returned empty content for ${step.path}.` }
+    return { success: true, text }
+}
+
 const executeStep = async (record, step, options = {}) => {
     const root = record.dir
     const action = step.action
@@ -307,8 +341,18 @@ const executeStep = async (record, step, options = {}) => {
         const target = path.resolve(root, step.path || '')
         if (!inside(root, target)) return { success: false, output: 'Blocked path outside project workspace.' }
         if (action === 'mkdir') { fs.mkdirSync(target, { recursive: true }); return { success: true, output: `Created ${step.path}` } }
+        let content = typeof step.content === 'string' ? step.content : ''
+        if (!content.trim()) {
+            // Brief-based plans carry no file body: generate this one file
+            // in its own AI call. (A single planner response holding every
+            // file as base64 JSON is beyond what the providers return —
+            // plans came back with empty or trivial steps.)
+            const generated = await generateFileContent(record, step, options)
+            if (!generated.success) return { success: false, output: generated.error }
+            content = generated.text
+        }
         fs.mkdirSync(path.dirname(target), { recursive: true })
-        fs.writeFileSync(target, String(step.content || ''))
+        fs.writeFileSync(target, content)
         return { success: true, output: `Wrote ${step.path}` }
     }
     if (action === 'install') {
