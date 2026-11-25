@@ -385,6 +385,22 @@ const generateFileContent = async (record, step, options = {}) => {
     return { success: false, error: `File generation for ${step.path} stayed incomplete after several continuations (no closing </html> tag).` }
 }
 
+// Make a generated package.json start script honour the host-assigned PORT
+// env var instead of a hardcoded port. http-server ignores PORT unless -p is
+// passed, so a missing flag is added for it; serve reads PORT natively and is
+// left alone. Returns the original text when nothing needs changing.
+const normalizePackageJsonStart = content => {
+    let pkg
+    try { pkg = JSON.parse(String(content || '')) } catch { return content }
+    const start = pkg?.scripts?.start
+    if (typeof start !== 'string' || !start) return content
+    let next = start.replace(/(^|\s)(--port|-p|--listen|-l)(=|\s+)(\d+)\b/g, (m, pre, flag, sep, port) => `${pre}${flag}${sep}\${PORT:-${port}}`)
+    if (/\bhttp-server\b/.test(next) && !/(--port|-p)(=|\s)/.test(next)) next = `${next} -p \${PORT:-3000}`
+    if (next === start) return content
+    pkg.scripts.start = next
+    return JSON.stringify(pkg, null, 2)
+}
+
 const executeStep = async (record, step, options = {}) => {
     const root = record.dir
     const action = step.action
@@ -403,6 +419,11 @@ const executeStep = async (record, step, options = {}) => {
             content = generated.text
         }
         fs.mkdirSync(path.dirname(target), { recursive: true })
+        // Hosts like BeraHost assign the port (PORT env) and share it across
+        // tenants: a generated start script that hardcodes a port
+        // (http-server . -p 3000) dies with EADDRINUSE and the deployment
+        // fails. Normalise package.json start scripts to honour $PORT.
+        if (path.basename(target) === 'package.json') content = normalizePackageJsonStart(content)
         fs.writeFileSync(target, content)
         return { success: true, output: `Wrote ${step.path}` }
     }
@@ -887,4 +908,4 @@ const run = async options => {
     return { success: true, record, validation, screenshot: previewScreenshot }
 }
 
-module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits }
+module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart }

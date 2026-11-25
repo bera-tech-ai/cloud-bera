@@ -10,8 +10,16 @@ const projectName = text => {
     const value = String(text || '')
     const quoted = value.match(/\b(?:called|named)\s+(?:“([^”\n]{2,60})”|‘([^’\n]{2,60})’|"([^"\n]{2,60})"|'([^'\n]{2,60})')/i)
     const unquoted = value.match(/\b(?:called|named)\s+([a-z0-9][a-z0-9 _'-]{1,50}?)(?=\s+(?:and\s+(?:deploy|publish|push|launch|create|make|ask|validate|test)\b|with\b|including\b)|[.!?,]\s|$)/i)
-    const explicit = quoted?.slice(1).find(Boolean) || unquoted?.[1]
-    if (explicit) return explicit.trim().replace(/[.!?,;:]+$/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+    // "build a website for "Savannah Cuts"" / "for Savannah Cuts in Westlands":
+    // the business name often follows "for" instead of called/named.
+    const forQuoted = value.match(/\bfor\s+(?:“([^”\n]{2,60})”|‘([^’\n]{2,60})’|"([^"\n]{2,60})"|'([^'\n]{2,60})')/i)
+    const forCapitalised = value.match(/\bfor\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})/)
+    const anyQuoted = value.match(/(?:“([^”\n]{2,60})”|"([^"\n]{2,60})")/)
+    const raw = quoted?.slice(1).find(Boolean) || unquoted?.[1] || forQuoted?.slice(1).find(Boolean) || forCapitalised?.[1] || anyQuoted?.slice(1).find(Boolean)
+    if (raw) {
+        const slug = raw.trim().replace(/[.!?,;:]+$/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+        if (slug) return slug
+    }
     const hint = String(text || '').match(/\b(todo|task|expense|weather|portfolio|recipe|chat|blog|shop|tracker|dashboard|calculator|notes?)\b/i)?.[1]
     return `${(hint || 'bera').toLowerCase()}-app`
 }

@@ -65,3 +65,11 @@ test('validateRevisionEdits rejects missing, repeated, and unknown targets', () 
     assert.match(validateRevisionEdits(contents, []), /did not produce/)
     assert.match(validateRevisionEdits(contents, [{ file: 'index.html', replace: 'x' }]), /malformed/)
 })
+
+test('projectName reads a quoted business name after "for"', () => {
+    assert.equal(projectName('Agent, build me a website for "Savannah Cuts" barbershop in Westlands — dark and classy, gold accents. Deploy it.'), 'savannah-cuts')
+})
+
+test('projectName reads a capitalised business name after "for"', () => {
+    assert.equal(projectName('build a website for Savannah Cuts in Westlands with prices'), 'savannah-cuts')
+})
