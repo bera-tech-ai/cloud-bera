@@ -571,7 +571,7 @@ const validate = async (record, options = {}) => {
 }
 
 const checkpoint = async (record, message = 'checkpoint: Bera AI') => {
-    const result = await command(`git init && git config user.name "Bera AI" && git config user.email "bera-ai@users.noreply.github.com" && git add -A -- . ':!.env' ':!.env.*' ':!**/.env' ':!**/.env.*' ':!node_modules/**' ':!**/node_modules/**' ':!.bera-preview.log' ':!.bera-revisions/**' && (git diff --cached --quiet || git commit -m ${JSON.stringify(message)})`, record.dir, 120000)
+    const result = await command(`git init && git config user.name "Bera AI" && git config user.email "bera-ai@users.noreply.github.com" && git add -A -- . ':!.env' ':!.env.*' ':!**/.env' ':!**/.env.*' ':!node_modules/**' ':!**/node_modules/**' ':!.bera-preview.log' ':!.bera-revisions' ':!.bera-revisions/**' && (git diff --cached --quiet || git commit -m ${JSON.stringify(message)})`, record.dir, 120000)
     if (result.success) { record.checkpoint = { at: now(), message }; update(record, { stage: 'checkpointed', status: 'checkpointed' }); event(record, 'checkpoint', { message }) }
     return result
 }
@@ -609,6 +609,185 @@ const screenshot = async record => {
     return result
 }
 
+// ── Revisions: surgical edits to an existing project ─────────────────────
+// The model never rewrites a file. It returns exact find/replace patches
+// against the current content; the patches are verified (each "find" must
+// occur exactly once) and applied deterministically, the project is
+// re-validated, and any failure restores the backup untouched.
+const REVISION_TEXT_EXTENSIONS = new Set(['.html', '.htm', '.css', '.js', '.mjs', '.cjs', '.json', '.md', '.txt', '.svg', '.xml'])
+
+const listRevisionFiles = root => {
+    const files = []
+    const walk = dir => {
+        let entries = []
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+        for (const entry of entries) {
+            if (files.length >= 40) return
+            if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === '.bera-revisions') continue
+            const full = path.join(dir, entry.name)
+            if (entry.isDirectory()) { walk(full); continue }
+            if (!entry.isFile() || !REVISION_TEXT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue
+            try {
+                const stat = fs.statSync(full)
+                if (stat.size > 150000) continue
+                files.push({ path: path.relative(root, full).split(path.sep).join('/'), size: stat.size })
+            } catch {}
+        }
+    }
+    walk(root)
+    return files
+}
+
+const revisionWindows = (content, instruction, maxChars = 3600) => {
+    const stopwords = new Set(['the', 'and', 'for', 'with', 'change', 'update', 'edit', 'make', 'please', 'agent', 'that', 'this', 'from', 'into', 'your', 'then', 'than', 'them', 'they', 'what', 'when', 'should', 'would', 'could', 'about', 'there', 'their', 'have', 'been', 'will', 'just', 'like', 'want', 'need', 'site', 'website', 'page', 'project'])
+    const tokens = [...new Set(String(instruction || '').toLowerCase().match(/[a-z0-9$#][a-z0-9$#.'-]*/g) || [])].filter(t => t.length >= 3 && !stopwords.has(t))
+    const lower = content.toLowerCase()
+    const hits = []
+    for (const token of tokens) {
+        let idx = lower.indexOf(token)
+        while (idx >= 0 && hits.length < 60) { hits.push(idx); idx = lower.indexOf(token, idx + token.length) }
+    }
+    if (!hits.length) return []
+    hits.sort((a, b) => a - b)
+    const windows = []
+    let used = 0
+    for (const hit of hits) {
+        const start = Math.max(0, hit - 420)
+        const end = Math.min(content.length, hit + 420)
+        if (windows.some(w => start <= w.end)) continue
+        const text = content.slice(start, end)
+        if (used + text.length > maxChars) break
+        windows.push({ start, end, text })
+        used += text.length
+    }
+    return windows
+}
+
+const htmlOutline = content => {
+    const parts = []
+    for (const m of content.matchAll(/<title>([^<]{3,80})<\/title>/gi)) parts.push(`title: ${m[1].trim()}`)
+    for (const m of content.matchAll(/<(?:section|div|header|footer|nav|main)\b[^>]*\bid="([^"]+)"/gi)) parts.push(`section #${m[1]}`)
+    for (const m of content.matchAll(/<h([12])[^>]*>([^<]{3,80})<\/h\1>/gi)) parts.push(`heading: ${m[2].trim()}`)
+    return [...new Set(parts)].slice(0, 30)
+}
+
+// Pure check used before any file is touched: every edit must name a known
+// file and its "find" text must occur exactly once in that file's content.
+const validateRevisionEdits = (contentsByFile, edits) => {
+    if (!Array.isArray(edits) || !edits.length) return 'The editing model did not produce any usable edit.'
+    for (const edit of edits) {
+        if (!edit || typeof edit.find !== 'string' || typeof edit.replace !== 'string' || !edit.find) return 'The editing model returned a malformed edit.'
+        if (!Object.prototype.hasOwnProperty.call(contentsByFile, edit.file)) return `The editing model named an unknown file (${edit.file}).`
+        const occurrences = contentsByFile[edit.file].split(edit.find).length - 1
+        if (occurrences !== 1) return `The text to change was found ${occurrences} times in ${edit.file} (it must appear exactly once to edit it safely).`
+    }
+    return null
+}
+
+const reviseProject = async (record, options = {}) => {
+    const instruction = String(options.instruction || '').trim()
+    if (!instruction) return { success: false, error: 'No change was described.', record }
+    if (!record.dir || !fs.existsSync(record.dir)) return { success: false, error: 'The project files are missing.', record }
+    const files = listRevisionFiles(record.dir)
+    if (!files.length) return { success: false, error: 'No editable files were found in this project.', record }
+    await notifyProgress(options, { phase: 'revision_plan', projectId: record.id })
+    // Provider prompts travel in a GET query string, so the context must
+    // stay small: whole files only when they fit, otherwise exact keyword
+    // windows around the parts of the file the change likely touches.
+    const contexts = []
+    let budget = 4800
+    for (const file of files) {
+        if (budget <= 0) break
+        let content = ''
+        try { content = fs.readFileSync(path.join(record.dir, file.path), 'utf8') } catch { continue }
+        if (content.length <= Math.min(2200, budget)) {
+            contexts.push({ file: file.path, text: content })
+            budget -= content.length
+            continue
+        }
+        const windows = revisionWindows(content, instruction, Math.min(3400, budget))
+        if (windows.length) {
+            const text = windows.map(w => w.text).join('\n…[snip]…\n')
+            contexts.push({ file: file.path, text })
+            budget -= text.length
+            continue
+        }
+        if (/\.html?$/i.test(file.path)) {
+            const outline = htmlOutline(content)
+            if (outline.length) contexts.push({ file: file.path, text: outline.join('\n') })
+        }
+    }
+    if (!contexts.length) return { success: false, error: 'I could not find the part of the project that change refers to. Try naming the exact text or section to change.', record }
+    const prompt = [
+        `A user wants to change their existing project "${record.name}".`,
+        `Requested change: ${instruction.slice(0, 700)}`,
+        'Below are the current project files (whole files, or the exact regions the change likely touches).',
+        ...contexts.map(c => `\n=== FILE: ${c.file} ===\n${c.text}`),
+        '\nReturn ONLY a JSON object, no explanations: {"summary": "short description of the change", "edits": [{"file": "index.html", "find": "exact text copied from the file above", "replace": "the new text"}]}',
+        'Rules: "find" must be copied EXACTLY from the content above, character for character, and must appear exactly once in that file. Keep every edit as small as possible — change only what was asked, never rewrite unrelated content. To add new content, set "find" to a short unique anchor next to where it belongs and "replace" to the anchor plus the new content (or the new content plus the anchor). Use the file paths exactly as shown; do not invent files.'
+    ].join('\n')
+    const result = await xcasper.chat([{ role: 'user', content: prompt }], {
+        timeout: 90000,
+        providerTimeout: 90000,
+        maxChars: 16000,
+        onProviderProgress: progress => notifyProgress(options, { phase: 'revision_provider', ...progress })
+    })
+    if (!result.success) return { success: false, error: `The editing model failed: ${result.error}`, record }
+    const parsed = parsePlannerJson(result.text, true)
+    const edits = parsed?.success && Array.isArray(parsed.value.edits) ? parsed.value.edits : []
+    if (!edits.length) return { success: false, error: 'The editing model did not produce any usable edit. Try describing the change with the exact wording or section name.', record }
+    const contentsByFile = {}
+    for (const edit of edits) {
+        if (edit && typeof edit.file === 'string' && !Object.prototype.hasOwnProperty.call(contentsByFile, edit.file)) {
+            try { contentsByFile[edit.file] = fs.readFileSync(path.join(record.dir, edit.file), 'utf8') } catch { contentsByFile[edit.file] = '' }
+        }
+    }
+    // A named file outside the editable set (or outside the project dir)
+    // must never be touched.
+    for (const edit of edits) {
+        if (!edit || !files.some(f => f.path === edit.file)) return { success: false, error: `The editing model named a file that is not editable (${edit?.file}); nothing was changed.`, record }
+    }
+    const editError = validateRevisionEdits(contentsByFile, edits)
+    if (editError) return { success: false, error: `${editError} Nothing was changed.`, record }
+    const touched = [...new Set(edits.map(e => e.file))]
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    // Backups live OUTSIDE the project directory: an ignored backups folder
+    // inside the project makes `git add` fail at publish time, and editing
+    // must never add files (like a .gitignore) the user did not ask for.
+    const backupDir = path.join(getUserWorkspace(record.userId), '.bera-revisions', record.name, stamp)
+    try {
+        for (const rel of touched) {
+            const dest = path.join(backupDir, rel)
+            fs.mkdirSync(path.dirname(dest), { recursive: true })
+            fs.copyFileSync(path.join(record.dir, rel), dest)
+        }
+    } catch (error) {
+        return { success: false, error: `Could not back up the project before editing: ${error.message}`, record }
+    }
+    const restore = () => { for (const rel of touched) { try { fs.copyFileSync(path.join(backupDir, rel), path.join(record.dir, rel)) } catch {} } }
+    for (const edit of edits) {
+        const full = path.join(record.dir, edit.file)
+        const content = fs.readFileSync(full, 'utf8')
+        if (!content.includes(edit.find)) { restore(); return { success: false, error: 'Part of the change no longer matched the file, so the edit was reverted and nothing was changed.', record } }
+        // A function replacer keeps $-sequences in prices literal.
+        fs.writeFileSync(full, content.replace(edit.find, () => edit.replace))
+    }
+    await notifyProgress(options, { phase: 'validation', projectId: record.id })
+    const validation = await validate(record, options)
+    if (!validation.success) {
+        restore()
+        update(record, { status: 'validated', stage: 'revision_reverted' })
+        return { success: false, error: 'The change broke a project check, so it was reverted — the project is unchanged.', validation, record }
+    }
+    const summary = String(parsed.value.summary || 'Requested change applied.').slice(0, 300)
+    record.lastRevision = { at: now(), instruction: instruction.slice(0, 300), summary, files: touched, edits: edits.length }
+    event(record, 'revision', { summary, files: touched, edits: edits.length })
+    update(record, { status: 'revised', stage: 'revised' })
+    await checkpoint(record, `revision: ${summary}`.slice(0, 120))
+    const fresh = get(record.id) || record
+    return { success: true, record: fresh, revision: { summary, files: touched, edits: edits.length }, validation }
+}
+
 const run = async options => {
     const requestedAction = options.action || 'run'
     if ((requestedAction === 'publish' || (requestedAction === 'run' && (options.publish || options.deploy))) && options.ownerAuthorized !== true) {
@@ -622,6 +801,7 @@ const run = async options => {
     const action = requestedAction
     if (action === 'status') return { success: true, record }
     if (action === 'create') return { success: true, record }
+    if (action === 'revise') return reviseProject(record, options)
     if (action === 'plan') return makePlan(record, options.task || record.task, options)
     if (action === 'preview_start') return previewStart(record, options)
     if (action === 'preview_stop') return previewStop(record)
@@ -707,4 +887,4 @@ const run = async options => {
     return { success: true, record, validation, screenshot: previewScreenshot }
 }
 
-module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot }
+module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits }

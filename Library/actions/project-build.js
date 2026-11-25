@@ -29,6 +29,48 @@ const repositoryVisibilityFromRequest = text => {
     return requested
 }
 
+const REVISION_VERB = /\b(change|edit|update|revise|modify|add|remove|delete|replace|rename|fix|make)\b/i
+const normaliseProjectName = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+// The newest record per project name for this user (several builds of the
+// same project share one directory; the newest carries the live links).
+const userProjectsByName = userId => {
+    try {
+        const agentOs = require('./agent-os')
+        const byName = new Map()
+        for (const record of agentOs.list(userId)) {
+            if (!record?.name || !record?.dir) continue
+            const prev = byName.get(record.name)
+            if (!prev || String(record.updatedAt || record.createdAt || '') > String(prev.updatedAt || prev.createdAt || '')) byName.set(record.name, record)
+        }
+        return [...byName.values()]
+    } catch { return [] }
+}
+
+// A revision names an edit verb AND one of the user's existing projects
+// (full name, or its unique first word — "tembea", "swahili"). Build
+// requests ("build a new site called X") are never revisions.
+const parseProjectRevision = (text, projects) => {
+    const value = String(text || '')
+    if (!REVISION_VERB.test(value)) return null
+    if (/\b(build|create|scaffold)\b/i.test(value) && /\b(called|named|new)\b/i.test(value)) return null
+    const haystack = ` ${normaliseProjectName(value)} `
+    const matches = []
+    for (const project of projects || []) {
+        const name = normaliseProjectName(project.name)
+        if (!name) continue
+        if (haystack.includes(` ${name} `)) { matches.push({ project, score: 2 }); continue }
+        const first = name.split(' ')[0]
+        if (first.length >= 5 && haystack.includes(` ${first} `)) matches.push({ project, score: 1 })
+    }
+    if (!matches.length) return null
+    matches.sort((a, b) => b.score - a.score)
+    if (matches.length > 1 && matches[0].score === matches[1].score && matches[0].project.id !== matches[1].project.id) return null
+    return { project: matches[0].project, instruction: value }
+}
+
+const looksLikeProjectRevision = (text, userId) => Boolean(parseProjectRevision(text, userProjectsByName(userId)))
+
 const validationFailureDetails = (result = {}, record = {}) => {
     const checks = Array.isArray(result.validation?.checks) ? result.validation.checks : Array.isArray(record.checks) ? record.checks : []
     return checks.filter(check => !check.success).map(check => {
@@ -193,4 +235,129 @@ const runProjectBuild = async (text, { userId, conn, chat, message } = {}) => {
     return result
 }
 
-module.exports = { looksLikeProjectBuild, runProjectBuild, validationFailureDetails, repositoryVisibilityFromRequest, projectName }
+const runProjectRevision = async (text, { userId, conn, chat, message } = {}) => {
+    const agentOs = require('./agent-os')
+    const { addRequesterMention } = require('../lib/group-mentions')
+    const replyProgress = async content => {
+        if (conn?.sendMessage && chat) {
+            try {
+                await conn.sendMessage(chat, addRequesterMention(message, content), message ? { quoted: message } : {})
+            } catch {}
+        }
+    }
+    const projects = userProjectsByName(userId)
+    const parsed = parseProjectRevision(text, projects)
+    if (!parsed) {
+        const names = projects.map(p => p.name)
+        await replyProgress(names.length
+            ? `✏️ Which project should I change? You have: ${names.join(', ')}. Name the project and the change — e.g. "change the prices on ${names[0]}".`
+            : '✏️ You have no built projects yet — ask me to build one first.')
+        return { success: false, error: 'No matching project for the revision.' }
+    }
+    const target = parsed.project
+    const deployRequested = /\b(deploy|publish|launch\s+(?:it|the\s+app|the\s+site))\b/i.test(text)
+    const repoRequested = deployRequested || /\b(github|repository|repo|push\s+(?:the\s+)?(?:code|project|changes?))\b/i.test(text)
+    const repositoryVisibility = repositoryVisibilityFromRequest(text)
+    let requesterIsOwner = false
+    try { requesterIsOwner = Boolean(require('../../Auth').isAuthorized(userId)?.isOwner) } catch {}
+    await replyProgress(`✏️ Making that change to ${target.name} — editing the existing files, nothing else will be rewritten.`)
+    const progressSent = new Set()
+    const result = await agentOs.run({
+        action: 'revise',
+        projectId: target.id,
+        userId,
+        instruction: text,
+        onProgress: async progress => {
+            const milestones = {
+                revision_plan: '✏️ Finding the exact spot to change...',
+                validation: '🧪 Change applied; checking the project still works...'
+            }
+            const line = milestones[progress.phase]
+            if (!line || progressSent.has(line)) return
+            progressSent.add(line)
+            await replyProgress(line)
+        }
+    })
+    const record = result.record || target
+    if (!result.success) {
+        await replyProgress(`❌ I couldn't make that change: ${result.error || 'unknown error'}`)
+        return result
+    }
+    const buildValidated = Boolean(record.checkpoint) && (record.checks || []).length > 0 && (record.checks || []).every(check => check.success)
+    // Same approval model as builds: the owner saying "deploy it" in the
+    // same message is the approval; otherwise a prompt case is created.
+    const skipApproval = Boolean(deployRequested && requesterIsOwner && buildValidated)
+    let approvalCase = null
+    let directPublish = null
+    if (record.id && buildValidated && repoRequested) {
+        try {
+            const support = require('./project-support')
+            await support.registerProject(record, { userId, chat })
+            if (skipApproval) {
+                try {
+                    directPublish = await agentOs.run({ action: 'publish', projectId: record.id, userId, private: repositoryVisibility !== 'public', deploy: true, approveProduction: true, ownerAuthorized: true })
+                } catch (error) {
+                    directPublish = { success: false, error: error.message }
+                }
+                const updated = agentOs.get(record.id)
+                if (updated) {
+                    record.github = updated.github || record.github
+                    record.deployment = updated.deployment || record.deployment
+                }
+            } else {
+                approvalCase = await support.createBuildApproval(record, { userId, chat, requestedPublish: repoRequested, requestedDeploy: deployRequested, repositoryVisibility })
+            }
+        } catch (error) {
+            await replyProgress(`⚠️ Project memory/approval metadata could not be saved: ${error.message}`)
+        }
+    }
+    const parts = [
+        `✅ Change applied to ${record.name || record.id}.`,
+        result.revision?.summary ? `Change: ${result.revision.summary}` : null,
+        result.revision?.files?.length ? `Files changed: ${result.revision.files.join(', ')}` : null,
+        record.checks?.length ? `Checks: ${record.checks.map(c => `${c.name} ${c.success ? 'passed' : 'failed'}`).join(', ')}` : null,
+        record.github?.url ? `GitHub: ${record.github.url}` : null,
+        record.deployment?.url ? `Live site: ${record.deployment.url}` : null,
+        directPublish?.success ? '🚀 Updated site published and deployed as you asked — no separate approval needed.' : null,
+        directPublish && !directPublish.success ? `⚠️ You asked me to deploy it, but publishing/deployment did not finish: ${directPublish.error || 'unknown error'}` : null,
+        approvalCase ? `Owner approval is pending to publish this change. Reply directly to the separate approval prompt with 1 to approve or 2 to decline (case ${approvalCase.id}).` : null,
+        !approvalCase && !directPublish && buildValidated ? 'The change is saved and validated locally. Say "deploy it" when you want it live.' : null
+    ].filter(Boolean)
+    await replyProgress(parts.join('\n'))
+    if (approvalCase && conn?.sendMessage && chat) {
+        try {
+            const prompt = [
+                'Bera project approval request',
+                `Case ID: ${approvalCase.id}`,
+                `Project: ${record.name || record.id}`,
+                `Action: ${deployRequested ? 'GitHub publication and deployment' : 'GitHub publication'} (revision)`,
+                `Change: ${result.revision?.summary || text}`,
+                'The change was applied and validated locally. No repository push or deployment happens unless an authorized project owner approves.',
+                'Reply directly to this message with 1 to approve or 2 to decline.'
+            ].join('\n')
+            const sent = await conn.sendMessage(chat, { text: prompt }, message ? { quoted: message } : {})
+            const support = require('./project-support')
+            await support.recordApprovalPromptMessage(approvalCase.id, {
+                id: sent?.key?.id,
+                remoteJid: sent?.key?.remoteJid || chat
+            })
+        } catch {}
+    }
+    if (directPublish?.success && record.deployment?.url && conn?.sendMessage && chat) {
+        try {
+            const { takeScreenshot } = require('./browser')
+            const shot = await takeScreenshot(record.deployment.url)
+            if (shot.success && Buffer.isBuffer(shot.buffer)) {
+                const caption = `*${record.name || record.id}* (updated)\nLive: ${record.deployment.url}${record.github?.url ? `\nRepo: ${record.github.url}` : ''}`
+                await conn.sendMessage(chat, {
+                    image: shot.buffer,
+                    mimetype: shot.mimetype || 'image/png',
+                    ...addRequesterMention(message, caption, {}, 'caption')
+                }, message ? { quoted: message } : {})
+            }
+        } catch {}
+    }
+    return result
+}
+
+module.exports = { looksLikeProjectBuild, runProjectBuild, validationFailureDetails, repositoryVisibilityFromRequest, projectName, looksLikeProjectRevision, parseProjectRevision, runProjectRevision, userProjectsByName }

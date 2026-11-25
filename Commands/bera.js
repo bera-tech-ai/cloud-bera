@@ -144,6 +144,17 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
 
     if (!imageBuffer) {
         const projectBuild = require('../Library/actions/project-build')
+        if (projectBuild.looksLikeProjectRevision(text, sender)) {
+            await react(conn, m, '✏️')
+            try {
+                const result = await projectBuild.runProjectRevision(text, { userId: sender, conn, chat: m.chat, message: m })
+                await react(conn, m, result.success ? '✅' : '⚠️')
+                return result
+            } catch (e) {
+                await react(conn, m, '❌')
+                return reply(`❌ Project revision failed: ${e.message}`)
+            }
+        }
         if (projectBuild.looksLikeProjectBuild(text)) {
             await react(conn, m, '🏗️')
             try {
@@ -2190,6 +2201,17 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, isOwner }
             `Files go to *./workspace/*. I work step by step until done.`
         )
         const projectBuild = require('../Library/actions/project-build')
+        if (projectBuild.looksLikeProjectRevision(text, sender)) {
+            try {
+                await react(conn, m, '✏️')
+                const result = await projectBuild.runProjectRevision(text, { userId: sender, conn, chat: m.chat, message: m })
+                await react(conn, m, result.success ? '✅' : '⚠️')
+                return result
+            } catch (e) {
+                await react(conn, m, '❌')
+                return reply(`❌ Project revision failed: ${e.message}`)
+            }
+        }
         if (projectBuild.looksLikeProjectBuild(text)) {
             try {
                 await react(conn, m, '🏗️')
