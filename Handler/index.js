@@ -3070,7 +3070,7 @@ const handleMessage = async (conn, rawMsg) => {
                         await reply(`╭══〘 *🚀 PROJECT READY* 〙═⊷\n┃ Name: *${r.name}*\n┃ Port: *${r.port}*\n┃ Dir: ${r.dir}\n┃\n┃ ${r.steps.map(s=>`${s.ok?'✅':'❌'} ${s.step}`).join(' | ')}\n┃\n┃ 📋 Logs: say "pm2 logs ${r.name}"\n┃ 🔄 Restart: say "restart ${r.name}"\n╰══════════════════⊷`)
                     } else {
                         await react('❌')
-                        await reply('❌ Project creation failed.')
+                        await reply(`❌ *${nm}* was not started${r.failedStep ? ` — the "${r.failedStep}" step failed` : ''}. It is not running. Steps: ${r.steps.map(s=>`${s.ok?'✅':'❌'} ${s.step}`).join(' | ')}`)
                     }
                     return
                 }

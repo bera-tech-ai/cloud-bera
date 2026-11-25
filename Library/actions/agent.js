@@ -418,7 +418,12 @@ app.listen(PORT, () => console.log(\`${name} running on port \${PORT}\`))
     steps.push({ step: 'npm install', ok: r.success, out: r.output.slice(0, 200) })
     r = await runShell(`pm2 delete ${safeName} 2>/dev/null; pm2 start ${projDir}/index.js --name ${safeName}`)
     steps.push({ step: 'pm2 start', ok: r.success, out: r.output.slice(0, 300) })
-    return { success: true, name: safeName, dir: projDir, port, steps }
+    // Truthful status: a project whose start step failed is NOT ready,
+    // whatever the earlier steps did. This used to return success:true
+    // unconditionally, so WhatsApp showed "🚀 PROJECT READY" over a
+    // ❌ pm2 start (the owner's ShopAPI, 2026-11-25).
+    const failedStep = steps.find(s => !s.ok)
+    return { success: !failedStep, failedStep: failedStep?.step || null, name: safeName, dir: projDir, port, steps }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
