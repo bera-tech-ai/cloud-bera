@@ -1,6 +1,9 @@
 // XADON V12 · MEDIACACHE — disk+memory vault for incoming media.
 // Every incoming image/video/audio/document/sticker is snapshotted (best-effort,
-// size-capped) so .deleted / .quoted / .deletedp can resurrect it AFTER deletion.
+// size-capped) so .deleted / .quoted / .deletedp can show it AFTER deletion —
+// but only for messages this bot received, and only when deleted recovery is
+// explicitly opted in (Phase 4, spec §25; see Library/lib/recovery-gate.js).
+// Nothing here fetches content from WhatsApp after deletion.
 // Memory holds hot buffers; disk (database/mediacache/) survives restarts.
 // Zero extra npm deps. Fully failure-proof: every step is guarded.
 const fs = require('fs');

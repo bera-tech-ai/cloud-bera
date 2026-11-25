@@ -19,9 +19,13 @@ const fakeBaileys = {
 
 const createFakePool = () => {
     const rows = new Map()
+    const seenSql = []
     const keyFor = (sid, type, id) => `${sid}\u0000${type}\u0000${id}`
     const query = async (sql, params = []) => {
-        const text = String(sql).trim().toUpperCase()
+        seenSql.push(String(sql))
+        // Phase 4: table names are schema-qualified ("berahost"."bera_whatsapp_auth").
+        // Match on the table name with the qualifier and quoting stripped.
+        const text = String(sql).trim().toUpperCase().replace(/"[^"]+"\./g, '').replace(/"/g, '')
         if (text.startsWith('CREATE TABLE')) return { rows: [] }
         if (text.startsWith('SELECT PAYLOAD')) {
             const row = rows.get(keyFor(...params))
@@ -49,6 +53,7 @@ const createFakePool = () => {
     }
     return {
         rows,
+        seenSql,
         query,
         connect: async () => ({ query, release() {} })
     }
@@ -134,4 +139,12 @@ test('refuses database-backed auth storage without a strong encryption key', asy
         createPostgresAuthState({ pool, encryptionKey: 'short', legacyState: makeLegacyState(), baileys: fakeBaileys }),
         /BERA_SESSION_ENCRYPTION_KEY/
     )
+})
+
+test('Phase 4: auth table is schema-qualified (berahost), never bare public', async () => {
+    const pool = createFakePool()
+    await createPostgresAuthState({ pool, encryptionKey, legacyState: makeLegacyState(), baileys: fakeBaileys })
+    assert.ok(pool.seenSql.some(sql => sql.includes('"berahost"."bera_whatsapp_auth"')),
+        `expected a qualified auth table reference, saw: ${pool.seenSql.join(' | ').slice(0, 400)}`)
+    assert.equal(pool.seenSql.some(sql => /(^|\s)bera_whatsapp_auth(\s|\(|$)/.test(sql) && !sql.includes('"berahost"')), false)
 })
