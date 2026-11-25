@@ -102,3 +102,22 @@ test('the arrival media cache round-trips bytes and metadata', () => {
     delete process.env.BERA_VIEWONCE_MEDIA_DIR
     delete require.cache[cachePath]
 })
+
+test('latestForChat returns the newest matching raw message for a chat', () => {
+    const fs = require('node:fs')
+    const os = require('node:os')
+    const path = require('node:path')
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'vo-store2-')), 'store.json')
+    process.env.BERA_VIEWONCE_STORE_FILE = file
+    const storePath = require.resolve('../Library/lib/view-once-store')
+    delete require.cache[storePath]
+    const store = require(storePath)
+    const { isViewOnceMessage } = require('../Library/lib/baileys-media')
+    store.remember({ key: { remoteJid: '9@g.us', id: 'OLD' }, message: { conversation: 'hi' } })
+    store.remember({ key: { remoteJid: '9@g.us', id: 'VO' }, message: { viewOnceMessage: { message: { imageMessage: {} } } } })
+    const hit = store.latestForChat('9@g.us', raw => isViewOnceMessage(raw?.message))
+    assert.equal(hit.key.id, 'VO')
+    assert.equal(store.latestForChat('other@g.us'), null)
+    delete process.env.BERA_VIEWONCE_STORE_FILE
+    delete require.cache[storePath]
+})

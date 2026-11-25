@@ -1,7 +1,7 @@
 'use strict'
 
 const config = require('../Config')
-const { findMedia, extractViewOnceText, downloadMediaContent, downloadViewOnceFirst, buildResendPayload } = require('../Library/lib/baileys-media')
+const { findMedia, extractViewOnceText, isViewOnceMessage, downloadMediaContent, downloadViewOnceFirst, buildResendPayload } = require('../Library/lib/baileys-media')
 const rawStore = require('../Library/lib/view-once-store')
 // Phase 4 (spec §25): view-once recovery is disabled by default. Only an
 // explicit owner opt-in (BERA_ALLOW_VIEWONCE_RECOVERY=1 or the
@@ -107,12 +107,23 @@ module.exports = {
     run: async (sock, message, args, ctx) => {
         const command = String(ctx.command || 'vv').toLowerCase()
         const chat = ctx.jid || message.key?.remoteJid
-        const quoted = message.quoted
+        let quoted = message.quoted
         // Phase 4 (spec §25): no arbitrary view-once recovery. When the gate
         // is off, say so in the standard format and stop — do not download
         // or re-send anything.
         if (!isViewOnceRecoveryAllowed()) return ctx.reply(VIEWONCE_RECOVERY().card)
-        if (!quoted) return ctx.reply('❌ Reply to the view-once media with .vv or .vvsave.')
+        // No quote? Fall back to the most recent view-once in this chat —
+        // that is how the command is naturally used ("just .vvdm").
+        if (!quoted) {
+            try {
+                const latest = rawStore.latestForChat(chat, raw => isViewOnceMessage(raw?.message))
+                if (latest) {
+                    message = { ...message, quoted: { key: latest.key, message: latest.message, sender: latest.key?.participant || latest.key?.remoteJid } }
+                    quoted = message.quoted
+                }
+            } catch {}
+        }
+        if (!message.quoted) return ctx.reply('❌ Reply to the view-once media with .vv or .vvsave — or send .vvdm after a view-once arrives in this chat.')
 
         try {
             const recovery = await recover(sock, message, ctx)
