@@ -540,7 +540,7 @@ const run = async options => {
             sourceDir: record.dir,
             type: options.type || 'node',
             description: record.task,
-            private: options.private !== false,
+            private: options.private === true,
             deploy: options.deploy !== false,
             environment: options.environment,
             approveProduction: options.approveProduction,

@@ -165,7 +165,7 @@ const createCase = async ({ project, sender, chat, description, evidence }) => {
     return entry
 }
 
-const createBuildApproval = async (record, { userId, chat, requestedPublish = false, requestedDeploy = false, repositoryVisibility = 'private' } = {}) => {
+const createBuildApproval = async (record, { userId, chat, requestedPublish = false, requestedDeploy = false, repositoryVisibility = 'public' } = {}) => {
     if (!requestedPublish && !requestedDeploy) return null
     const project = await registerProject(record, { userId, chat })
     const sourceDir = path.resolve(record.dir)

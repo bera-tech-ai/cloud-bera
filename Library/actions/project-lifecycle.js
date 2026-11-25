@@ -153,7 +153,7 @@ const validateExistingRepository = (repo, owner, repoName, isPrivate) => {
     return repo
 }
 
-const getOrCreateRepository = async (owner, repoName, { isPrivate = true, description = '' } = {}) => {
+const getOrCreateRepository = async (owner, repoName, { isPrivate = false, description = '' } = {}) => {
     const existing = await github.getRepo(owner, repoName)
     if (!existing?.error) return validateExistingRepository(existing, owner, repoName, isPrivate)
     if (existing.status !== 404) throw new Error(describeGitHubError('GitHub repository lookup failed', existing))
@@ -222,7 +222,11 @@ const lifecycle = async (options = {}) => {
         let repo = options.repoUrl ? { html_url: options.repoUrl, clone_url: options.repoUrl } : null
         if (!repo) {
             repo = await getOrCreateRepository(owner, repoName, {
-                isPrivate: options.private !== false,
+                // Public by default: BeraHost has no GitHub account connected
+                // (GET /github/status → connected: false), so it can only clone
+                // public repositories. Pass private: true explicitly to keep a
+                // repo private (it then cannot deploy on BeraHost).
+                isPrivate: options.private === true,
                 description: options.description || `Project ${name} created by Bera AI`
             })
         }
@@ -248,7 +252,7 @@ const lifecycle = async (options = {}) => {
                 })
                 if (!deployment.success) {
                     const deploymentError = String(deployment.error || 'unknown error')
-                    const repoIsPrivate = typeof repo.private === 'boolean' ? repo.private : options.private !== false
+                    const repoIsPrivate = typeof repo.private === 'boolean' ? repo.private : options.private === true
                     const privateCloneHint = repoIsPrivate && /404|not found|download failed/i.test(deploymentError)
                         ? ' The GitHub repository is private, and Bera’s BeraHost request does not configure a dedicated GitHub clone credential. This 404 is consistent with BeraHost lacking access. Bera kept the repository private; configure BeraHost’s supported private-repository access or explicitly approve making the source public.'
                         : ''

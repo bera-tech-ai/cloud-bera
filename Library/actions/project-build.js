@@ -20,7 +20,10 @@ const repositoryVisibilityFromRequest = text => {
     const value = String(text || '').toLowerCase()
     const visibility = value.match(/\b(public|private)\s+(?:github\s+)?(?:repo|repository)\b|\b(?:github\s+)?(?:repo|repository)\s+(?:be\s+)?(public|private)\b/)
     const explicitChoice = value.match(/\b(?:make|set|keep)\s+(?:it|the\s+(?:github\s+)?(?:repo|repository))\s+(public|private)\b/)
-    if (!visibility && !explicitChoice) return 'private'
+    // Public by default: BeraHost has no GitHub account connected, so it can
+    // only clone public repositories. An explicit "private" request is still
+    // honoured (that repo then cannot deploy on BeraHost).
+    if (!visibility && !explicitChoice) return 'public'
     const requested = visibility?.[1] || visibility?.[2] || explicitChoice?.[1]
     if (requested === 'public' && /\b(?:don't|do not|dont|never)\b[\s\S]{0,40}\bpublic\b/.test(value)) return 'private'
     return requested
