@@ -41,7 +41,7 @@ const notifyProgress = async (options, progress) => {
 const safe = value => String(value || 'project').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'project'
 const load = () => { try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) } catch { return { projects: {}, events: [] } } }
 const save = state => { fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true }); fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2)) }
-const update = (record, patch) => { Object.assign(record, patch, { updatedAt: now() }); const s = load(); s.projects[record.id] = record; save(s); return record }
+const update = (record, patch) => { Object.assign(record, patch, { updatedAt: now() }); if (!record?.id) return record; const s = load(); s.projects[record.id] = record; save(s); return record }
 const projectRoot = (userId, name) => path.join(getUserWorkspace(userId), 'projects', safe(name))
 const inside = (root, target) => { const r = path.resolve(root), t = path.resolve(target); return t === r || t.startsWith(`${r}${path.sep}`) }
 
@@ -245,7 +245,7 @@ const parsePlannerJson = (raw, repairMalformed = false) => {
 }
 
 const makePlan = async (record, task, options = {}) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Stack contract for ANY server app or system: the plan MUST include a package.json at the project ROOT whose start script runs a server entrypoint file that is ALSO at the project ROOT (server.js) — never put the only entrypoint inside src/. Use ONLY plain Node.js (built-in http or Express) with static HTML/CSS/JS; never use Vue, React, Angular, Svelte, TypeScript, .vue/.jsx/.tsx files, SQL schema files, bundlers, or any build/compilation step — the app is deployed exactly as written. Never invent deployment tools or commands (no surf, vercel, netlify, or firebase CLIs). Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Stack contract for ANY server app or system: the plan MUST include a package.json at the project ROOT whose start script runs a server entrypoint file that is ALSO at the project ROOT (server.js) — never put the only entrypoint inside src/. Use ONLY plain Node.js (built-in http or Express) with static HTML/CSS/JS; never use Vue, React, Angular, Svelte, TypeScript, .vue/.jsx/.tsx files, SQL schema files, bundlers, or any build/compilation step — the app is deployed exactly as written. Never invent deployment tools or commands (no surf, vercel, netlify, or firebase CLIs). Dependency versions: only use real, well-known versions (express ^4.19.2, dotenv ^16.4.5, cors ^2.8.5); never invent a version number — if unsure, use "*" as the version. Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
         timeout: 45000,
@@ -389,11 +389,50 @@ const generateFileContent = async (record, step, options = {}) => {
 // env var instead of a hardcoded port. http-server ignores PORT unless -p is
 // passed, so a missing flag is added for it; serve reads PORT natively and is
 // left alone. Returns the original text when nothing needs changing.
+// Generators routinely invent dependency versions that do not exist
+// (express@^17 was written for EduTrack — npm answered ETARGET and the
+// whole build died). Two defences: cap absurd majors for packages whose
+// real version line is well known, and — for anything else — rewrite the
+// exact package npm rejected to "*" and re-validate (fixUnresolvableDependencies).
+const DEPENDENCY_MAJOR_CAPS = { express: [5, '^4.19.2'], 'socket.io': [4, '^4.7.5'], dotenv: [16, '^16.4.5'], cors: [2, '^2.8.5'], morgan: [1, '^1.10.0'], nodemon: [3, '^3.1.0'] }
+const sanitizeDependencyVersions = pkg => {
+    let changed = false
+    for (const field of ['dependencies', 'devDependencies']) {
+        for (const [name, range] of Object.entries(pkg?.[field] || {})) {
+            const cap = DEPENDENCY_MAJOR_CAPS[name]
+            if (!cap || typeof range !== 'string') continue
+            const major = Number(range.replace(/^[^0-9]*/, '').split('.')[0])
+            if (Number.isFinite(major) && major > cap[0]) { pkg[field][name] = cap[1]; changed = true }
+        }
+    }
+    return changed
+}
+const fixUnresolvableDependencies = (record, failureText) => {
+    const names = [...String(failureText || '').matchAll(/No matching version found for ([^@\s]+)@/g)].map(match => match[1])
+    if (!names.length || !record?.dir) return 0
+    const pkgPath = path.join(record.dir, 'package.json')
+    if (!fs.existsSync(pkgPath)) return 0
+    let pkg
+    try { pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) } catch { return 0 }
+    let fixed = 0
+    for (const field of ['dependencies', 'devDependencies']) {
+        for (const name of names) {
+            if (pkg?.[field]?.[name] && pkg[field][name] !== '*') { pkg[field][name] = '*'; fixed++ }
+        }
+    }
+    if (fixed) {
+        fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+        event(record, 'unresolvable_dependency_fixed', { names })
+    }
+    return fixed
+}
+
 const normalizePackageJsonStart = content => {
     let pkg
     try { pkg = JSON.parse(String(content || '')) } catch { return content }
+    const depsChanged = sanitizeDependencyVersions(pkg)
     const start = pkg?.scripts?.start
-    if (typeof start !== 'string' || !start) return content
+    if (typeof start !== 'string' || !start) return depsChanged ? JSON.stringify(pkg, null, 2) : content
     let next = start
     let changed = false
     if (/\bhttp-server\b/.test(next)) {
@@ -422,7 +461,7 @@ const normalizePackageJsonStart = content => {
         next = start.replace(/(^|\s)(--port|-p|--listen|-l)(=|\s+)(\d+)\b/g, (m, pre, flag, sep, port) => `${pre}${flag}${sep}\${PORT:-${port}}`)
         changed = next !== start
     }
-    if (!changed) return content
+    if (!changed && !depsChanged) return content
     pkg.scripts.start = next
     return JSON.stringify(pkg, null, 2)
 }
@@ -949,7 +988,13 @@ const run = async options => {
     let repairError = null
     for (let attempt = 0; !validation.success && attempt < (options.maxRepairs ?? 2); attempt++) {
         await notifyProgress(options, { phase: 'repair', attempt: attempt + 1, total: options.maxRepairs ?? 2 })
-        const fixed = await repair(record, validation.checks.filter(c => !c.success).map(c => c.output).join('\n'), options)
+        const failureText = validation.checks.filter(c => !c.success).map(c => c.output).join('\n')
+        if (fixUnresolvableDependencies(record, failureText)) {
+            validation = await validate(record, options)
+            repairError = validation.success ? null : `Dependency versions were corrected but validation still fails: ${validation.checks.filter(check => !check.success).map(check => check.output).join('\\n')}`
+            continue
+        }
+        const fixed = await repair(record, failureText, options)
         if (!fixed.success) { repairError = fixed.error || 'Automatic repair failed.'; continue }
         validation = await validate(record, options)
         repairError = validation.success ? null : `Repair steps ran but validation still fails: ${validation.checks.filter(check => !check.success).map(check => check.output).join('\n')}`
@@ -979,4 +1024,4 @@ const run = async options => {
     return { success: true, record, validation, screenshot: previewScreenshot }
 }
 
-module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson }
+module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson, sanitizeDependencyVersions, fixUnresolvableDependencies }
