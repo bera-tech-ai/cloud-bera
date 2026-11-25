@@ -679,28 +679,47 @@ const repair = async (record, failure, options) => {
         const actionOptions = allActionOptions.filter(action => !externalActions.has(action))
         if (!actionOptions.length && blockedActions.length) continue
         const hasContent = Boolean(rawStep.contentBase64 || (typeof rawStep.content === 'string' && rawStep.content.length))
-        const action = actionOptions.length === 1
+        let action = actionOptions.length === 1
             ? actionOptions[0]
             : hasContent && actionOptions.includes('write_file') ? 'write_file'
                 : !hasContent && actionOptions.includes('mkdir') && actionOptions.includes('write_file') ? 'mkdir' : ''
+        // Planners sometimes glue the target into the action itself
+        // ("mkdir db" — the repair that died for EduTrack build #9).
+        // Split a leading known verb off and use the rest as the path
+        // when the step carries none of its own.
+        let gluedPath = ''
+        if (!action && allActionOptions.length === 1) {
+            const glued = allActionOptions[0]
+            for (const verb of ['write_file', 'mkdir', 'install', 'build', 'test']) {
+                if (glued.startsWith(verb + '_')) { action = verb; gluedPath = glued.slice(verb.length + 1).replace(/_/g, '/'); break }
+            }
+        }
+        // An unusable step is skipped, never fatal: one bad step must not
+        // kill a repair whose other steps are the actual fix. Validation
+        // after the repair judges whether enough was done.
         if (!['write_file', 'mkdir', 'build', 'test', 'install'].includes(action)) {
-            return { success: false, error: `Repair planner returned an unsupported or ambiguous action at step ${index + 1} (${JSON.stringify(rawAction.slice(0, 100))}).` }
+            await notifyProgress(options, { phase: 'repair_step_skipped', index: index + 1, action: rawAction.slice(0, 60), reason: 'unsupported or ambiguous action' })
+            continue
         }
         const step = {
             ...rawStep,
             action,
+            path: rawStep.path || gluedPath || rawStep.path,
             content: rawStep.contentBase64 && !rawStep.content
                 ? Buffer.from(String(rawStep.contentBase64).replace(/\s+/g, ''), 'base64').toString('utf8')
                 : rawStep.content
         }
         if (action === 'write_file' && (!String(step.path || '').trim() || typeof step.content !== 'string' || !step.content.length)) {
-            return { success: false, error: `Repair planner returned an incomplete write_file step at step ${index + 1}.` }
+            await notifyProgress(options, { phase: 'repair_step_skipped', index: index + 1, action, reason: 'incomplete write_file step' })
+            continue
         }
         if (action === 'mkdir' && !String(step.path || '').trim()) {
-            return { success: false, error: `Repair planner returned an incomplete mkdir step at step ${index + 1}.` }
+            await notifyProgress(options, { phase: 'repair_step_skipped', index: index + 1, action, reason: 'mkdir step without a path' })
+            continue
         }
         if (['write_file', 'mkdir'].includes(action) && !inside(record.dir, path.resolve(record.dir, step.path))) {
-            return { success: false, error: `Repair planner requested a path outside the project workspace at step ${index + 1}.` }
+            await notifyProgress(options, { phase: 'repair_step_skipped', index: index + 1, action, reason: 'path outside the project workspace' })
+            continue
         }
         normalizedSteps.push(step)
     }
