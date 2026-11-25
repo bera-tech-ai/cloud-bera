@@ -2,7 +2,7 @@
 
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const { parseProjectRevision } = require('../Library/actions/project-build')
+const { parseProjectRevision, explicitRepoName, projectName } = require('../Library/actions/project-build')
 const { validateRevisionEdits } = require('../Library/actions/agent-os')
 
 const projects = [
@@ -38,6 +38,17 @@ test('revision parser refuses an ambiguous first-word match', () => {
     assert.equal(parseProjectRevision('update tembea', ambiguous), null)
     const exact = parseProjectRevision('update tembea tours', ambiguous)
     assert.equal(exact.project.id, 'b')
+})
+
+test('explicitRepoName reads a named repository from the request', () => {
+    assert.equal(explicitRepoName('Create a private GitHub repository named kijani-coffee-site, push the code'), 'kijani-coffee-site')
+    assert.equal(explicitRepoName('build a site called Kijani Coffee and deploy it'), null)
+    assert.equal(explicitRepoName('push it to a repo called my-app'), 'my-app')
+})
+
+test('projectName survives a comma after the name', () => {
+    assert.equal(projectName('build a website for a bakery called Tamu Bakes, with a hero and prices'), 'tamu-bakes')
+    assert.equal(projectName('build a website called Kijani Coffee. Include a hero section'), 'kijani-coffee')
 })
 
 test('validateRevisionEdits accepts an exact-once edit', () => {
