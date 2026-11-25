@@ -103,6 +103,16 @@ const parseImageQuestion = (input) => {
     return null
 }
 
+// "open this view once" / "reveal the view once" / bare "vv" — the user is
+// asking to reveal a quoted view-once message. Returns true on a match.
+const parseViewOnceReveal = (input) => {
+    const text = stripTrigger(input).trim().toLowerCase()
+    if (/^\.?vv2?$/.test(text) || /^rvo$/.test(text)) return true
+    if (/\bview[\s-]?once\b/.test(text) && /\b(open|reveal|show|see|save|download|unlock|get|send|resend|check|display)\b/.test(text)) return true
+    if (/\b(reveal|open|unlock|show)\b/.test(text) && /\bview[\s-]?once\b/.test(text)) return true
+    return false
+}
+
 // "from now on use voice to communicate" / "talk to me in voice" — a
 // persistent reply mode, not a one-off voice note (that's parseSayInVoice).
 // Returns { on: true | false }. Checked before parseSayInVoice because
@@ -122,4 +132,4 @@ const parseVoiceMode = (input) => {
     return null
 }
 
-module.exports = { parseMovieLookupTitle, parseWebSearchQuery, isGitHubStatusQuery, parseGroupInactiveRequest, parseMemberSearch, parseSayInVoice, parseImageQuestion, parseVoiceMode }
+module.exports = { parseMovieLookupTitle, parseWebSearchQuery, isGitHubStatusQuery, parseGroupInactiveRequest, parseMemberSearch, parseSayInVoice, parseImageQuestion, parseVoiceMode, parseViewOnceReveal }
