@@ -326,12 +326,25 @@ const groupAnalyzer = async (conn, chat) => {
 //  NPM TOOLS
 // ══════════════════════════════════════════════════════════════════════════════
 
+let _egressAgent = null
+const egressAgent = () => {
+    if (_egressAgent) return _egressAgent
+    try {
+        const { HttpsProxyAgent } = require('https-proxy-agent')
+        const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || 'http://hatch-egress-proxy:3128'
+        if (proxyUrl) _egressAgent = new HttpsProxyAgent(proxyUrl)
+    } catch {}
+    return _egressAgent || undefined
+}
+
 const npmStats = async (pkg) => {
     try {
+        const agent = egressAgent()
+        const httpOpts = { timeout: 30000, ...(agent ? { httpsAgent: agent, httpAgent: agent } : {}) }
         const [weekly, monthly, info] = await Promise.all([
-            axios.get(`https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(pkg)}`, { timeout: 10000 }),
-            axios.get(`https://api.npmjs.org/downloads/point/last-month/${encodeURIComponent(pkg)}`, { timeout: 10000 }),
-            axios.get(`https://registry.npmjs.org/${encodeURIComponent(pkg)}`, { timeout: 10000 })
+            axios.get(`https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(pkg)}`, httpOpts),
+            axios.get(`https://api.npmjs.org/downloads/point/last-month/${encodeURIComponent(pkg)}`, httpOpts),
+            axios.get(`https://registry.npmjs.org/${encodeURIComponent(pkg)}`, httpOpts)
         ])
         const latest = info.data['dist-tags']?.latest || 'unknown'
         return {
@@ -500,7 +513,7 @@ CODE EXECUTION (any language via Piston API):
 - code_review    → args: { code, context }
 - code_explain   → args: { code, fileName }
 - bug_finder     → args: { code, fileName }
-- npm_stats      → args: { package }
+- npm_stats      → args: { package } (download statistics for an existing npm package ONLY — never for running npm commands; use shell to install/test/run)
 
 WEB SCRAPING & BROWSING:
 - web_scrape     → args: { url }
@@ -986,6 +999,10 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 return { success: r.success, output: r.text||r.error, desc }
             }
             case 'npm_stats': {
+                const pkgName = String(args.package || '').trim().toLowerCase()
+                if (['install', 'i', 'test', 'run', 'build', 'start', 'init', 'ci', 'publish', 'uninstall', 'remove', 'update', 'audit', 'ls', 'list', 'exec', 'create'].includes(pkgName)) {
+                    return { success: false, output: `"${pkgName}" is an npm command, not a package name. npm_stats only looks up download statistics for a real package. To run npm ${pkgName} inside a project, use the shell tool in that project's folder instead.`, desc }
+                }
                 const r = await npmStats(args.package)
                 return { success: r.success, output: r.success ? `${r.pkg} v${r.version} | Weekly: ${r.weekly} | Monthly: ${r.monthly}` : r.error, desc }
             }

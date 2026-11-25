@@ -107,3 +107,53 @@ test('executeStep normalises extensionless module paths to real files', async ()
     assert.equal(nested.success, true)
     assert.equal(fs.existsSync(path.join(dir, 'src/config/index.js')), true)
 })
+
+const { sanitizeGeneratedScripts } = require('../Library/actions/agent-os')
+
+test('sanitizeGeneratedScripts drops unbacked toolchain scripts, keeps real ones', () => {
+    const dir = tmpProject({
+        'package.json': JSON.stringify({
+            name: 'x',
+            scripts: { start: 'node server.js', build: 'webpack --mode production', test: 'jest', serve: 'http-server .' },
+            dependencies: { jest: '^29.0.0', webpack: '^5.0.0' },
+        }),
+        'server.js': 'require("http").createServer().listen(3000)',
+    })
+    // webpack IS a dependency but there is no webpack config anywhere.
+    assert.deepEqual(sanitizeGeneratedScripts({ dir, name: 'x' }), ['build'])
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+    assert.equal(pkg.scripts.build, undefined)
+    assert.equal(pkg.scripts.test, 'jest')
+    assert.equal(pkg.scripts.start, 'node server.js')
+})
+
+test('sanitizeGeneratedScripts keeps a bundler build when its config exists', () => {
+    const dir = tmpProject({
+        'package.json': JSON.stringify({ name: 'x', scripts: { build: 'webpack --mode production' }, dependencies: { webpack: '^5.0.0' } }),
+        'webpack.config.js': 'module.exports = {}',
+    })
+    assert.deepEqual(sanitizeGeneratedScripts({ dir, name: 'x' }), [])
+})
+
+test('executeStep refuses corrupted content and invalid package.json writes', async () => {
+    const dir = tmpProject({ 'package.json': '{"name":"good"}' })
+    const corrupt = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'server.js', content: 'x�e\u0013k��p' })
+    assert.equal(corrupt.success, false)
+    assert.match(corrupt.output, /corrupted/i)
+    const badJson = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'package.json', content: '{not json' })
+    assert.equal(badJson.success, false)
+    assert.match(badJson.output, /not valid JSON/i)
+    assert.equal(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'), '{"name":"good"}')
+})
+
+const { bootCheck } = require('../Library/actions/agent-os')
+
+test('bootCheck passes a server that answers HTTP and fails one that crashes on a missing module', async () => {
+    const good = tmpProject({ 'server.js': 'require("http").createServer((q,s)=>{s.end("ok")}).listen(process.env.PORT)' })
+    const okRes = await bootCheck({ dir: good, name: 'x' }, 'server.js', { bootTimeout: 6000 })
+    assert.equal(okRes.success, true)
+    const bad = tmpProject({ 'server.js': 'require("./db")' })
+    const badRes = await bootCheck({ dir: bad, name: 'x' }, 'server.js', { bootTimeout: 6000 })
+    assert.equal(badRes.success, false)
+    assert.match(badRes.output, /Cannot find module/)
+})
