@@ -39,8 +39,41 @@ const notifyProgress = async (options, progress) => {
     try { await options?.onProgress?.(progress) } catch {}
 }
 const safe = value => String(value || 'project').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'project'
-const load = () => { try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) } catch { return { projects: {}, events: [] } } }
-const save = state => { fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true }); fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2)) }
+// ── Database mirror (the database is the global store) ──────────────────────
+// The JSON file stays as a local cache/fallback, but every save also mirrors
+// the state into global.db.data.agentOsState (db.write() throttled — builds
+// save often). On load the DB copy WINS when present; when it is absent the
+// file is loaded and becomes the migration source the first save uploads.
+// Without global.db (tests, child processes) this degrades to file-only.
+const DB_STATE_KEY = 'agentOsState'
+let _dbWriteTimer = null
+const _mirrorToDb = state => {
+    try {
+        if (!global.db?.data || typeof global.db.write !== 'function') return
+        global.db.data[DB_STATE_KEY] = JSON.parse(JSON.stringify(state))
+        if (_dbWriteTimer) return
+        _dbWriteTimer = setTimeout(() => {
+            _dbWriteTimer = null
+            try { Promise.resolve(global.db.write()).catch(() => {}) } catch {}
+        }, 1500)
+        _dbWriteTimer.unref?.()
+    } catch {}
+}
+const _stateFromDb = () => {
+    try {
+        const s = global.db?.data?.[DB_STATE_KEY]
+        if (s && typeof s === 'object' && s.projects && typeof s.projects === 'object') {
+            return JSON.parse(JSON.stringify(s))
+        }
+    } catch {}
+    return null
+}
+const load = () => {
+    const fromDb = _stateFromDb()
+    if (fromDb) return fromDb
+    try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) } catch { return { projects: {}, events: [] } }
+}
+const save = state => { fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true }); fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2)); _mirrorToDb(state) }
 const update = (record, patch) => { Object.assign(record, patch, { updatedAt: now() }); if (!record?.id) return record; const s = load(); s.projects[record.id] = record; save(s); return record }
 const projectRoot = (userId, name) => path.join(getUserWorkspace(userId), 'projects', safe(name))
 const inside = (root, target) => { const r = path.resolve(root), t = path.resolve(target); return t === r || t.startsWith(`${r}${path.sep}`) }

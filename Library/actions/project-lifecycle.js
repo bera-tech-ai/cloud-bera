@@ -15,12 +15,44 @@ const STATE_FILE = path.join(__dirname, '../../Database/project_lifecycle.json')
 const safeId = value => String(value || 'project').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'project'
 const now = () => new Date().toISOString()
 
+// ── Database mirror (the database is the global store) ──────────────────────
+// Same contract as agent-os: the JSON file stays as a local cache/fallback,
+// every save also mirrors into global.db.data.projectLifecycleState
+// (db.write() throttled), and on load the DB copy WINS when present — the
+// file is the migration source until the first save uploads it. Without
+// global.db (tests) this degrades to file-only behaviour.
+const DB_STATE_KEY = 'projectLifecycleState'
+let _dbWriteTimer = null
+const _mirrorToDb = state => {
+    try {
+        if (!global.db?.data || typeof global.db.write !== 'function') return
+        global.db.data[DB_STATE_KEY] = JSON.parse(JSON.stringify(state))
+        if (_dbWriteTimer) return
+        _dbWriteTimer = setTimeout(() => {
+            _dbWriteTimer = null
+            try { Promise.resolve(global.db.write()).catch(() => {}) } catch {}
+        }, 1500)
+        _dbWriteTimer.unref?.()
+    } catch {}
+}
+const _stateFromDb = () => {
+    try {
+        const s = global.db?.data?.[DB_STATE_KEY]
+        if (s && typeof s === 'object' && s.projects && typeof s.projects === 'object') {
+            return JSON.parse(JSON.stringify(s))
+        }
+    } catch {}
+    return null
+}
 const loadState = () => {
+    const fromDb = _stateFromDb()
+    if (fromDb) return fromDb
     try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) } catch { return { projects: {} } }
 }
 const saveState = state => {
     fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true })
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2))
+    _mirrorToDb(state)
 }
 const updateRecord = (record, patch) => {
     Object.assign(record, patch, { updatedAt: now() })
