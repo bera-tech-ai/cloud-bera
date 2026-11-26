@@ -30,7 +30,12 @@ function load() {
 }
 
 function flush() {
-    try { fs.writeFileSync(STORE_FILE, JSON.stringify(Object.fromEntries(entries))) } catch {}
+    try {
+        // Atomic write: a crash mid-write must not corrupt the store.
+        const tmp = `${STORE_FILE}.tmp-${process.pid}`
+        fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(entries)))
+        fs.renameSync(tmp, STORE_FILE)
+    } catch {}
 }
 
 function scheduleSave() {

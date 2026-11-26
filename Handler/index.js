@@ -2735,7 +2735,7 @@ const handleMessage = async (conn, rawMsg) => {
                     const parsed = parseNaturalReminder(phrase.trim())
                     if (parsed.error) { await reply('❓ ' + parsed.error + '\nSay it like: *Bera remind me to drink water in 5 minutes* or *Bera remind me to call mum tomorrow at 9am*'); return }
                     let created
-                    try { created = createReminder({ chat, jid: sender, msg: parsed.msg, fireAt: parsed.fireAt, repeat: parsed.repeat }) }
+                    try { created = await createReminder({ chat, jid: sender, msg: parsed.msg, fireAt: parsed.fireAt, repeat: parsed.repeat }) }
                     catch (e) { await reply('❌ ' + e.message); return }
                     await react('⏰')
                     await reply('⏰ Got it! I will remind you to *' + created.msg + '* at ' + formatNairobi(created.fireAt) + ' (Africa/Nairobi). [#' + created.id + ']' + (created.repeat ? ' 🔁 ' + repeatLabel(created.repeat) : ''))
@@ -3120,7 +3120,7 @@ const handleMessage = async (conn, rawMsg) => {
                     // in-memory timer.)
                     const { createReminder, formatNairobi } = require('../Library/actions/reminders')
                     let created
-                    try { created = createReminder({ chat, jid: sender, msg, fireAt: Date.now() + ms, repeat: null }) }
+                    try { created = await createReminder({ chat, jid: sender, msg, fireAt: Date.now() + ms, repeat: null }) }
                     catch (e) { await reply('❌ ' + e.message); return }
                     await reply(`✅ Scheduled: "${msg.slice(0,50)}" for *${formatNairobi(created.fireAt)}* (Africa/Nairobi) [#${created.id}]`)
                     return

@@ -174,7 +174,7 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         if (parsed.error) return reply(`❌ ${parsed.error}\n\n${usage}`)
         let created
         try {
-            created = createReminder({ chat: m.chat, jid: sender, msg: parsed.msg, fireAt: parsed.fireAt, repeat: parsed.repeat })
+            created = await createReminder({ chat: m.chat, jid: sender, msg: parsed.msg, fireAt: parsed.fireAt, repeat: parsed.repeat })
         } catch (e) { return reply(`❌ ${e.message}`) }
 
         await react(conn, m, '⏰')
