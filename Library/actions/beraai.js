@@ -544,7 +544,9 @@ const preDispatch = async (text, m, conn) => {
         try {
             const { fetchTts, resolveSpeechLanguage } = require('./tts')
             const audio = await fetchTts(sayInVoice.text, resolveSpeechLanguage(sayInVoice.text, 'en'))
-            await conn.sendMessage(m.chat, { audio, mimetype: 'audio/ogg; codecs=opus', ptt: true }, { quoted: m })
+            const sent = await conn.sendMessage(m.chat, { audio, mimetype: 'audio/ogg; codecs=opus', ptt: true }, { quoted: m })
+            // Register the bot's own voice note so auto-listen never transcribes it back (self-bot loop guard).
+            require('./voice-listen').markBotSentVoice(sent?.key?.id)
             return { success: true, reply: '🎙️ Sent as a voice note.', skipVoice: true }
         } catch (e) {
             return { success: false, reply: `❌ Could not make a voice note: ${e.message}` }
