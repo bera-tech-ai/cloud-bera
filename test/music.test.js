@@ -10,6 +10,9 @@ const loadMusicWithXcasper = (mock) => {
     delete require.cache[musicPath]
     Module._load = function (request, parent, isMain) {
         if (request === './xcasper' && parent?.filename === musicPath) return mock
+        // Keep the ytv primary backend out of these Xcasper-shape tests:
+        // its HTTP calls fail fast here, so music.js falls back to the mock.
+        if (request === 'axios' && parent?.filename === musicPath) return { get: async () => { throw new Error('ytv disabled in tests') } }
         return originalLoad.call(this, request, parent, isMain)
     }
     try {

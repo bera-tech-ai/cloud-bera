@@ -278,7 +278,7 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
                 // Search on YT as fallback since Spotify doesn't allow direct search without auth
                 const dl = await (require('../Library/actions/music').searchAndDownload)(text)
                 if (!dl.success) throw new Error(dl.error)
-                audioUrl = dl.audioUrl
+                audioUrl = dl.audioUrl || dl.audioBuffer
                 title = dl.title
                 thumb = dl.thumbnail
             }

@@ -204,11 +204,11 @@ handle.all = async (m, { conn, command, args, prefix, reply, sender } = {}) => {
             const { downloadAudio } = require('../Library/actions/music')
             const dl = await downloadAudio(songUrl)
             
-            if (dl.success && (dl.url || dl.audioUrl)) {
+            if (dl.success && (dl.url || dl.audioUrl || Buffer.isBuffer(dl.audioBuffer))) {
                 if (songThumb) {
                     await conn.sendMessage(chat, { image: { url: songThumb }, caption: '🎵 ' + songTitle }).catch(() => {})
                 }
-                await sendAudioMessage(conn, chat, dl.url || dl.audioUrl, {
+                await sendAudioMessage(conn, chat, dl.url || dl.audioUrl || dl.audioBuffer, {
                     mimetype: 'audio/mpeg',
                     fileName: songTitle + '.mp3',
                     quoted: m
