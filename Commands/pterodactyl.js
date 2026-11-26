@@ -117,29 +117,49 @@ async function dispatchCreds(m, conn, chat, waJid, credMsg, displayNum) {
     }
 }
 
-async function handle(m, { conn, args, command, text, prefix, isOwner, chat, reply }) {
-    if (!isOwner) return reply(`⛔ Owner only.`)
-
+async function handle(m, { conn, args, command, text, prefix, isOwner, chat, reply, sender }) {
     // BeraHost credentials are independent of the Pterodactyl panel settings.
+    // .setbhkey is bring-your-own: anyone may link their OWN BeraHost key in
+    // a private chat. A non-owner's key is stored only against their own
+    // number (db.data.userSecrets) and their deploys run on their own
+    // account/plan; the owner's key additionally remains the bot-wide default.
     if (['setbhkey', 'bhkey', 'setberakey', 'bhsetkey'].includes(command)) {
         if (m.isGroup || String(chat || '').endsWith('@g.us')) return reply('🔒 For safety, set the BeraHost key in a private chat with the bot.')
         const newKey = text?.trim()
         if (!newKey?.startsWith('bh_')) return reply(`❓ Usage: ${prefix}setbhkey bh_yourKeyHere\n\nGet from: https://berahost.com → API Access`)
         if (!global.db?.data) return reply('❌ Database is not ready; the BeraHost key was not saved.')
         if (!global.db.data.settings) global.db.data.settings = {}
-        const oldKey = global.db.data.settings.bhApiKey
-        global.db.data.settings.bhApiKey = newKey
+        if (isOwner) {
+            const oldKey = global.db.data.settings.bhApiKey
+            global.db.data.settings.bhApiKey = newKey
+            try {
+                await global.db.write()
+            } catch (error) {
+                if (oldKey === undefined) delete global.db.data.settings.bhApiKey
+                else global.db.data.settings.bhApiKey = oldKey
+                console.error('[BERAHOST] Key persistence failed:', error.message)
+                return reply('❌ I could not persist the BeraHost API key. Check database connectivity and try again.')
+            }
+            await conn.sendMessage(chat, { react: { text: '✅', key: m.key } })
+            return reply(`✅ BeraHost API key saved!\n\n🧪 Test with: ${prefix}plans`)
+        }
+        if (!global.db.data.userSecrets) global.db.data.userSecrets = {}
+        const bare = String(sender || m?.sender || chat || '').split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
+        const previousSecret = global.db.data.userSecrets[bare]
+        global.db.data.userSecrets[bare] = { ...(previousSecret || {}), berahostKey: newKey }
         try {
             await global.db.write()
         } catch (error) {
-            if (oldKey === undefined) delete global.db.data.settings.bhApiKey
-            else global.db.data.settings.bhApiKey = oldKey
+            if (previousSecret === undefined) delete global.db.data.userSecrets[bare]
+            else global.db.data.userSecrets[bare] = previousSecret
             console.error('[BERAHOST] Key persistence failed:', error.message)
-            return reply('❌ I could not persist the BeraHost API key. Check database connectivity and try again.')
+            return reply('❌ I could not persist your BeraHost API key. Check database connectivity and try again.')
         }
         await conn.sendMessage(chat, { react: { text: '✅', key: m.key } })
-        return reply(`✅ BeraHost API key saved!\n\n🧪 Test with: ${prefix}plans`)
+        return reply(`✅ Your BeraHost API key is saved — it is linked to *your* BeraHost account, and your deploys will run on your own account and plan.\n\n🧪 Test with: ${prefix}plans`)
     }
+
+    if (!isOwner) return reply(`⛔ Owner only.`)
 
     const ptUrl    = Config.pterodactylUrl    || process.env.PTERODACTYL_URL    || ''
     const clientK  = Config.pterodactylKey    || process.env.PTERODACTYL_KEY    || ''

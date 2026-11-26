@@ -24,12 +24,15 @@ const gh = (path, method = 'GET', data = null, token = null) => {
     })
 }
 
-const handle = async (m, { conn, command, args, text, reply, isOwner, chat, prefix }) => {
+const handle = async (m, { conn, command, args, text, reply, isOwner, chat, prefix, sender }) => {
     const react = (e) => conn.sendMessage(chat, { react: { text: e, key: m.key } }).catch(() => {})
 
     // ── .setghtoken <token> ───────────────────────────────────────────────────
+    // Bring-your-own: anyone may link their OWN GitHub token in a private
+    // chat. A non-owner's token is stored only against their own number
+    // (db.data.userSecrets) and their builds publish to their own account.
+    // The owner's token additionally remains the bot-wide default.
     if (['setghtoken', 'setgithubtoken', 'setghkey'].includes(command)) {
-        if (!isOwner) return reply('❌ Owner only.')
         if (m.isGroup || String(chat || '').endsWith('@g.us')) return reply('🔒 For safety, set the GitHub token in a private chat with the bot.')
         const token = args[0]?.trim()
         if (!token) return reply('❌ Usage: *' + prefix + 'setghkey ghp_yourTokenHere*\n\nGet one at: github.com/settings/tokens')
@@ -45,18 +48,36 @@ const handle = async (m, { conn, command, args, text, reply, isOwner, chat, pref
             const user = res.data
             if (!global.db?.data) return reply('❌ Database is not ready; the GitHub token was not saved.')
             if (!global.db.data.settings) global.db.data.settings = {}
+            if (!global.db.data.userSecrets) global.db.data.userSecrets = {}
+            const bare = String(sender || m?.sender || chat || '').split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
+            const previousSecret = global.db.data.userSecrets[bare]
             const oldToken = global.db.data.settings.githubToken
-            global.db.data.settings.githubToken = token
+            global.db.data.userSecrets[bare] = { ...(previousSecret || {}), githubToken: token }
+            if (isOwner) global.db.data.settings.githubToken = token
             try {
                 await global.db.write()
             } catch (error) {
-                if (oldToken === undefined) delete global.db.data.settings.githubToken
-                else global.db.data.settings.githubToken = oldToken
+                if (previousSecret === undefined) delete global.db.data.userSecrets[bare]
+                else global.db.data.userSecrets[bare] = previousSecret
+                if (isOwner) {
+                    if (oldToken === undefined) delete global.db.data.settings.githubToken
+                    else global.db.data.settings.githubToken = oldToken
+                }
                 console.error('[GITHUB] Token persistence failed:', error.message)
                 await react('❌')
                 return reply('❌ GitHub validated the token, but I could not persist it. Check database connectivity and try again.')
             }
             await react('✅')
+            if (!isOwner) {
+                return reply(
+                    '✅ *GitHub account linked!*\n\n' +
+                    '👤 *Account:* ' + user.login + '\n' +
+                    '📛 *Name:* ' + (user.name || 'N/A') + '\n' +
+                    '📦 *Public Repos:* ' + user.public_repos + '\n' +
+                    '👥 *Followers:* ' + user.followers + '\n\n' +
+                    'This token is linked to *your* GitHub account — your builds will publish there, under your own account.'
+                )
+            }
             return reply(
                 '✅ *GitHub Token Saved!*\n\n' +
                 '👤 *Account:* ' + user.login + '\n' +

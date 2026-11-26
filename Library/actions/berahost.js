@@ -18,8 +18,25 @@ const getBhBaseUrl = () => {
 const BH_API  = () => getBhBaseUrl() + '/api'
 const getKey  = () => global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY || process.env.BERAHOST_API_KEY || null
 
+// ── Bring-your-own credentials (mirrors github.js getTokenFor) ─────────────
+// Per-user keys live in global.db.data.userSecrets, keyed by bare phone
+// number. A requester's own linked key wins; the global key is the OWNER's
+// fallback only; any other user without their own key resolves to null —
+// never silently deploy on the owner's account/plan. With no specific
+// requester (undefined/null/''/'shared') the historical global key applies.
+const bareNumber = value => String(value ?? '').split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
+const isOwnerId = userId => {
+    try { return Boolean(require('../../Auth').isAuthorized(userId)?.isOwner) } catch { return false }
+}
+const getKeyFor = userId => {
+    if (userId === undefined || userId === null || userId === '' || userId === 'shared') return getKey()
+    const own = global.db?.data?.userSecrets?.[bareNumber(userId)]?.berahostKey
+    if (own) return own
+    return isOwnerId(userId) ? getKey() : null
+}
+
 const bh = (options = {}) => {
-    const k = getKey()
+    const k = options.key !== undefined ? options.key : getKey()
     if (!k && !options.public) throw new Error('NO_BH_KEY — set BERAHOST_API_KEY or save a scoped key with .setbhkey in a private chat')
     return axios.create({
         baseURL: BH_API(),
@@ -249,24 +266,24 @@ const pollDeployment = async (id, maxWait = 120000, interval = 5000) => {
 
 // ── WEB DEPLOYMENTS ──────────────────────────────────────────────────────────
 // These endpoints deploy a GitHub website/app rather than a native WhatsApp bot.
-const createWebDeployment = async (payload) => {
+const createWebDeployment = async (payload, apiKey = undefined) => {
     try {
-        const r = await bh().post('/web-deployments', payload)
+        const r = await bh({ key: apiKey }).post('/web-deployments', payload)
         const d = r.data || {}
         return { success: true, id: d.id, status: d.status, url: d.url || d.liveUrl, data: d }
     } catch (e) { return { success: false, error: bhErr(e) } }
 }
 
-const listWebDeployments = async () => {
+const listWebDeployments = async (apiKey = undefined) => {
     try {
-        const r = await bh().get('/web-deployments')
+        const r = await bh({ key: apiKey }).get('/web-deployments')
         return { success: true, deployments: r.data?.deployments || r.data || [] }
     } catch (e) { return { success: false, error: bhErr(e) } }
 }
 
-const getWebDeployment = async (id) => {
+const getWebDeployment = async (id, apiKey = undefined) => {
     try {
-        const r = await bh().get(`/web-deployments/${encodeURIComponent(id)}`)
+        const r = await bh({ key: apiKey }).get(`/web-deployments/${encodeURIComponent(id)}`)
         return { success: true, deployment: r.data }
     } catch (e) { return { success: false, error: bhErr(e) } }
 }
@@ -278,9 +295,9 @@ const deleteWebDeployment = async (id) => {
     } catch (e) { return { success: false, error: bhErr(e) } }
 }
 
-const pollWebDeployment = async (id, maxWait = 120000, interval = 5000) => {
+const pollWebDeployment = async (id, maxWait = 120000, interval = 5000, apiKey = undefined) => {
     const deadline = Date.now() + maxWait
-    let current = await getWebDeployment(id)
+    let current = await getWebDeployment(id, apiKey)
     while (Date.now() < deadline) {
         if (current.success) {
             const status = current.deployment?.status
@@ -290,7 +307,7 @@ const pollWebDeployment = async (id, maxWait = 120000, interval = 5000) => {
         // not abort the poll: keep the last good response and keep waiting,
         // otherwise a mid-poll outage hands out a "queued" dead URL.
         await new Promise(resolve => setTimeout(resolve, interval))
-        const next = await getWebDeployment(id)
+        const next = await getWebDeployment(id, apiKey)
         if (next.success) current = next
     }
     return current
@@ -386,6 +403,7 @@ const pollForPairCode = async (id, maxWait = 180000, interval = 6000) => {
 
 module.exports = {
     BH_API,
+    getKeyFor,
     requestCustomerApi,
     listDeployments, deployBot, getDeployment, deleteDeployment,
     startDeployment, stopDeployment, updateEnv,

@@ -99,7 +99,23 @@ const handle = async (m, { conn, text, reply, react, prefix, command, sender, ch
                 out.on('close', resolve)
                 archive.on('error', reject)
                 archive.pipe(out)
-                archive.file('./Database/db.json', { name: 'db.json' })
+                // Sanitised db.json: other users' linked credentials
+                // (userSecrets) are stripped and secret-looking settings
+                // masked — a backup must never ship everyone's tokens.
+                try {
+                    const cleanDb = JSON.parse(fs.readFileSync('./Database/db.json', 'utf8'))
+                    delete cleanDb.userSecrets
+                    if (cleanDb.settings) {
+                        for (const k of Object.keys(cleanDb.settings)) {
+                            if (/token|key|secret|password/i.test(k) && typeof cleanDb.settings[k] === 'string' && cleanDb.settings[k]) {
+                                cleanDb.settings[k] = '••••' + cleanDb.settings[k].slice(-2)
+                            }
+                        }
+                    }
+                    archive.append(JSON.stringify(cleanDb, null, 2), { name: 'db.json' })
+                } catch {
+                    archive.append('db.json could not be sanitised and was excluded from this backup.', { name: 'db.json.excluded.txt' })
+                }
                 if (fs.existsSync('./session/creds.json')) {
                     archive.file('./session/creds.json', { name: 'session/creds.json' })
                 }
@@ -111,7 +127,7 @@ const handle = async (m, { conn, text, reply, react, prefix, command, sender, ch
                 document: buffer,
                 mimetype: 'application/zip',
                 fileName: `nick_backup_${new Date().toISOString().slice(0, 10)}.zip`,
-                caption: `✅ Backup ready — contains db.json and session credentials.`
+                caption: `✅ Backup ready — contains db.json (user-linked tokens stripped, secrets masked) and session credentials.`
             }, { quoted: m })
         } catch (e) {
             return reply(`❌ Backup failed: ${e.message}`)
@@ -552,13 +568,30 @@ Generate at: https://github.com/settings/tokens`)
     }
 
     // ── SET BERAHOST API KEY ─────────────────────────────────────────────
+    // Bring-your-own: the owner's key is the bot-wide default; a non-owner
+    // may link their OWN key in a private chat — it is stored only against
+    // their own number (db.data.userSecrets) and used for their deploys.
     if (command === 'setbhkey' || command === 'psetbhkey') {
-        if (!isOwner) return reply(`⛔ Owner only.`)
         if (!text) return reply(`❌ Usage: ${prefix}setbhkey <your-berahost-api-key>\nGet yours at: https://berahost.com`)
         if (!global.db.data.settings) global.db.data.settings = {}
-        global.db.data.settings.bhApiKey = text.trim()
-        await global.db.write()
-        return reply(`✅ BeraHost API key saved!\nKey: ***${text.trim().slice(-4)}\nAll BeraHost commands will now use your key.`)
+        if (isOwner) {
+            global.db.data.settings.bhApiKey = text.trim()
+            await global.db.write()
+            return reply(`✅ BeraHost API key saved!\nKey: ***${text.trim().slice(-4)}\nAll BeraHost commands will now use your key.`)
+        }
+        if (m?.isGroup || String(chat || '').endsWith('@g.us')) return reply('🔒 For safety, set the BeraHost key in a private chat with the bot.')
+        if (!global.db.data.userSecrets) global.db.data.userSecrets = {}
+        const bare = String(sender || m?.sender || chat || '').split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
+        const previousSecret = global.db.data.userSecrets[bare]
+        global.db.data.userSecrets[bare] = { ...(previousSecret || {}), berahostKey: text.trim() }
+        try {
+            await global.db.write()
+        } catch (error) {
+            if (previousSecret === undefined) delete global.db.data.userSecrets[bare]
+            else global.db.data.userSecrets[bare] = previousSecret
+            return reply('❌ I could not persist your BeraHost API key. Check database connectivity and try again.')
+        }
+        return reply('✅ Your BeraHost API key is saved — it is linked to *your* BeraHost account, and your deploys will run on your own account and plan.')
     }
 
     // ── VIEW MY CONFIG ───────────────────────────────────────────────────
