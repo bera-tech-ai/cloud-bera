@@ -113,6 +113,38 @@ const localFallback = async (userText) => {
 const _MEM_FILE = path.join(__dirname, '../../Database/agent_memory.json')
 let MEMORY = {}
 try { MEMORY = JSON.parse(fs.readFileSync(_MEM_FILE, 'utf8')) } catch {}
+// ── Database mirror (the database is the global store) ──────────────────────
+// The JSON file stays as a local cache/fallback, but every save also mirrors
+// MEMORY into global.db.data.agentMemoryState (db.write() throttled — memory
+// saves are chatty). The DB copy is adopted lazily on first access: when it
+// exists and is non-empty it WINS over the file copy; otherwise the file copy
+// is the migration source the first save uploads. Without global.db (tests)
+// this degrades to file-only behaviour.
+const _MEM_DB_KEY = 'agentMemoryState'
+let _memDbAdopted = false
+let _memWriteTimer = null
+const _adoptDbMemory = () => {
+    if (_memDbAdopted) return
+    _memDbAdopted = true
+    try {
+        const s = global.db?.data?.[_MEM_DB_KEY]
+        if (s && typeof s === 'object' && Object.keys(s).length) {
+            MEMORY = JSON.parse(JSON.stringify(s))
+        }
+    } catch {}
+}
+const _mirrorMemoryToDb = () => {
+    try {
+        if (!global.db?.data || typeof global.db.write !== 'function') return
+        global.db.data[_MEM_DB_KEY] = JSON.parse(JSON.stringify(MEMORY))
+        if (_memWriteTimer) return
+        _memWriteTimer = setTimeout(() => {
+            _memWriteTimer = null
+            try { Promise.resolve(global.db.write()).catch(() => {}) } catch {}
+        }, 1500)
+        _memWriteTimer.unref?.()
+    } catch {}
+}
 const _saveMEMORY = () => {
     try {
         fs.mkdirSync(path.dirname(_MEM_FILE), { recursive: true })
@@ -121,13 +153,15 @@ const _saveMEMORY = () => {
         fs.writeFileSync(tmp, JSON.stringify(MEMORY, null, 2))
         fs.renameSync(tmp, _MEM_FILE)
     } catch {}
+    _mirrorMemoryToDb()
 }
 const remember = (chat, key, value) => {
+    _adoptDbMemory()
     if (!MEMORY[chat]) MEMORY[chat] = {}
     if (value !== undefined) { MEMORY[chat][key] = value; _saveMEMORY() }
     return MEMORY[chat][key]
 }
-const getMemory = (chat) => MEMORY[chat] || {}
+const getMemory = (chat) => { _adoptDbMemory(); return MEMORY[chat] || {} }
 
 const scrapeUrl = async (url) => {
     try {
@@ -161,15 +195,17 @@ const pushHistory = (chat, role, content) => {
 }
 const getHistory = (chat) => HISTORY[chat] || []
 const clearHistory = (chat) => { delete HISTORY[chat] }
-const clearMemory = (chat) => { delete MEMORY[chat]; _saveMEMORY() }
+const clearMemory = (chat) => { _adoptDbMemory(); delete MEMORY[chat]; _saveMEMORY() }
 const saveMemory = (chat, key, value) => remember(chat, key, value)
 const setMemory = (chat, value, key) => {
+    _adoptDbMemory()
     if (!MEMORY[chat]) MEMORY[chat] = {}
     const k = key || `note_${Object.keys(MEMORY[chat]).length + 1}`
     MEMORY[chat][k] = String(value).slice(0, 300)
     _saveMEMORY()
 }
 const deleteMemory = (chat, key) => {
+    _adoptDbMemory()
     if (!MEMORY[chat]) return
     if (key) {
         const allKeys = Object.keys(MEMORY[chat])
@@ -188,6 +224,7 @@ const deleteMemory = (chat, key) => {
 // ── Auto-record completed agent actions to persistent memory ──────────────────
 const _autoMemorize = (chat, task, summary) => {
     if (!chat || !task || !summary) return
+    _adoptDbMemory()
     if (!MEMORY[chat]) MEMORY[chat] = {}
     // Keep rolling log of last 10 completed tasks
     const log = MEMORY[chat]._action_log || []

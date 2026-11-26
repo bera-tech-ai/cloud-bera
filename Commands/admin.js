@@ -461,6 +461,74 @@ const handle = async (m, { conn, text, reply, react, prefix, command, sender, ch
             `\n╰══════════════════⊷`
         )
     }
+    // ── GENERIC SETTINGS ────────────────────────────────────────────────
+    // .setprefix / .setsetting / .getsetting / .resetsetting — these were
+    // advertised in the settings menu but never implemented natively (the
+    // imported xadon copy writes to its own data.xadon store, which the
+    // connection layer never reads). All four write global.db.data.settings
+    // and await global.db.write(), so values land in the Postgres snapshot
+    // and survive restarts (prefix included — it is read back from
+    // settings.prefix on boot).
+    const _coerceSetting = raw => {
+        const v = String(raw ?? '').trim()
+        if (/^(on|true)$/i.test(v)) return true
+        if (/^(off|false)$/i.test(v)) return false
+        if (/^-?\d+$/.test(v)) return parseInt(v, 10)
+        if (/^-?\d*\.\d+$/.test(v)) return parseFloat(v)
+        return v
+    }
+    const _formatSetting = (key, value) => {
+        if (/token|key|secret|password|passwd|credential/i.test(key)) {
+            return '••••' + String(value ?? '').slice(-2)
+        }
+        return typeof value === 'object' ? JSON.stringify(value) : String(value)
+    }
+    const _blockedSettingKey = key => ['__proto__', 'constructor', 'prototype'].includes(key)
+
+    if (command === 'setprefix') {
+        if (!isOwner) return reply('⛔ Owner only.')
+        const newPrefix = (args[0] || '').trim()
+        if (!newPrefix || newPrefix.length > 3 || /\s/.test(newPrefix)) {
+            return reply(`❌ Usage: ${prefix}setprefix <char>\nExample: ${prefix}setprefix #  (1–3 chars, no spaces)`)
+        }
+        if (!global.db.data.settings) global.db.data.settings = {}
+        global.db.data.settings.prefix = newPrefix
+        await global.db.write()
+        return reply(`✅ Prefix changed to *${newPrefix}*\nTry: ${newPrefix}menu\n_Saved to the database — it will still be ${newPrefix} after a restart._`)
+    }
+
+    if (command === 'setsetting') {
+        if (!isOwner) return reply('⛔ Owner only.')
+        const key = (args[0] || '').trim()
+        const rawValue = args.slice(1).join(' ').trim()
+        if (!key || !rawValue) return reply(`❌ Usage: ${prefix}setsetting <key> <value>\nExample: ${prefix}setsetting autoread on`)
+        if (_blockedSettingKey(key)) return reply('❌ That key is reserved and cannot be set.')
+        if (!global.db.data.settings) global.db.data.settings = {}
+        const value = _coerceSetting(rawValue)
+        global.db.data.settings[key] = value
+        await global.db.write()
+        return reply(`✅ Setting *${key}* = *${_formatSetting(key, value)}*\n_Saved to the database._`)
+    }
+
+    if (command === 'getsetting') {
+        if (!isOwner) return reply('⛔ Owner only.')
+        const key = (args[0] || '').trim()
+        if (!key) return reply(`❌ Usage: ${prefix}getsetting <key>`)
+        const settings = global.db.data.settings || {}
+        if (!(key in settings)) return reply(`ℹ️ Setting *${key}* is not set.`)
+        return reply(`⚙️ *${key}* = *${_formatSetting(key, settings[key])}*`)
+    }
+
+    if (command === 'resetsetting') {
+        if (!isOwner) return reply('⛔ Owner only.')
+        const key = (args[0] || '').trim()
+        if (!key) return reply(`❌ Usage: ${prefix}resetsetting <key>`)
+        if (!global.db.data.settings || !(key in global.db.data.settings)) return reply(`ℹ️ Setting *${key}* is not set.`)
+        delete global.db.data.settings[key]
+        await global.db.write()
+        return reply(`✅ Setting *${key}* reset (removed).\n_Saved to the database._`)
+    }
+
     // ── SET GITHUB USERNAME ─────────────────────────────────────────────
     if (command === 'setgitusername') {
         if (!isOwner) return reply(`⛔ Owner only.`)
@@ -1046,6 +1114,7 @@ Generate at: https://github.com/settings/tokens`)
 
 handle.command = ['dbstatus', 'update','reload','hotreload','selfupdate','up','broadcast', 'backup', 'stats', 'ban', 'unban', 'premium', 'depremium',
     'autoreply', 'schedule', 'listusers', 'resetlimit', 'cleandb', 'mode',
+    'setprefix', 'setsetting', 'getsetting', 'resetsetting',
     'autostatusview', 'statusview', 'autotyping', 'autobio',
     'addbio', 'setbio', 'listbios', 'clearbio', 'noprefix',
     'setgitusername', 'setgittoken', 'setbhkey', 'psetbhkey', 'myconfig', 'mykeys', 'configs',
