@@ -783,7 +783,9 @@ Requirements:
 
 const githubCodeSearch = async (query, lang = '', limit = 5) => {
     try {
-        const token = process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''
+        let token = ''
+        try { token = require('./github').getToken() || '' } catch {}
+        if (!token) token = process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''
         const q = lang ? `${query} language:${lang}` : query
         const r = await axios.get('https://api.github.com/search/code', {
             params: { q, per_page: limit },

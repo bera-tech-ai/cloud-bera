@@ -13,6 +13,8 @@ const referents = require('../Library/lib/referents')
 const agentDispatch = require('../Library/lib/agent-dispatch')
 const { buildCommandMap: buildRegistryMap, RegistryCollisionError } = require('../Library/lib/command-registry')
 
+const delay = (ms) => new Promise(r => setTimeout(r, ms))
+
 // Pre-warm library modules so first command has zero load delay
 try { require('../Library/actions/music') } catch {}
 try { require('../Library/actions/search') } catch {}
@@ -1151,15 +1153,8 @@ const handleMessage = async (conn, rawMsg) => {
                     const phoneMatch = text.match(/(\d{6,15})/)
                     const newNameMatch = text.match(/(?:as|to)\s+([\w-]+)/i)
                     if (!nameCandidate) { await reply('Usage: deploy bot atassa  or  clone server atassa for 254712345678'); return }
-                    await react('🔄'); await reply('Cloning server "' + nameCandidate + '"...')
-                    const r = await bh.cloneServer(nameCandidate, phoneMatch ? phoneMatch[1] : null, newNameMatch ? newNameMatch[1] : null)
-                    if (r.success) {
-                        await react('✅')
-                        await reply('SUCCESS\n' + r.message)
-                        if (phoneMatch) {
-                            await conn.sendMessage(phoneMatch[1] + '@s.whatsapp.net', { text: 'YOUR BOT IS READY!\n' + r.message + '\nPanel: ' + bh.PANEL }).catch(()=>{})
-                        }
-                    } else { await react('❌'); await reply('Clone failed: ' + r.error) }
+                    await react('❌')
+                    await reply('Cloning is not supported by the BeraHost API — there is no clone endpoint for deployments. To run a second copy, deploy a fresh instance of the bot instead (e.g. ".bh" or "deploy bot <name>").')
                     return
                 }
 
@@ -1170,30 +1165,20 @@ const handleMessage = async (conn, rawMsg) => {
                     const fileMatch = text.match(/(?:read|cat|get)\s+([\w/.~-]+\.\w+)/i)
                     const dirMatch  = text.match(/(?:ls|list|dir)\s+([\w/.~-]+)/i)
                     if (!onMatch) { await reply('Usage: list files on server atassa  or  read session/creds.json on atassa'); return }
-                    const srvName = onMatch[1]
-                    await react('📁')
-                    if (fileMatch) {
-                        const r = await bh.readServerFile(srvName, fileMatch[1])
-                        await reply(r.success ? r.content.slice(0,3000) : 'Error: ' + r.error)
-                    } else {
-                        const dir = dirMatch ? dirMatch[1] : '/'
-                        const r   = await bh.listServerFiles(srvName, dir)
-                        if (r.success) { await reply(r.files.map(f=>(f.isDir?'📁 ':'📄 ')+f.name+' ('+f.size+')').join('\n').slice(0,2000)) }
-                        else { await reply('Error: ' + r.error) }
-                    }
+                    await react('❌')
+                    await reply('Server file access is not available through the BeraHost API — the API exposes deployments, logs and metrics, not a file manager.')
                     return
                 }
 
                 if (intent === 'bh_owner_list') {
                     if (!isOwner) { await reply('Owner only.'); return }
                     const bh = require('../Library/actions/berahost')
-                    const pm = text.match(/(\d{6,15})/)
                     await react('📋')
-                    const r = pm ? await bh.listOwnerServers(pm[1]) : await bh.listServers()
+                    const r = await bh.listDeployments()
                     if (r.success) {
-                        const srvs = r.servers || []
-                        const rows = srvs.map(s => s.id + ' | ' + s.name + ' | ' + s.ram + 'MB').join('\n')
-                        await reply('Servers (' + srvs.length + '):\n' + (rows || 'None found'))
+                        const deps = r.deployments || r.data || []
+                        const rows = deps.map(d => d.id + ' | ' + (d.botName || d.name || d.botId || '') + ' | ' + bh.statusEmoji(d.status) + ' ' + d.status).join('\n')
+                        await reply('Deployments (' + deps.length + '):\n' + (rows || 'None found'))
                     } else { await reply('Error: ' + r.error) }
                     return
                 }
@@ -1203,9 +1188,8 @@ const handleMessage = async (conn, rawMsg) => {
                     const bh = require('../Library/actions/berahost')
                     const nm = text.match(/(?:reinstall|clean install)\s+(?:server\s+)?([\w-]+)/i) || text.match(/server\s+([\w-]+)/i)
                     if (!nm) { await reply('Usage: reinstall server atassa'); return }
-                    await react('🔧')
-                    const r = await bh.reinstallServer(nm[1])
-                    await reply(r.success ? r.output : 'Error: ' + r.error)
+                    await react('❌')
+                    await reply('Reinstall is not available through the BeraHost API. To refresh a deployment, stop it and start it again, or delete it and deploy fresh.')
                     return
                 }
 
@@ -1215,8 +1199,12 @@ const handleMessage = async (conn, rawMsg) => {
                     const nm = text.match(/(?:suspend|disable|freeze)\s+(?:server\s+)?([\w-]+)/i)
                     if (!nm) { await reply('Usage: suspend server atassa'); return }
                     await react('🚫')
-                    const r = await bh.suspendServer(nm[1])
-                    await reply(r.success ? r.output : 'Error: ' + r.error)
+                    const list = await bh.listDeployments()
+                    const deps = list?.deployments || list?.data || []
+                    const dep = deps.find(d => String(d.id) === nm[1] || String(d.botName || d.name || d.botId || '').toLowerCase() === nm[1].toLowerCase())
+                    if (!dep) { await reply('No deployment matches "' + nm[1] + '".'); return }
+                    const r = await bh.stopDeployment(dep.id)
+                    await reply(r && r.success === false ? 'Error: ' + (r.error || 'stop failed') : '⏸️ Suspended (stopped): ' + (dep.botName || dep.name || dep.id))
                     return
                 }
 
@@ -1226,8 +1214,12 @@ const handleMessage = async (conn, rawMsg) => {
                     const nm = text.match(/(?:unsuspend|enable|restore)\s+(?:server\s+)?([\w-]+)/i)
                     if (!nm) { await reply('Usage: unsuspend server atassa'); return }
                     await react('✅')
-                    const r = await bh.unsuspendServer(nm[1])
-                    await reply(r.success ? r.output : 'Error: ' + r.error)
+                    const list = await bh.listDeployments()
+                    const deps = list?.deployments || list?.data || []
+                    const dep = deps.find(d => String(d.id) === nm[1] || String(d.botName || d.name || d.botId || '').toLowerCase() === nm[1].toLowerCase())
+                    if (!dep) { await reply('No deployment matches "' + nm[1] + '".'); return }
+                    const r = await bh.startDeployment(dep.id)
+                    await reply(r && r.success === false ? 'Error: ' + (r.error || 'start failed') : '▶️ Resumed (started): ' + (dep.botName || dep.name || dep.id))
                     return
                 }
 
@@ -1239,9 +1231,8 @@ const handleMessage = async (conn, rawMsg) => {
                     const cpu  = text.match(/(\d{1,4})\s*%?\s*cpu/i)
                     const disk = text.match(/(\d{3,6})\s*mb?\s*disk/i)
                     if (!nm) { await reply('Usage: upgrade server atassa 1024MB RAM 200% CPU'); return }
-                    await react('⬆️')
-                    const r = await bh.updateResources(nm[1], { ramMB: ram?parseInt(ram[1]):undefined, cpuPercent: cpu?parseInt(cpu[1]):undefined, diskMB: disk?parseInt(disk[1]):undefined })
-                    await reply(r.success ? r.output : 'Error: ' + r.error)
+                    await react('❌')
+                    await reply('Changing a deployment\'s RAM/CPU/disk is not available through the BeraHost API.')
                     return
                 }
 
@@ -1251,9 +1242,8 @@ const handleMessage = async (conn, rawMsg) => {
                     const nm = text.match(/(?:on|in)\s+(?:server\s+)?([\w-]+)/i)
                     const cm = text.match(/(?:run|send|command)\s+"([^"]+)"/i) || text.match(/(?:run|send|command)\s+([^\s].+)$/i)
                     if (!nm || !cm) { await reply('Usage: run command "npm restart" on server atassa'); return }
-                    await react('💻')
-                    const r = await bh.sendConsoleCommand(nm[1], cm[1])
-                    await reply(r.success ? r.output : 'Error: ' + r.error)
+                    await react('❌')
+                    await reply('Console commands are not available through the BeraHost API — the API exposes deployments, logs and metrics only.')
                     return
                 }
 
@@ -1263,11 +1253,13 @@ const handleMessage = async (conn, rawMsg) => {
                     const nm = text.match(/(?:server|bot|info|details|config)\s+([\w-]+)/i)
                     if (!nm) { await reply('Usage: server info atassa'); return }
                     await react('ℹ️')
-                    const r = await bh.getServerConfig(nm[1])
-                    if (r.success) {
-                        const envStr = Object.entries(r.environment||{}).slice(0,8).map(([k,v])=>k+'='+(v||'').toString().slice(0,30)).join('\n')
-                        await reply(r.name + ' (ID '+r.id+')\nStatus: ' + r.status + '\nRAM: ' + r.limits?.memory + 'MB | CPU: ' + r.limits?.cpu + '% | Disk: ' + r.limits?.disk + 'MB\n\nENV:\n' + envStr)
-                    } else { await reply('Error: ' + r.error) }
+                    const list = await bh.listDeployments()
+                    const deps = list?.deployments || list?.data || []
+                    const dep = deps.find(d => String(d.id) === nm[1] || String(d.botName || d.name || d.botId || '').toLowerCase() === nm[1].toLowerCase())
+                    if (!dep) { await reply('No deployment matches "' + nm[1] + '".'); return }
+                    const g = await bh.getDeployment(dep.id)
+                    const d = g?.deployment || g?.data || g
+                    await reply(bh.fmtDeploy(d))
                     return
                 }
 
@@ -1404,23 +1396,14 @@ const handleMessage = async (conn, rawMsg) => {
                         // Apply fancy font if requested
                         let finalName = rawName
                         if (/fancy|exceptional|stylish|cool|unicode|special/i.test(text)) {
-                            let toFancy = null
-                            try {
-                                const fancyMod = require('../Library/actions/fancy')
-                                toFancy = fancyMod?.default?.toFancy || fancyMod?.toFancy || null
-                            } catch (_) {}
-                            if (typeof toFancy === 'function') {
-                                finalName = toFancy(rawName)
-                            } else {
-                                // Built-in fallback: bold unicode
-                                const bold = s => [...s].map(c => {
-                                    const code = c.charCodeAt(0)
-                                    if (code >= 65 && code <= 90) return String.fromCodePoint(code - 65 + 0x1D400)
-                                    if (code >= 97 && code <= 122) return String.fromCodePoint(code - 97 + 0x1D41A)
-                                    return c
-                                }).join('')
-                                finalName = bold(rawName)
-                            }
+                            // Built-in fancy styling: bold unicode
+                            const bold = s => [...s].map(c => {
+                                const code = c.charCodeAt(0)
+                                if (code >= 65 && code <= 90) return String.fromCodePoint(code - 65 + 0x1D400)
+                                if (code >= 97 && code <= 122) return String.fromCodePoint(code - 97 + 0x1D41A)
+                                return c
+                            }).join('')
+                            finalName = bold(rawName)
                         }
                         try {
                             await react('✏️')
@@ -3146,69 +3129,89 @@ const handleMessage = async (conn, rawMsg) => {
                 // ── BeraHost: deploy new bot ──────────────────────────────────
                 if (intent === 'berahost_deploy') {
                     if (!isOwner) { await reply('❌ BeraHost actions are owner-only.'); return }
-                    const { deployBot } = require('../Library/actions/berahost')
-                    const nameMatch = text.match(/\b(?:deploy|host|create|called|named?)\s+([\w-]+)/i)
-                    const repoMatch = text.match(/https?:\/\/github\.com\/[^\s]+/)
-                    const ramMatch  = text.match(/(\d+)\s*(mb|ram|memory)/i)
-                    const botName = nameMatch ? nameMatch[1] : 'new-bot'
-                    const repoUrl = repoMatch ? repoMatch[0] : ''
-                    const ram     = ramMatch  ? parseInt(ramMatch[1]) : 512
+                    const bh = require('../Library/actions/berahost')
+                    const nameMatch = text.match(/\b(?:deploy|host|create)\s+(?:bot\s+)?([\w-]+)/i)
+                    const sessMatch = text.match(/session(?:\s*id)?[:=\s]+([A-Za-z0-9_-]{6,})/i)
+                    const botName   = nameMatch ? nameMatch[1] : null
+                    const sessionId = sessMatch ? sessMatch[1] : null
+                    // deployBot(botId, sessionId, extraEnv) deploys a bot from
+                    // the BeraHost catalogue by its numeric id — it needs a
+                    // catalogue bot (matched here by name) and a WhatsApp
+                    // session id. Repo URLs / RAM are not part of this API.
+                    const cat = await bh.listBots()
+                    if (!cat.success) { await reply(`❌ Could not reach the BeraHost bot catalogue: ${cat.error}`); return }
+                    const bot = botName ? (cat.bots || []).find(b => String(b.name || '').toLowerCase().includes(botName.toLowerCase())) : null
+                    if (!bot) {
+                        const names = (cat.bots || []).slice(0, 10).map(b => b.name).filter(Boolean).join(', ')
+                        await reply(`❓ I can't deploy that yet — BeraHost bot deployments start from a bot in the catalogue${names ? ` (${names})` : ''} plus a WhatsApp session id. Try: *deploy <bot name> on berahost with session <session id>*`)
+                        return
+                    }
+                    if (!sessionId) { await reply(`❓ Found catalogue bot *${bot.name}* — now I need its WhatsApp session id to deploy it.`); return }
                     await react('🚀')
-                    await reply(`🚀 Deploying *${botName}* on BeraHost...${repoUrl ? '\n📦 Repo: ' + repoUrl : ''}`)
-                    const r = await deployBot(botName, repoUrl, sender.replace(/@.+/,''), ram)
+                    await reply(`🚀 Deploying *${bot.name}* on BeraHost...`)
+                    const r = await bh.deployBot(bot.id, sessionId, {})
                     await react(r.success ? '✅' : '❌')
-                    await reply(r.success ? r.message : `❌ Deploy failed: ${r.error}`)
+                    await reply(r.success
+                        ? `✅ Deployment started for *${bot.name}*\n🆔 ID: ${r.id}\n📊 Status: ${r.status || 'queued'}`
+                        : `❌ Deploy failed: ${r.error}`)
                     return
                 }
 
-                // ── BeraHost: list servers ────────────────────────────────────
+                // ── BeraHost: list deployments ────────────────────────────────
                 if (intent === 'berahost_list') {
                     if (!isOwner) { await reply('❌ BeraHost actions are owner-only.'); return }
-                    const { listServers } = require('../Library/actions/berahost')
+                    const bh = require('../Library/actions/berahost')
                     await react('🌐')
-                    const r = await listServers()
-                    if (r.success) {
-                        const srvList = r.servers.length
-                            ? r.servers.map((s,i) => `┃ ${i+1}. *${s.name}* | ${s.status} | RAM:${s.ram}MB CPU:${s.cpu}%`).join('\n')
-                            : '┃ No servers found'
-                        await reply(`╭══〘 *🌐 BERAHOST SERVERS* 〙═⊷\n┃ Total: ${r.servers.length}\n┃\n${srvList}\n╰══════════════════⊷`)
-                    } else {
-                        await reply(`❌ Could not list servers: ${r.error}`)
-                    }
+                    const [bots, webs] = await Promise.all([bh.listDeployments(), bh.listWebDeployments()])
+                    if (!bots.success && !webs.success) { await reply(`❌ Could not list deployments: ${bots.error || webs.error}`); return }
+                    const botLines = (bots.deployments || []).map((d, i) => `┃ ${i+1}. 🤖 *${d.bot?.name || 'Bot ' + (d.botId ?? '?')}* [${d.id}] — ${bh.statusEmoji(d.status)}`)
+                    const webLines = (webs.deployments || []).map((d, i) => `┃ ${i+1}. 🌍 *${d.customName || d.repoUrl || 'Web app'}* [${d.id}] — ${bh.statusEmoji(d.status)}${(d.url || d.liveUrl) ? ' — ' + (d.url || d.liveUrl) : ''}`)
+                    const lines = [...botLines, ...webLines]
+                    await reply(`╭══〘 *🌐 BERAHOST DEPLOYMENTS* 〙═⊷\n┃ Bots: ${botLines.length} · Web: ${webLines.length}\n┃\n${lines.length ? lines.join('\n') : '┃ Nothing deployed yet'}\n╰══════════════════⊷`)
                     return
                 }
 
                 // ── BeraHost: power action ────────────────────────────────────
                 if (intent === 'berahost_power') {
                     if (!isOwner) { await reply('❌ BeraHost actions are owner-only.'); return }
-                    const { getServer, serverPower } = require('../Library/actions/berahost')
+                    const bh = require('../Library/actions/berahost')
                     const actMatch  = text.match(/\b(start|stop|restart|kill)\b/i)
                     const nameMatch = text.match(/\b(?:start|stop|restart|kill)\b\s+([\w-]+)/i)
                     const action = actMatch  ? actMatch[1].toLowerCase()  : 'restart'
                     const name   = nameMatch ? nameMatch[1] : null
-                    if (!name) { await reply('❓ Which server? e.g. *restart my-bot on berahost*'); return }
+                    if (!name) { await reply('❓ Which deployment? e.g. *restart my-bot on berahost*'); return }
                     await react('⚙️')
-                    const found = await getServer(name)
-                    if (!found.success) { await reply(`❌ ${found.error}`); return }
-                    const r = await serverPower(found.server.id, action)
-                    await reply(`${r.success ? '✅' : '❌'} *${action.toUpperCase()}* → ${found.server.name}\n${r.output || r.error || ''}`)
+                    const list = await bh.listDeployments()
+                    if (!list.success) { await reply(`❌ Could not list deployments: ${list.error}`); return }
+                    const found = (list.deployments || []).find(d =>
+                        String(d.id) === name ||
+                        String(d.bot?.name || '').toLowerCase() === name.toLowerCase() ||
+                        String(d.bot?.name || '').toLowerCase().includes(name.toLowerCase()))
+                    if (!found) { await reply(`❌ No BeraHost deployment matches "${name}".`); return }
+                    let r
+                    if (action === 'start') r = await bh.startDeployment(found.id)
+                    else if (action === 'restart') { const s = await bh.stopDeployment(found.id); r = s.success ? await bh.startDeployment(found.id) : s }
+                    else r = await bh.stopDeployment(found.id) // stop / kill
+                    await reply(`${r.success ? '✅' : '❌'} *${action.toUpperCase()}* → ${found.bot?.name || 'deployment ' + found.id}\n${r.output || r.error || ''}`)
                     return
                 }
 
                 // ── BeraHost: resources ───────────────────────────────────────
                 if (intent === 'berahost_resources') {
                     if (!isOwner) { await reply('❌ BeraHost actions are owner-only.'); return }
-                    const { listServers, serverResources } = require('../Library/actions/berahost')
+                    const bh = require('../Library/actions/berahost')
                     await react('📊')
-                    const list = await listServers()
-                    if (!list.success || !list.servers.length) { await reply(`❌ No servers found or panel unreachable`); return }
-                    const rows = await Promise.all(list.servers.slice(0,5).map(async s => {
-                        const res = await serverResources(s.uuid)
+                    const list = await bh.listDeployments()
+                    if (!list.success) { await reply(`❌ Could not list deployments: ${list.error}`); return }
+                    if (!list.deployments.length) { await reply('📭 No BeraHost deployments to report on.'); return }
+                    const rows = await Promise.all(list.deployments.slice(0,5).map(async d => {
+                        const label = d.bot?.name || 'Bot ' + (d.botId ?? d.id)
+                        const res = await bh.getDeploymentMetrics(d.id)
                         return res.success
-                            ? `┃ *${s.name}*: ${res.state} | CPU:${res.cpu} RAM:${res.ram} Up:${res.uptime}`
-                            : `┃ *${s.name}*: unreachable`
+                            ? `┃ *${label}*: ${res.status} | CPU:${res.cpu} RAM:${res.ram} Up:${res.uptime}`
+                            : `┃ *${label}*: metrics unavailable`
                     }))
-                    await reply(`╭══〘 *📊 SERVER RESOURCES* 〙═⊷\n${rows.join('\n')}\n╰══════════════════⊷`)
+                    await reply(`╭══〘 *📊 DEPLOYMENT RESOURCES* 〙═⊷\n${rows.join('\n')}\n╰══════════════════⊷`)
                     return
                 }
 
