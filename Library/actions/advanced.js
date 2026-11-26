@@ -14,12 +14,15 @@
       const req = mod.get(url, { timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0 BeraBot/3.0', ...opts.headers }, ...opts }, r => {
           const bufs = []
           r.on('data', c => bufs.push(c))
+          r.on('error', rej)
           r.on('end', () => {
               try { res(JSON.parse(Buffer.concat(bufs).toString())) } catch(_) { res(Buffer.concat(bufs).toString()) }
           })
       })
       req.on('error', rej)
-      req.setTimeout(12000, () => req.destroy())
+      // Destroy WITH an error so the promise rejects — a bare destroy()
+      // left it pending forever on a stalled response.
+      req.setTimeout(12000, () => req.destroy(new Error('Request timed out after 12000ms: ' + url)))
   })
 
   // ── Weather ────────────────────────────────────────────────────────────────────

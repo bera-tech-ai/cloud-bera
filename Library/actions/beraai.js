@@ -1981,30 +1981,15 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     }
 
     // ── db ────────────────────────────────────────────────────────────────────
+    // Runs SQL through the sqlite3 CLI, same as the db_query tool below
+    // (the old implementation generated a script requiring better-sqlite3,
+    // which is not installed, so it always failed).
     if (t === 'db') {
         const file = _safeWsPath(tc.file || 'workspace/data.sqlite')
         const sql = tc.sql || ''
         if (!sql) return 'ERROR: no SQL'
-        const action = tc.action || 'query'
-        const escapedFile = file.replace(/'/g, "\\'")
-        const escapedSql = sql.replace(/`/g, '\\`').replace(/\\/g, '\\\\')
-        const jsCode = `
-try {
-    const Database = require('better-sqlite3');
-    const db = new Database('${escapedFile}');
-    if ('${action}' === 'query') {
-        const rows = db.prepare(\`${escapedSql}\`).all();
-        console.log(JSON.stringify(rows, null, 2));
-    } else {
-        const info = db.prepare(\`${escapedSql}\`).run();
-        console.log(JSON.stringify({changes: info.changes, lastInsertRowid: info.lastInsertRowid}));
-    }
-    db.close();
-} catch(e) { console.error('DB Error:', e.message); }`
-        const tmpFile = `/tmp/db_${Date.now()}.js`
-        _nodeFsSync.writeFileSync(tmpFile, jsCode)
-        const r = await runBash(`node "${tmpFile}" 2>&1`, 15000)
-        try { _nodeFsSync.unlinkSync(tmpFile) } catch {}
+        const escaped = sql.replace(/'/g, "'\\''").slice(0, 2000)
+        const r = await runBash(`sqlite3 -header -column "${file}" '${escaped}' 2>&1`, 15000)
         return (r.output || 'done').slice(0, 3000)
     }
 
@@ -2015,15 +2000,21 @@ try {
         if (action === 'add') {
             const id = tc.id || `cron_${Date.now()}`
             if (!tc.schedule || !tc.task) return 'ERROR: need schedule and task'
-            global._cronJobs[id] = { schedule: tc.schedule, task: tc.task, chat: chatId, createdAt: new Date().toISOString() }
+            // Validate and schedule FIRST — only record the job once
+            // cron.schedule has succeeded, so a failure leaves no phantom
+            // job in the list and is reported honestly.
+            let task
             try {
                 const cron = require('node-cron')
                 if (!cron.validate(tc.schedule)) return `ERROR: invalid cron expression: ${tc.schedule}`
-                if (!global._cronTasks) global._cronTasks = {}
-                global._cronTasks[id] = cron.schedule(tc.schedule, async () => {
+                task = cron.schedule(tc.schedule, async () => {
                     try { if (conn) await conn.sendMessage(chatId, { text: `⏰ *Cron [${id}]:* ${tc.task}` }) } catch {}
                 })
-            } catch {}
+            } catch (e) { return `ERROR: could not schedule cron job: ${e.message}` }
+            if (!global._cronTasks) global._cronTasks = {}
+            try { global._cronTasks[id]?.stop() } catch {}
+            global._cronTasks[id] = task
+            global._cronJobs[id] = { schedule: tc.schedule, task: tc.task, chat: chatId, createdAt: new Date().toISOString() }
             return `✅ Cron *${id}* scheduled: \`${tc.schedule}\` — ${tc.task}`
         }
         if (action === 'list') {
@@ -3390,9 +3381,12 @@ ${r.output.trim().slice(0, maxLen)}`
         if (!dbName) return 'ERROR: provide name (database name)'
         if (!sql) return 'ERROR: provide sql query'
 
-        // Safety: block destructive ops unless confirmed
+        // Safety: destructive/write statements require explicit confirmation
         const sqlUpper = sql.trim().toUpperCase()
-        const safe = !['DROP TABLE', 'DROP DATABASE', 'DELETE FROM', 'TRUNCATE'].some(kw => sqlUpper.includes(kw) && !tc.confirm)
+        const destructive = /^(DROP|DELETE|UPDATE|INSERT|ALTER|TRUNCATE)\b/.test(sqlUpper)
+        if (destructive && tc.confirm !== true) {
+            return `⛔ That SQL changes data (${sqlUpper.split(/\s+/)[0]} …) and needs confirmation first. Re-run the same db_query with "confirm": true to execute it.`
+        }
 
         const dbPath = _safeWsPath(`workspace/${dbName}.db`)
         if (!_nodeFsSync.existsSync(dbPath)) return `❌ Database not found: ${dbPath}\nCreate with: {"tool":"create_database","name":"${dbName}","schema":[...]}`
@@ -3556,7 +3550,7 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
         ...getHistory(chat).slice(-12)
     ]
 
-    const loopCap = opts.maxLoops || 25
+    const loopCap = opts.maxLoops ?? opts.MAX_LOOPS ?? 25
     let stepCount = 0
 
     if (conn && m) {

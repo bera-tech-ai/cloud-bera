@@ -50,8 +50,16 @@ const convertUnit = (value, from, to) => {
         if (math) {
             try {
                 const r = math.evaluate(`${value} ${from} to ${to}`)
-                return { success: true, result: Number(r), formatted: `${value} ${from} = ${math.format(r, { precision: 10 })} ${to}` }
-            } catch {}
+                // mathjs returns a Unit object — Number(unit) is NaN, so
+                // pull the plain number out in the target unit instead.
+                const num = r && typeof r.toNumber === 'function' ? r.toNumber(to) : Number(r)
+                if (num == null || Number.isNaN(num)) {
+                    return { success: false, result: 0, formatted: '', error: `Could not convert ${from} to ${to}` }
+                }
+                return { success: true, result: num, formatted: `${value} ${from} = ${math.format(num, { precision: 10 })} ${to}` }
+            } catch (e) {
+                return { success: false, result: 0, formatted: '', error: e.message }
+            }
         }
         return { success: false, result: 0, formatted: '', error: 'convert-units not installed' }
     }
@@ -60,6 +68,9 @@ const convertUnit = (value, from, to) => {
         let cu = convertUnits
         if (typeof cu === 'function') {
             const result = cu(value).from(from).to(to)
+            if (typeof result !== 'number' || Number.isNaN(result)) {
+                return { success: false, result: 0, formatted: '', error: `Could not convert ${from} to ${to}` }
+            }
             return {
                 success: true,
                 result,

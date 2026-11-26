@@ -15,7 +15,9 @@ const getKey = () =>
     ''
 
 const setKey = async (key) => {
-    if (!global.db?.data?.settings) global.db.data.settings = {}
+    if (!global.db) global.db = { data: {} }
+    if (!global.db.data) global.db.data = {}
+    if (!global.db.data.settings) global.db.data.settings = {}
     global.db.data.settings.skyApiKey = key
     await global.db?.write?.()
 }

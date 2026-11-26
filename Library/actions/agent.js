@@ -60,6 +60,18 @@ const EXECUTOR_OWNER_ACTIONS = new Set([
 // ── Xcasper AI provider chain ────────────────────────────────────────────────
 const xcasper = require('./xcasper')
 const { webSearch } = require('./web-search')
+// gt* provider helpers used by the planner actions below (crypto_price,
+// weather_gt, gt_* …). Previously never imported — every one of those
+// actions threw "gtXxx is not defined".
+const {
+    gtCrypto, gtStock, gtCurrency, gtMovie, gtAnime, gtTranslate, gtWeather,
+    gtNews, gtLyrics, gtWiki, gtBible, gtDnsCheck, gtHttpHeaders, gtServerCheck,
+    gtEncodeBinary, gtDecodeBinary, gtEncodeBase64, gtDecodeBase64, gtFancyText,
+    gtEncryptCode, gtGoogleImages, gtUnsplash, gtTikTokSearch, gtLyricsV2,
+    gtSpotifyLyrics, gtSpotifyPlaylist, gtSoundCloud, gtHearthis, gtChord,
+    gtDefine, gtWikimedia, gtPlaystore, gtHappyMod, gtApkMirror, gtNpmSearch,
+    gtWattpad
+} = require('./giftedapi')
 
 const callAI = async (systemPrompt, userMsg, timeoutMs) => {
     const messages = []
@@ -187,8 +199,19 @@ const bugFinder = async (code, fileName = '') => {
 }
 
 const httpRequest = async (method, url, data, headers = {}) => {
+    // Accept either positional (method, url, data, headers) or a single
+    // options object { method, url, data, headers } — Handler/index.js
+    // calls it with the object shape.
+    if (method && typeof method === 'object') {
+        const o = method
+        method  = o.method || 'GET'
+        url     = o.url
+        data    = o.data
+        headers = o.headers || {}
+    }
     try {
-        const config = { method: method.toUpperCase(), url, timeout: 20000, headers: { 'User-Agent': 'Bera-Agent/1.0', ...headers } }
+        const agent = egressAgent()
+        const config = { method: String(method || 'GET').toUpperCase(), url, timeout: 20000, headers: { 'User-Agent': 'Bera-Agent/1.0', ...headers }, ...(agent ? { httpsAgent: agent, httpAgent: agent } : {}) }
         if (data && ['POST', 'PUT', 'PATCH'].includes(config.method)) {
             config.data = typeof data === 'string' ? data : JSON.stringify(data)
             config.headers['Content-Type'] = 'application/json'
@@ -1001,9 +1024,9 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
             case 'berahost_power':
             case 'berahost': {
                 const bh = require('./berahost')
-                const action = args.action || tc.action || 'list'
+                const action = args.action || 'list'
                 if (!trustedBotOwner()) return ownerDenied()
-                const id = args.id || tc.id
+                const id = args.id
                 try {
                     switch(action) {
                         case 'list': {
@@ -1044,7 +1067,7 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                             return { success: true, output: `📊 *Metrics*\n• CPU: ${r.cpu}\n• RAM: ${r.ram}\n• Uptime: ${r.uptime}\n• Status: ${r.status}\n• Threads: ${r.threads||'N/A'}`, desc }
                         }
                         case 'deploy': {
-                            const r = await bh.deployBot(args.botId||tc.botId, args.sessionId||tc.sessionId||null, args.envVars||tc.envVars||{})
+                            const r = await bh.deployBot(args.botId, args.sessionId || null, args.envVars || {})
                             if (!r.success) return { success: false, output: r.error, desc }
                             const checked = r.id ? await bh.pollDeployment(r.id) : null
                             const deployment = checked?.success ? (checked.deployment || checked) : r.data
@@ -1065,14 +1088,7 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                             return { success: true, output: `🤖 *Available Bots*:\n${bots}`, desc }
                         }
                         default: {
-                            const r = await bh.requestCustomerApi(action, {
-                                ...args, ...tc,
-                                id: args.id ?? tc.id,
-                                domainId: args.domainId ?? tc.domainId,
-                                memberId: args.memberId ?? tc.memberId,
-                                body: args.body ?? tc.body,
-                                params: args.params ?? tc.params
-                            })
+                            const r = await bh.requestCustomerApi(action, { ...args })
                             return { success: r.success, output: r.success ? JSON.stringify(r.data).slice(0, 2500) : r.error, desc }
                         }
                     }
@@ -1897,6 +1913,30 @@ const RETRYABLE_ACTIONS = new Set([
     'workspace_write', 'workspace_mkdir', 'git_clone', 'http_request'
 ])
 
+// Extract the first balanced JSON object from text: find the first '{',
+// then scan with string-awareness to its matching '}'. (A non-greedy
+// regex truncates at the first '}' — i.e. at the end of a nested args
+// object — so JSON.parse failed for any corrected step with args.)
+const extractFirstJsonObject = (text) => {
+    const s = String(text || '')
+    const start = s.indexOf('{')
+    if (start < 0) return null
+    let depth = 0, inStr = false, esc = false
+    for (let i = start; i < s.length; i++) {
+        const c = s[i]
+        if (inStr) {
+            if (esc) esc = false
+            else if (c === '\\') esc = true
+            else if (c === '"') inStr = false
+            continue
+        }
+        if (c === '"') inStr = true
+        else if (c === '{') depth++
+        else if (c === '}') { depth--; if (depth === 0) return s.slice(start, i + 1) }
+    }
+    return null
+}
+
 const executeWithRetry = async (step, conn, chat, m, opts = {}, maxRetries = 3) => {
     let current = { ...step }
     let lastResult = null
@@ -1920,9 +1960,9 @@ Return ONLY corrected step JSON: {"action":"...","args":{...},"desc":"..."}`
         const fix = await callAI('', fixPrompt)
         if (!fix.success) break
         try {
-            const match = fix.text.match(/\{[\s\S]*?\}/)
-            if (!match) break
-            const corrected = JSON.parse(match[0])
+            const jsonText = extractFirstJsonObject(fix.text)
+            if (!jsonText) break
+            const corrected = JSON.parse(jsonText)
             if (!corrected.action) break
             console.log(`[AGENT] 🔧 Self-correcting step (attempt ${attempt + 2}/${maxRetries}):`, corrected.action)
             current = corrected
