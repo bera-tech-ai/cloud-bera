@@ -1891,7 +1891,6 @@ const executeToolCall = async (tc, chatId, conn, m) => {
                     const url = deployment?.url || deployment?.liveUrl
                     return `${status === 'running' ? '✅' : status === 'failed' ? '❌' : 'ℹ️'} deployment id=${d.id} status=${status}${url ? ` url=${url}` : ''}`
                 }
-                case 'coins': return 'This BeraHost API version does not document coin balance or claim endpoints.'
                 case 'bots': {
                     const r = await bhLib.listBots()
                     if (!r.success) return `BeraHost error: ${r.error}`
@@ -3496,7 +3495,7 @@ ${r.output.trim().slice(0, maxLen)}`
             `*🤖 AI & Generation:*\nsearch, image_gen, code_review, code_explain, bug_finder, code_gen\n\n` +
             `*🚀 App Builder:*\nscaffold, build_webapp, generate_api, self_test_fix, mock_server\n\n` +
             `*🌍 Live Data:*\ncrypto_price, stock_price, weather_gt, news_fetch, translate, lyrics_fetch, wiki_search\n\n` +
-            `*🏗️ BeraHost Deploy:*\nberahost (list/status/start/stop/logs/deploy/coins/bots)\n\n` +
+            `*🏗️ BeraHost Deploy:*\nberahost (list/status/start/stop/logs/deploy/plans/bots)\n\n` +
             `Use: Agent <task> — I'll pick the right tools automatically.`
     }
 

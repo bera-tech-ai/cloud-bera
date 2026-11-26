@@ -138,7 +138,7 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
             return reply('❌ I could not persist the BeraHost API key. Check database connectivity and try again.')
         }
         await conn.sendMessage(chat, { react: { text: '✅', key: m.key } })
-        return reply(`✅ BeraHost API key saved!\n\n🧪 Test with: ${prefix}coins`)
+        return reply(`✅ BeraHost API key saved!\n\n🧪 Test with: ${prefix}plans`)
     }
 
     const ptUrl    = Config.pterodactylUrl    || process.env.PTERODACTYL_URL    || ''
@@ -866,7 +866,7 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
 
     // ── BeraHost API key guard ────────────────────────────────────────────
     const _bhKeySet = global.db?.data?.settings?.bhApiKey || process.env.BH_API_KEY || process.env.BERAHOST_API_KEY
-    const _bhFunctionalCmds = ['deploy','bhd','botdeploy','newdeploy','deployments','mybots','listdeploy','bhdlist','mydeployments','startbot','bhstart','depstart','stopbot','bhstop','depstop','deletedeploy','deldeploy','bhdel','removedeploy','botlogs','bhlogs','deplogs','logbot','botmetrics','botstats','bhmetrics','depmetrics','depstats','depinfo','bhinfo','deployinfo','botinfo','updateenv','setenv','bhenv','depenv','coins','bhcoins','mycoins','balance','claimcoins','dailycoins','claim','bhclaim','redeem','voucher','bhredeem','mpesa','pay','bhpay','bhmoney','stk','paystatus','checkpay','paycheck','payhistory','payments','bhpayments','mypayments','transactions','coinhistory','bhhistory','cointx']
+    const _bhFunctionalCmds = ['deploy','bhd','botdeploy','newdeploy','deployments','mybots','listdeploy','bhdlist','mydeployments','startbot','bhstart','depstart','stopbot','bhstop','depstop','deletedeploy','deldeploy','bhdel','removedeploy','botlogs','bhlogs','deplogs','logbot','botmetrics','botstats','bhmetrics','depmetrics','depstats','depinfo','bhinfo','deployinfo','botinfo','updateenv','setenv','bhenv','depenv','paystatus','checkpay','paycheck','payhistory','payments','bhpayments','mypayments']
     if (_bhFunctionalCmds.includes(command) && !_bhKeySet) {
         return reply(
             '🔑 *BeraHost API key not set!*\n\n' +
@@ -1028,67 +1028,17 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
         return reply(r.success ? `✅ ${r.output}\n\nUpdated: ${Object.keys(envVars).join(', ')}` : `❌ ${r.error}`)
     }
 
-    // ── .coins ────────────────────────────────────────────────────────────────
-    if (['coins', 'bhcoins', 'mycoins', 'balance'].includes(command)) {
-        if (!isOwner) return reply('⛔ Owner only.')
-        await conn.sendMessage(chat, { react: { text: '🪙', key: m.key } })
-        const r = await bh.getCoins()
-        if (!r.success) return reply(`❌ ${r.error}`)
-        return reply(
-            `╭══〘 *🪙 BERAHOST COINS* 〙═⊷\n` +
-            `┃ Balance: *${r.balance} coins*\n` +
-            `┃\n` +
-            `┃ 💡 Claim daily: ${prefix}claimcoins\n` +
-            `┃    Buy plan:    ${prefix}plans\n` +
-            `╰══════════════════⊷`
-        )
-    }
-
-    // ── .claimcoins ───────────────────────────────────────────────────────────
-    if (['claimcoins', 'dailycoins', 'claim', 'bhclaim'].includes(command)) {
-        if (!isOwner) return reply('⛔ Owner only.')
-        await conn.sendMessage(chat, { react: { text: '🪙', key: m.key } })
-        const r = await bh.claimDailyCoins()
-        await conn.sendMessage(chat, { react: { text: r.success ? '✅' : '❌', key: m.key } })
-        if (r.success) return reply(`✅ *Daily coins claimed!*\n${r.output}${r.amount ? '\n+' + r.amount + ' coins' : ''}${r.balance ? '\nNew balance: ' + r.balance : ''}`)
-        return reply(`❌ ${r.error}`)
-    }
-
-    // ── .redeem <voucher> ─────────────────────────────────────────────────────
-    if (['redeem', 'voucher', 'bhredeem'].includes(command)) {
-        if (!isOwner) return reply('⛔ Owner only.')
-        if (!text) return reply(`❓ Usage: ${prefix}redeem <voucher_code>`)
-        await conn.sendMessage(chat, { react: { text: '🎟️', key: m.key } })
-        const r = await bh.redeemVoucher(text.trim())
-        await conn.sendMessage(chat, { react: { text: r.success ? '✅' : '❌', key: m.key } })
-        return reply(r.success ? `✅ ${r.output}` : `❌ ${r.error}`)
-    }
-
     // ── .plans ────────────────────────────────────────────────────────────────
     if (['plans', 'bhplans', 'hostingplans', 'pricelist'].includes(command)) {
         await conn.sendMessage(chat, { react: { text: '📦', key: m.key } })
         const r = await bh.getPlans()
         if (!r.success) return reply('❌ ' + r.error)
 
-        const pkgs  = r.coinPackages      || []
         const subs  = r.subscriptionPlans || []
 
-        if (!pkgs.length && !subs.length) return reply('❌ No plans found from BeraHost.')
+        if (!subs.length) return reply('❌ No plans found from BeraHost.')
 
         let msg = '╭══〘 *📦 BERAHOST PLANS* 〙═⊷\n┃\n'
-
-        if (pkgs.length) {
-            msg += '┃ 🪙 *COIN PACKAGES (Buy Coins)*\n'
-            msg += '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-            pkgs.forEach(p => {
-                const badge = p.best ? ' 🏆 BEST' : p.popular ? ' 🔥 POPULAR' : ''
-                const bonus = p.bonus > 0 ? ' (+' + p.bonus + ' bonus)' : ''
-                msg += '┃ *' + p.name + '*' + badge + '\n'
-                msg += '┃   💰 KES ' + p.kes + '  →  🪙 ' + p.totalCoins + ' coins' + bonus + '\n'
-                msg += '┃   ID: ' + p.id + '\n'
-                msg += '┃\n'
-            })
-        }
 
         if (subs.length) {
             msg += '┃ 🖥️ *SUBSCRIPTION PLANS*\n'
@@ -1104,37 +1054,10 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
         }
 
         msg += '┃ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-        msg += '┃ 💳 Pay: *' + prefix + 'mpesa <phone> <plan-id>*\n'
-        msg += '┃ 🎟️ Redeem: *' + prefix + 'redeem <voucher>*\n'
+        msg += '┃ 💳 Subscribe via PayHero checkout on the BeraHost dashboard\n'
         msg += '╰══════════════════⊷'
 
         return reply(msg)
-    }
-
-    // ── .mpesa <phone> <planId> [amount] ─────────────────────────────────────
-    if (['mpesa', 'pay', 'bhpay', 'bhmoney', 'stk'].includes(command)) {
-        if (!isOwner) return reply('⛔ Owner only.')
-        const parts = text.trim().split(/\s+/)
-        const phone = parts[0]?.replace(/\D/g, '')
-        const planId = parts[1]
-        const amount = parts[2]
-        if (!phone || !planId) return reply(`❓ Usage: ${prefix}mpesa <phone> <planId> [amount]\n\nExample: ${prefix}mpesa 254712345678 basic\n\nSee plans: ${prefix}plans`)
-        await conn.sendMessage(chat, { react: { text: '💳', key: m.key } })
-        const r = await bh.initiateMpesa(phone, planId, amount)
-        await conn.sendMessage(chat, { react: { text: r.success ? '📲' : '❌', key: m.key } })
-        if (r.success) {
-            return reply(
-                `╭══〘 *📲 M-PESA STK SENT* 〙═⊷\n` +
-                `┃ Phone: ${phone}\n` +
-                `┃ Plan: ${planId}\n` +
-                `┃ ${r.output}\n` +
-                `┃ Payment ID: ${r.paymentId || 'N/A'}\n` +
-                `┃\n` +
-                `┃ Check status: ${prefix}paystatus ${r.paymentId || ''}\n` +
-                `╰══════════════════⊷`
-            )
-        }
-        return reply(`❌ M-Pesa failed: ${r.error}`)
     }
 
     // ── .paystatus <paymentId> ────────────────────────────────────────────────
@@ -1170,18 +1093,6 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
         return reply(`╭══〘 *🤖 AVAILABLE BOTS* 〙═⊷\n${botRows || '┃ No bots listed yet'}\n┃\n┃ Deploy: ${prefix}deploy bot <id> <session_id>\n╰══════════════════⊷`)
     }
 
-    // ── .transactions / .coinhistory ──────────────────────────────────────────
-    if (['transactions', 'coinhistory', 'bhhistory', 'cointx'].includes(command)) {
-        if (!isOwner) return reply('⛔ Owner only.')
-        await conn.sendMessage(chat, { react: { text: '📋', key: m.key } })
-        const r = await bh.getTransactions()
-        if (!r.success) return reply(`❌ ${r.error}`)
-        const txs = r.transactions.slice(0, 10)
-        if (!txs.length) return reply('No transactions yet.')
-        const rows = txs.map(t => `┃ ${t.type || '?'} ${t.amount > 0 ? '+' : ''}${t.amount} — ${t.description || t.reason || '?'}`).join('\n')
-        return reply(`╭══〘 *📋 COIN HISTORY* 〙═⊷\n${rows}\n╰══════════════════⊷`)
-    }
-
     // ── .bhhelp ───────────────────────────────────────────────────────────────
     if (['bhhelp', 'deployhelp', 'berahost'].includes(command)) {
         return reply(
@@ -1196,15 +1107,8 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
             `┃ ${prefix}updateenv <id> KEY=VAL\n` +
             `┃ ${prefix}deletedeploy <id>\n` +
             `┃\n` +
-            `┃ *🪙 Coins*\n` +
-            `┃ ${prefix}coins — check balance\n` +
-            `┃ ${prefix}claimcoins — claim daily\n` +
-            `┃ ${prefix}transactions — coin history\n` +
-            `┃ ${prefix}redeem <voucher>\n` +
-            `┃\n` +
-            `┃ *💳 Payments (M-Pesa)*\n` +
+            `┃ *💳 Plans & Payments*\n` +
             `┃ ${prefix}plans — see available plans\n` +
-            `┃ ${prefix}mpesa <phone> <planId>\n` +
             `┃ ${prefix}paystatus <id>\n` +
             `┃ ${prefix}payhistory\n` +
             `┃\n` +
@@ -1229,7 +1133,7 @@ async function handle(m, { conn, args, command, text, prefix, isOwner, chat, rep
                 '*Example:*\n' + prefix + 'deploybera 254712345678\n\n' +
                 '📱 Use your full number with country code (no + sign)\n' +
                 '💡 A pair code will be sent to you — enter it in WhatsApp\n\n' +
-                '*Cost:* 10 BeraHost coins'
+                '*Cost:* Counts against your BeraHost subscription plan'
             )
         }
         await conn.sendMessage(chat, { react: { text: '🚀', key: m.key } })
@@ -1313,15 +1217,10 @@ handle.command = [
     'botmetrics','botstats','bhmetrics','depmetrics','depstats',
     'depinfo','bhinfo','deployinfo','botinfo',
     'updateenv','setenv','bhenv','depenv',
-    'coins','bhcoins','mycoins','balance',
-    'claimcoins','dailycoins','claim','bhclaim',
-    'redeem','voucher','bhredeem',
     'plans','bhplans','hostingplans','pricelist',
-    'mpesa','pay','bhpay','bhmoney','stk',
     'paystatus','checkpay','paycheck',
     'payhistory','payments','bhpayments','mypayments',
     'bots','bhbots','botlist','availablebots',
-    'transactions','coinhistory','bhhistory','cointx',
     'setbhkey','bhkey','setberakey','bhsetkey',
     'bhhelp','deployhelp','berahost',
     'deploybera','beradeploy','bhbera','deployai','depbera'

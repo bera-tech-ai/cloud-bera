@@ -164,16 +164,14 @@ const handle = async (m, ctx) => {
             return reply('✅ BeraHost API URL saved: ' + db.settings.bhApiUrl)
         }
 
-        // ── coins balance ──
-        if (['coins', 'balance', 'claim', 'txns', 'transactions'].includes(sub))
-            return reply('ℹ️ Coin balance, daily-claim, and transaction endpoints are not in the current BeraHost API documentation.')
-
         // ── plans ──
         if (sub === 'plans') {
             let p, s
             try { [p, s] = await Promise.all([bh('get', '/payments/plans', undefined, true), bh('get', '/subscriptions/plans', undefined, true)]) }
             catch (e) { return reply('❌ ' + (e.response?.data?.error || e.message)) }
-            return reply(`💳 *BeraHost Plans*\n\n*Payments:*\n${JSON.stringify(p, null, 2).slice(0, 800)}\n\n*Subscriptions:*\n${JSON.stringify(s, null, 2).slice(0, 1200)}`)
+            const plans = (Array.isArray(s) ? s : (s.subscriptionPlans || s.plans || []))
+            const rows = plans.map(pl => '• *' + (pl.name || pl.id) + '* — ' + (pl.priceKes === 0 ? 'Free' : 'KES ' + pl.priceKes + '/month') + ' · ' + (pl.botLimit ?? pl.maxBots ?? '?') + ' bot(s), ' + (pl.webLimit ?? pl.maxWebApps ?? '?') + ' web app(s)').join('\n')
+            return reply('💳 *BeraHost Plans* (subscriptions — pay via PayHero checkout on the dashboard):\n' + (rows || 'No plans returned.'))
         }
 
         // ── pay ──
@@ -209,7 +207,7 @@ const handle = async (m, ctx) => {
             if (!bots.length) return reply('📭 No bots available.')
             const lines = bots.map(b => {
                 const req = Object.keys(b.requiredVars || {}).join(', ')
-                const cost = b.deployCost ? `💰 ${b.deployCost} coins` : '💰 free'
+                const cost = 'Included in your subscription plan'
                 return `*[${b.id}] ${b.name}* ${b.isFeatured ? '⭐' : ''}\n  ${cost} · Needs: \`${req || 'none'}\`\n  _${(b.description || '').slice(0, 80)}..._`
             })
             return reply(
@@ -373,7 +371,7 @@ const handle = async (m, ctx) => {
             `  \`${prefix}deploy beraai 254712345678\`\n` +
             `  \`${prefix}deploy atassa 254712345678 Gifted~session\`\n\n` +
             `*Manage deployments:*\n` +
-            `  \`${prefix}bh\` — dashboard (all bots + coins)\n` +
+            `  \`${prefix}bh\` — dashboard (all bots)\n` +
             `  \`${prefix}bh bots\` — available bot templates\n` +
             `  \`${prefix}bh status <id>\` — status + metrics\n` +
             `  \`${prefix}bh logs <id> [n]\` — last N log lines\n` +
