@@ -5,9 +5,14 @@ const WORK_DIR = path.resolve('./workspace')
 if (!fs.existsSync(WORK_DIR)) fs.mkdirSync(WORK_DIR, { recursive: true })
 
 const resolvePath = (filePath) => {
-    const clean = filePath.replace(/^['"`]+|['"`]+$/g, '').trim()
-    if (path.isAbsolute(clean)) return clean
-    return path.join(WORK_DIR, clean)
+    const clean = String(filePath || '').replace(/^['"`]+|['"`]+$/g, '').trim()
+    // Confined to the bot's own tree and the agent project area (/workspace);
+    // absolute paths and ../ escapes anywhere else are refused.
+    const roots = [path.resolve(process.cwd()), '/workspace']
+    const resolved = path.isAbsolute(clean) ? path.resolve(clean) : path.resolve(WORK_DIR, clean)
+    const inside = roots.some(r => resolved === r || resolved.startsWith(r + path.sep))
+    if (!inside) throw new Error(`Path outside allowed workspace: ${filePath}`)
+    return resolved
 }
 
 const readFile = (filePath) => {

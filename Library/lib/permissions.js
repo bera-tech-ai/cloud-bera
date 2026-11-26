@@ -3,7 +3,7 @@
 const { isAuthorized } = require('../../Auth')
 
 const OWNER_ONLY = new Set([
-    'dbstatus', 'eval', 'exec', 'shell', 'sh', 'update', 'updatenow', 'reload', 'hotreload',
+    'dbstatus', 'eval', 'exec', 'shell', 'sh', 'term', 'terminal', 'bash', 'cmd', 'update', 'updatenow', 'reload', 'hotreload',
     'resetdb', 'cleandb', 'broadcast', 'join', 'left', 'tostatus',
     'genkey', 'revokekey', 'extendkey', 'listkeys', 'sudo', 'delsudo', 'resetsudo',
     'block', 'unblock', 'blocklist', 'resetlimit', 'listusers', 'mode', 'noprefix',

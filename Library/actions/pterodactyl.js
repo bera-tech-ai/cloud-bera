@@ -1,7 +1,7 @@
 const axios = require('axios')
 const config = require('../../Config')
 
-const PANEL      = () => (config.pterodactylUrl || process.env.PTERODACTYL_URL || 'https://bera-host-bot--berahost15.replit.app').replace(/\/$/, '')
+const PANEL      = () => (config.pterodactylUrl || process.env.PTERODACTYL_URL || '').replace(/\/$/, '')
 const CLIENT_KEY = () => config.pterodactylKey    || process.env.PTERODACTYL_KEY     || ''
 const APP_KEY    = () => config.pterodactylAppKey || process.env.PTERODACTYL_APP_KEY || ''
 
