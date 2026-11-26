@@ -32,15 +32,21 @@ test('`.setbhkey` saves a valid key via the persisted database and never echoes 
     } finally { global.db = previous }
 })
 
-test('BeraHost key save refuses non-owner and group-chat attempts', async () => {
+test('BeraHost key save is bring-your-own: non-owners store only their own key; group chats refused', async () => {
     const previous = global.db
     global.db = { data: { settings: {} }, write: async () => {} }
     try {
         const secret = 'bh_private_example'
+        // Non-owner in a private chat: the key lands ONLY in their own
+        // userSecrets entry (keyed by their bare number — the fake chat JID),
+        // never in the global settings, and the reply names their account.
         const notOwner = fakeContext('setbhkey', secret, [secret], { isOwner: false })
         await pterodactyl(notOwner.m, notOwner.ctx)
         assert.equal(global.db.data.settings.bhApiKey, undefined)
-        assert.match(notOwner.replies[0], /owner only/i)
+        assert.equal(global.db.data.userSecrets['254700000001'].berahostKey, secret)
+        assert.match(notOwner.replies[0], /linked to \*your\* BeraHost account/i)
+        assert.doesNotMatch(notOwner.replies.join('\n'), /owner only/i)
+        // Group chats are refused for everyone, owner included.
         const group = fakeContext('setbhkey', secret, [secret], { chat: '123@g.us' })
         await pterodactyl(group.m, group.ctx)
         assert.equal(global.db.data.settings.bhApiKey, undefined)

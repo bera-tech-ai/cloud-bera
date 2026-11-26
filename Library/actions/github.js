@@ -5,18 +5,40 @@ const getToken = () => {
     return settings.githubToken || settings.gitToken ||
         process.env.GITHUB_TOKEN || process.env.GIT_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''
 }
+
+// ── Bring-your-own credentials ─────────────────────────────────────────────
+// Per-user secrets live in global.db.data.userSecrets, keyed by bare phone
+// number (the digits before '@'). Resolution for a specific requester:
+//   1. the requester's own linked token, when they have one;
+//   2. the global chain above — OWNER ONLY: the owner's own builds keep
+//      working with the bot-wide token, and the owner is the only one who
+//      may fall back to it;
+//   3. '' for any other user with no token of their own — a non-owner must
+//      never silently publish under the owner's account.
+// With no specific requester (undefined/null/''/'shared'), getTokenFor
+// keeps the historical global behaviour so legacy callers are unaffected.
+const bareNumber = value => String(value ?? '').split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
+const isOwnerId = userId => {
+    try { return Boolean(require('../../Auth').isAuthorized(userId)?.isOwner) } catch { return false }
+}
+const getTokenFor = userId => {
+    if (userId === undefined || userId === null || userId === '' || userId === 'shared') return getToken()
+    const own = global.db?.data?.userSecrets?.[bareNumber(userId)]?.githubToken
+    if (own) return own
+    return isOwnerId(userId) ? getToken() : ''
+}
 const MAX_REPOSITORY_DESCRIPTION_LENGTH = 350
 const normalizeRepositoryDescription = description => Array.from(String(description || '').trim())
     .slice(0, MAX_REPOSITORY_DESCRIPTION_LENGTH).join('')
 
-const gh = (endpoint, method = 'GET', data = null) => {
-    const token = getToken()
-    if (!token) return Promise.resolve({ error: 'No GitHub token configured. The owner can set it with .setghkey in a private chat.' })
+const gh = (endpoint, method = 'GET', data = null, token = undefined) => {
+    const resolved = token !== undefined ? token : getToken()
+    if (!resolved) return Promise.resolve({ error: 'No GitHub token configured. The owner can set it with .setghkey in a private chat.' })
     return axios({
         method,
         url: `https://api.github.com${endpoint}`,
         headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${resolved}`,
             Accept: 'application/vnd.github+json',
             'User-Agent': 'BeraBot/2.0',
             'X-GitHub-Api-Version': '2022-11-28'
@@ -34,8 +56,8 @@ const gh = (endpoint, method = 'GET', data = null) => {
     })
 }
 
-const getUser        = ()                         => gh('/user')
-const getRepo        = (owner, repo)              => gh(`/repos/${owner}/${repo}`)
+const getUser        = (token)                    => gh('/user', 'GET', null, token)
+const getRepo        = (owner, repo, token)       => gh(`/repos/${owner}/${repo}`, 'GET', null, token)
 const listBranches   = (owner, repo)              => gh(`/repos/${owner}/${repo}/branches`)
 const searchRepos    = (query)                    => gh(`/search/repositories?q=${encodeURIComponent(query)}&per_page=5`)
 
@@ -51,7 +73,7 @@ const createRepo = (name, isPrivate = false, description = '', options = {}) =>
         private: isPrivate,
         description: normalizeRepositoryDescription(description),
         auto_init: options.autoInit !== undefined ? Boolean(options.autoInit) : true
-    })
+    }, options.token)
 
 const deleteRepo = async (owner, repo) => {
     const data = await gh(`/repos/${owner}/${repo}`, 'DELETE')
@@ -111,8 +133,8 @@ const createBranch = async (owner, repo, branchName, fromBranch = 'main') => {
 const getCommits = (owner, repo, perPage = 5) =>
     gh(`/repos/${owner}/${repo}/commits?per_page=${perPage}`)
 
-const getOwner = async () => {
-    const user = await getUser()
+const getOwner = async (token) => {
+    const user = await getUser(token)
     return user?.login || null
 }
 
@@ -205,7 +227,7 @@ const detectProjectType = (text) => {
 }
 
 module.exports = {
-    getToken, getUser, getOwner, getRepo, listRepos, createRepo, normalizeRepositoryDescription, deleteRepo,
+    getToken, getTokenFor, bareNumber, getUser, getOwner, getRepo, listRepos, createRepo, normalizeRepositoryDescription, deleteRepo,
     listFiles, getFile, createFile, updateFile, upsertFile, pushMultipleFiles,
     createIssue, listIssues, forkRepo, createBranch, getCommits,
     listBranches, searchRepos, PROJECT_TEMPLATES, detectProjectType
