@@ -357,6 +357,38 @@ const makePlan = async (record, task, options = {}) => {
             if (reparsed.success && Array.isArray(reparsed.value?.steps) && reparsed.value.steps.length) parsed = reparsed
         }
     }
+    // Planners sometimes return the step list under a different key
+    // (plan/actions/tasks) — accept those shapes instead of reading
+    // them as an empty plan.
+    if (parsed.success && parsed.value && typeof parsed.value === 'object' && !Array.isArray(parsed.value.steps)) {
+        for (const key of ['plan', 'actions', 'tasks', 'items', 'files']) {
+            const arr = parsed.value[key]
+            if (Array.isArray(arr) && arr.length && arr.some(x => x && typeof x === 'object' && ('action' in x || 'path' in x || 'brief' in x))) {
+                parsed = { ...parsed, value: { ...parsed.value, steps: arr } }
+                break
+            }
+        }
+    }
+    // Last resort (seen live 2026-11-26: Kitee Coffee returned an empty
+    // plan twice in a row, regeneration included): synthesize the
+    // standard minimal plan deterministically. The per-file generator
+    // still writes real content from the task + these briefs, so the
+    // build proceeds instead of dying at the planning stage.
+    if (parsed.success && (!Array.isArray(parsed.value?.steps) || !parsed.value.steps.length)) {
+        await notifyProgress(options, { phase: 'planner_fallback_plan' })
+        const taskText = String(task || record.task || '')
+        const wantsServer = /\b(api|server|backend|express|node\.?js|dashboard|login|sign[ -]?in|database|booking system|crud)\b/i.test(taskText)
+        const steps = wantsServer
+            ? [
+                { action: 'write_file', path: 'package.json', brief: 'Root package.json for the app described in the project task: name, main server.js, start script "node server.js", and only the well-known dependencies the server code imports (express if needed).' },
+                { action: 'write_file', path: 'server.js', brief: 'The complete single-file backend for the app described in the project task: plain CommonJS Node (Express if the task implies it), every route the task needs, data stored in a JSON file under data/ or in memory, serves the static frontend from public/, listens on process.env.PORT.' },
+                { action: 'write_file', path: 'public/index.html', brief: 'The complete frontend page for the app described in the project task: one self-contained HTML file with inline CSS and JS implementing every section and feature the task asks for, with the real names, prices and text from the task.' }
+            ]
+            : [
+                { action: 'write_file', path: 'index.html', brief: 'A complete, responsive one-page website for exactly what the project task describes: one self-contained HTML file with inline CSS and JS, every section the task asks for, with the real names, prices and text from the task. No placeholder content.' }
+            ]
+        parsed = { success: true, value: { summary: 'Deterministic fallback plan (planner returned no steps).', steps, planFallback: true } }
+    }
     const plan = parsed.value
     if (!Array.isArray(plan.steps) || !plan.steps.length) return { success: false, error: 'Planner returned no steps.' }
     await notifyProgress(options, { phase: 'planning_complete', provider: result.provider })
@@ -666,7 +698,16 @@ const executeStep = async (record, step, options = {}) => {
         if (!step.path || step.path.trim() === '.' || /relative[ _]path/i.test(step.path)) {
             return { success: false, output: `Invalid file path from the planner: "${step.path || ''}" is a placeholder, not a real path.` }
         }
-        if (action === 'mkdir') { fs.mkdirSync(target, { recursive: true }); return { success: true, output: `Created ${step.path}` } }
+        if (action === 'mkdir') {
+            // Planners sometimes emit mkdir for a FILE path (mkdir
+            // src/public/style.css — seen live 2026-11-26), creating a
+            // directory that then blocks the real file write. File
+            // writes create their parent directories anyway.
+            if (/\.(html?|css|m?js|json|txt|md|svg|png|jpe?g|ico|xml|csv)$/i.test(step.path)) {
+                return { success: true, output: `Skipped mkdir for file-like path ${step.path}; directories are created by file writes.` }
+            }
+            fs.mkdirSync(target, { recursive: true }); return { success: true, output: `Created ${step.path}` }
+        }
         let content = typeof step.content === 'string' ? step.content : ''
         if (!content.trim()) {
             // Brief-based plans carry no file body: generate this one file
@@ -678,7 +719,11 @@ const executeStep = async (record, step, options = {}) => {
             content = generated.text
         }
         if (fs.existsSync(target) && fs.statSync(target).isDirectory()) {
-            return { success: false, output: `Cannot write a file over the directory ${step.path}; choose a file path inside it instead.` }
+            // An empty directory squatting on a file path (left by a
+            // stray mkdir step) is removed so the write can proceed; a
+            // non-empty one is a real conflict and still fails.
+            if (fs.readdirSync(target).length === 0) fs.rmdirSync(target)
+            else return { success: false, output: `Cannot write a file over the directory ${step.path}; choose a file path inside it instead.` }
         }
         // Never let corrupted content overwrite a good file: providers and
         // repair steps occasionally return encoding-damaged or binary junk

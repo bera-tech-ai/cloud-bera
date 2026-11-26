@@ -66,8 +66,16 @@ test('executeStep rejects placeholder paths and directory targets instead of cra
     const placeholder = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'relative_path_from_project_root', content: 'x' })
     assert.equal(placeholder.success, false)
     assert.match(placeholder.output, /placeholder/i)
+    // An EMPTY directory squatting on a file path (left by a stray
+    // mkdir step — the live Kings Kutz failure) is removed and the
+    // write proceeds; a NON-empty directory is still a hard conflict.
     fs.mkdirSync(path.join(dir, 'src/broken.js'), { recursive: true })
-    const overDir = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'src/broken.js', content: 'x' })
+    const overEmptyDir = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'src/broken.js', content: 'x' })
+    assert.equal(overEmptyDir.success, true)
+    assert.equal(fs.readFileSync(path.join(dir, 'src/broken.js'), 'utf8'), 'x')
+    fs.mkdirSync(path.join(dir, 'src/full.js'), { recursive: true })
+    fs.writeFileSync(path.join(dir, 'src/full.js', 'inner.txt'), 'keep me')
+    const overDir = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'src/full.js', content: 'x' })
     assert.equal(overDir.success, false)
     assert.match(overDir.output, /directory/i)
     const ok = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'src/new.js', content: 'module.exports = 1' })
