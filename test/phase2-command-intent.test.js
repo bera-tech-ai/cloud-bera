@@ -88,6 +88,26 @@ test('say-in-voice rejects plain chat with no voice wording', () => {
     assert.equal(parseSayInVoice('what is the weather'), null)
 })
 
+// ── Batch D (2026-11-26): parser hijacks of general questions ────────────
+test('batch D: member search rejects non-name targets', () => {
+    assert.equal(parseMemberSearch('who is the president'), null)
+    assert.equal(parseMemberSearch('who is online'), null)
+    assert.equal(parseMemberSearch('who is admin'), null)
+    assert.deepEqual(parseMemberSearch('who is casper'), { name: 'casper' })
+})
+
+test('batch D: voice mode needs an imperative about the bot\u2019s replies', () => {
+    assert.equal(parseVoiceMode('talk about voice acting in kenya'), null)
+    assert.deepEqual(parseVoiceMode('use voice'), { on: true })
+    assert.deepEqual(parseVoiceMode('reply in voice'), { on: true })
+})
+
+test('batch D: say-in-voice only speaks literal text, never "tell me a joke in voice"', () => {
+    assert.equal(parseSayInVoice('tell me a joke in voice'), null)
+    assert.deepEqual(parseSayInVoice('say hello in voice'), { text: 'hello' })
+    assert.deepEqual(parseSayInVoice('read this announcement aloud in voice'), { text: 'this announcement' })
+})
+
 test('image questions parse, including the Agent trigger', () => {
     assert.deepEqual(parseImageQuestion('what do you see'), { question: 'what do you see' })
     assert.deepEqual(parseImageQuestion('Agent what do you see'), { question: 'what do you see' })

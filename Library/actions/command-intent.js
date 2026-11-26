@@ -26,7 +26,11 @@ const parseWebSearchQuery = (input) => {
         .replace(/\s+(?:and\s+)?(?:please\s+)?(?:show|give|display|list|fetch|provide|return|tell)\s+(?:me\s+)?(?:the\s+)?(?:search\s+)?(?:results?|details?|information|info|answer)\b[\s\S]*$/i, '')
         .trim()
         .replace(/^['"“‘]+|['"”’]+$/g, '')
-    return query && !/^(?:a|an|the|for|me)$/i.test(query) ? query : null
+    if (!query || /^(?:a|an|the|for|me)$/i.test(query)) return null
+    // "find my phone" / "search my messages" ask about the user's own
+    // things, not the web — a query starting with "my " is not a web search.
+    if (/^my\s/i.test(query)) return null
+    return query
 }
 
 const isGitHubStatusQuery = (input) => {
@@ -66,6 +70,10 @@ const parseMemberSearch = (input) => {
     if (!match) return null
     const name = String(match[1] || '').trim().replace(/^@/, '').replace(/^['"“‘]+|['"”’]+$/g, '').replace(/\s+[?.!]*$/, '')
     if (!name || name.length < 2 || name.split(/\s+/).length > 3 || /^(everyone|everybody|all|anyone|someone|the\s+admins?|admins?)$/i.test(name)) return null
+    // "who is the president" is a general question, not a member lookup:
+    // names starting with "the " and role/status words are not person names.
+    const lowered = name.toLowerCase()
+    if (lowered.startsWith('the ') || ['online', 'president', 'owner', 'admin', 'bot', 'here'].includes(lowered)) return null
     return { name }
 }
 
@@ -78,8 +86,14 @@ const parseSayInVoice = (input) => {
         const v = clean(s)
         return v && v.length >= 2 && !/^(it|that|this|something|anything|that\s+for\s+me)$/i.test(v) ? v : null
     }
-    let match = text.match(/^(?:please\s+)?(?:say|tell(?:\s+me)?|speak)\s+(.+?)\s+(?:in\s+voice|as\s+a\s+voice\s+note|out\s+loud)\s*[?.!]*$/i) ||
-        text.match(/^(?:please\s+)?(?:say|tell(?:\s+me)?|speak)\s+(.+?)\s+in\s+a\s+voice\s+note\s*[?.!]*$/i)
+    // Only explicit "say/read <these exact words> in voice / out loud"
+    // shapes count — the captured text is spoken literally. "tell me a
+    // joke in voice" asks FOR content (a joke the bot must invent), so
+    // "tell" only counts with "out loud", never with "in voice".
+    let match = text.match(/^(?:please\s+)?read\s+(.+?)\s+(?:aloud|out\s+loud)\s+in\s+voice\s*[?.!]*$/i) ||
+        text.match(/^(?:please\s+)?(?:say|speak|read)\s+(.+?)\s+(?:in\s+voice|as\s+a\s+voice\s+note|out\s+loud)\s*[?.!]*$/i) ||
+        text.match(/^(?:please\s+)?(?:say|speak|read)\s+(.+?)\s+in\s+a\s+voice\s+note\s*[?.!]*$/i) ||
+        text.match(/^(?:please\s+)?tell(?:\s+me)?\s+(.+?)\s+out\s+loud\s*[?.!]*$/i)
     if (match) {
         const spoken = valid(match[1])
         return spoken ? { text: spoken } : null
@@ -120,7 +134,10 @@ const parseViewOnceReveal = (input) => {
 const parseVoiceMode = (input) => {
     const text = stripTrigger(input)
     if (/^(?:please\s+)?(?:from\s+now\s+on|starting\s+now|henceforth)\b.{0,40}\bvoice\b/i.test(text) ||
-        /^(?:please\s+)?(?:use|talk|answer|reply|respond|communicate|speak)\b.{0,30}\b(?:in\s+)?voice\b.{0,20}$/i.test(text) ||
+        // Imperative about the bot's own replies only: the verb must be
+        // followed directly by "(to me) (in) voice". "talk about voice
+        // acting in kenya" is a topic, not a mode switch.
+        /^(?:please\s+)?(?:use|talk|answer|reply|respond|communicate|speak)(?:\s+to\s+me)?\s+(?:in\s+)?voice\b.{0,20}$/i.test(text) ||
         /^(?:please\s+)?switch\s+to\s+voice\b/i.test(text) ||
         /^(?:please\s+)?turn\s+voice\s+on\b/i.test(text) ||
         /^(?:please\s+)?voice\s+mode\s+on\b/i.test(text) ||

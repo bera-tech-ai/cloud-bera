@@ -58,3 +58,47 @@ test('nameForJid reverse-looks-up a learned pushName, null when unknown', () => 
     assert.equal(referents.nameForJid('254711111111@s.whatsapp.net'), 'Lord Eagle')
     assert.equal(referents.nameForJid('254700000000@s.whatsapp.net'), null)
 })
+
+// ── Batch D (2026-11-26): router misfires verified live in the audit ─────
+test('batch D: everyday sentences no longer hijack action intents', () => {
+    assert.equal(detectIntent('say hello to babe'), 'send_pm')       // was tts_msg
+    assert.notEqual(detectIntent('quiet please'), 'mute_member')
+    assert.notEqual(detectIntent('open the group'), 'unmute_group')
+    assert.notEqual(detectIntent('start the project'), 'github_create_repo')
+    assert.notEqual(detectIntent('run to the store and buy milk'), 'agent')
+    assert.notEqual(detectIntent('run this by me again'), 'agent')
+    assert.notEqual(detectIntent('run this by me again'), 'shell_cmd')
+    assert.notEqual(detectIntent('i have a cold'), 'weather')
+    assert.notEqual(detectIntent('this song is hot'), 'weather')
+    assert.notEqual(detectIntent('what is the time'), 'wiki')
+    assert.notEqual(detectIntent('hash browns for breakfast'), 'hash')
+    assert.notEqual(detectIntent('ship it tomorrow'), 'fun_ship')
+    assert.notEqual(detectIntent('no jokes please'), 'fun_joke')
+    assert.notEqual(detectIntent('ping me when you are done'), 'ping')
+    assert.notEqual(detectIntent('the countdown to christmas'), 'timer')
+    assert.notEqual(detectIntent('explain what docker is'), 'docker')
+    assert.notEqual(detectIntent('what is cron used for'), 'cron')
+})
+
+test('batch D: legitimate uses of the tightened rules still route', () => {
+    assert.equal(detectIntent('say hello in voice'), 'tts_msg')
+    assert.equal(detectIntent('run ls -la'), 'agent')
+    assert.equal(detectIntent('run this command'), 'agent')
+    assert.equal(detectIntent('docker ps'), 'docker')
+    assert.equal(detectIntent('list cron jobs'), 'cron')
+    assert.equal(detectIntent('hash this text'), 'hash')
+    assert.equal(detectIntent('mute @254700000000'), 'mute_member')
+    assert.equal(detectIntent('tell me a joke'), 'fun_joke')
+    assert.equal(detectIntent('ship @babe and @mike'), 'fun_ship')
+    assert.equal(detectIntent('set a countdown for 5 minutes'), 'timer')
+    assert.equal(detectIntent('unmute the group'), 'unmute_group')
+    assert.equal(detectIntent('weather in nairobi'), 'weather')
+    assert.equal(detectIntent('is it hot in mombasa today'), 'weather')
+    assert.equal(detectIntent('bot config'), 'show_settings')
+})
+
+test('batch D: semantic fallback cannot resolve shell_cmd without a shell noun', () => {
+    assert.equal(semanticRoute('run', 0.30), null)
+    assert.equal(semanticRoute('execute', 0.30), null)
+    assert.equal(semanticRoute('run this by me again', 0.30), null)
+})
