@@ -233,3 +233,36 @@ test('checkpoint succeeds when the project .gitignore lists node_modules', () =>
     `)
     assert.match(output, /CHECKPOINT_GITIGNORE_OK/)
 })
+
+test('generated JS that stays invalid after regeneration fails the step and is never written', () => {
+    const output = runScript(`
+        const assert = require('node:assert/strict')
+        xcasper.chat = async () => ({ success: true, provider: 'test', text: "const body-parser = require('body-parser')\\n" })
+        const record = { id: 't13', name: 't13', dir, task: 'build a booking server' }
+        const executed = await agentOs.executeStep(record, { action: 'write_file', path: 'server.js', brief: 'An express server.' }, {})
+        assert.equal(executed.success, false, executed.output)
+        assert.match(executed.output, /still invalid/)
+        assert.equal(fs.existsSync(dir + '/server.js'), false)
+        console.log('GEN_FAILS_LOUD_OK')
+    `)
+    assert.match(output, /GEN_FAILS_LOUD_OK/)
+})
+
+test('truncated generated JS is stitched with a continuation until it parses', () => {
+    const output = runScript(`
+        const assert = require('node:assert/strict')
+        let calls = 0
+        xcasper.chat = async () => {
+            calls++
+            if (calls === 1) return { success: true, provider: 'test', text: 'function book() {\\n  const x = 1;\\n' }
+            return { success: true, provider: 'test', text: '  return x\\n}\\nmodule.exports = book\\n' }
+        }
+        const record = { id: 't14', name: 't14', dir, task: 'build a booking server' }
+        const executed = await agentOs.executeStep(record, { action: 'write_file', path: 'server.js', brief: 'A booking helper.' }, {})
+        assert.equal(executed.success, true, executed.output)
+        const written = fs.readFileSync(dir + '/server.js', 'utf8')
+        assert.match(written, /module\\.exports = book/)
+        console.log('GEN_STITCH_OK calls=' + calls)
+    `)
+    assert.match(output, /GEN_STITCH_OK/)
+})
