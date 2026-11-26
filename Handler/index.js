@@ -1065,9 +1065,106 @@ const handleMessage = async (conn, rawMsg) => {
 
         // ── NON-COMMAND: only do lightweight group checks, then exit ──────
         if (!isCmd) {
+            // ChatBera is evaluated BEFORE the private-mode gate below:
+            // when ChatBera is ON it is the owner's public face and must
+            // answer PMs even in private mode, while the agent and every
+            // other NLP feature stay behind the gate. The agent-claim
+            // check is recomputed here from the router's own logic (the
+            // router further down computes the same thing as _agentAllowed)
+            // so a message the agent should handle is never taken here.
+            const _cbMentioned = m.isBeraMentioned || (m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []).some(j => j === conn.user?.id)
+            // Toggle: settings.beraTrigger (default ON). When false, "bera/agent <text>" without prefix is ignored.
+            const _cbTriggerOn   = global.db?.data?.settings?.beraTrigger !== false
+            const _cbCustomTriggers = Array.isArray(global.db?.data?.settings?.beraTriggers)
+                ? global.db.data.settings.beraTriggers.filter(Boolean).map(x => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+                : []
+            const _cbTriggerPattern = new RegExp(`^\\s*(?:bera|agent${_cbCustomTriggers.length ? '|' + _cbCustomTriggers.join('|') : ''})\\b`, 'i')
+            // Only an explicit leading trigger or a direct mention activates the AI.
+            const _cbBeraCall  = _cbTriggerOn && text && _cbTriggerPattern.test(text)
+            // _agentForceMode: set when user used .agent <task> and we intercepted it above
+            const _cbAgentClaimed   = _cbMentioned || _cbBeraCall || _agentForceMode
+            // ── ChatBera mode: reply as the owner when activated ──────────────
+            // ChatBera: global mode OR per-chat mode
+            // Does NOT fire when the agent already handled the message (bera mentioned)
+            const chatberaGlobal = global.db?.data?.chatbera?.globalEnabled
+            const chatberaChat   = global.db?.data?.chatbera?.enabled?.[chat]
+            const chatberaOn = chatberaGlobal || chatberaChat
+            // Skip if message is from a group (PMs only) unless group mode enabled
+            const chatberaGroupOk = global.db?.data?.chatbera?.groupEnabled || false
+            if (chatberaOn && !m.fromMe && text && !_cbAgentClaimed && (!m.isGroup || chatberaGroupOk)) {
+                console.log('[CHATBERA] 🔥 Triggered for msg:', text.slice(0, 30), '| from:', sender)
+                  try {
+                      const { generateSimpleReply } = require('../Library/actions/beraai')
+                      const { normalizeLanguage } = require('../Library/actions/tts')
+                      const normalizedSender = String(sender || '').replace(/:\d+@/, '@').toLowerCase()
+                      const chatberaPrefs = global.db?.data?.chatbera || {}
+                      // Language flow: an explicitly stored preference (set
+                      // when the person asked, e.g. "reply in Sheng") always
+                      // wins. Otherwise detect THIS message's language and
+                      // answer in kind, per message — Sheng gets Sheng,
+                      // Swahili gets Swahili, English gets English. The
+                      // detected language is never saved as a preference.
+                      const storedLanguage = chatberaPrefs.languagePreferences?.[normalizedSender]
+                      const { detectMessageLanguage } = require('../Library/actions/language-routing')
+                      const languagePreference = storedLanguage
+                          ? normalizeLanguage(storedLanguage)
+                          : detectMessageLanguage(text)
+                      const voiceRepliesEnabled = chatberaPrefs.voiceReplies?.[normalizedSender] === true && !m.isGroup
+                      conn.sendPresenceUpdate('composing', chat).catch(() => {})
+                      await new Promise(r => setTimeout(r, 800 + Math.random() * 1500))
+                      const result = await generateSimpleReply(text, chat, languagePreference, { chatbera: true })
+                      if (result.success && result.reply) {
+                          // Voice-reply rule (Bera, 2026-11-26): a voice note in
+                          // always gets a voice reply; a typed conversation gets
+                          // its first 3 ChatBera replies in this chat as voice
+                          // notes, then text. Voice mode (voiceRepliesEnabled)
+                          // keeps today's behaviour exactly — text plus voice.
+                          // A new-rule voice reply REPLACES the text; if the
+                          // voice send cannot happen (reply too long for TTS,
+                          // or TTS fails) the text goes out instead, so the
+                          // reply is never lost and never sent twice.
+                          const { shouldVoiceReply } = require('../Library/actions/voice-reply-rule')
+                          const repliesSent = Number(chatberaPrefs.replyCounts?.[chat]) || 0
+                          const wantVoice = shouldVoiceReply({ fromVoiceNote: m.fromVoiceNote === true, voiceModeOn: voiceRepliesEnabled, repliesSent })
+                          let replySent = false
+                          if (voiceRepliesEnabled) {
+                              await sendGroupReply(conn, m, result.reply)
+                              replySent = true
+                              await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
+                          } else if (wantVoice && await sendOptInVoiceReply(conn, m, result.reply, languagePreference, { force: true })) {
+                              replySent = true
+                          } else {
+                              await sendGroupReply(conn, m, result.reply)
+                              replySent = true
+                          }
+                          // Count every ChatBera reply actually sent, whatever
+                          // its form, persisted via db.write() (PostgreSQL-backed)
+                          // so a restart does not reset the first-3 allowance.
+                          if (replySent && global.db?.data) {
+                              const chatberaStore = global.db.data.chatbera || (global.db.data.chatbera = {})
+                              chatberaStore.replyCounts = chatberaStore.replyCounts || {}
+                              chatberaStore.replyCounts[chat] = repliesSent + 1
+                              // Register the sent reply text so ChatBera
+                              // style learning can tell bot-sent replies
+                              // apart from Bera's own messages (they both
+                              // arrive fromMe on this self-bot account).
+                              try {
+                                  const { registerSentReply } = require('../Library/actions/style-learning')
+                                  registerSentReply(chatberaStore, chat, result.reply)
+                              } catch {}
+                              await global.db.write().catch(() => {})
+                          }
+                      }
+                      conn.sendPresenceUpdate('paused', chat).catch(() => {})
+                } catch (e) {
+                    console.error('[CHATBERA]', e.message)
+                }
+            }
+
             // ── PRIVATE MODE GATE: if bot is private, non-owners get NO response ──
-            // This blocks Bera Agent, ChatBera AI, auto-reply, and all NLP responses
+            // This blocks Bera Agent, auto-reply, and all NLP responses
             // for anyone who isn't the owner. Silent exit — no message sent.
+            // (ChatBera is handled above the gate — when ON it answers PMs.)
             if (!authorized) return
 
             // Anti-viewonce (groups + DMs)
@@ -4429,84 +4526,6 @@ const handleMessage = async (conn, rawMsg) => {
                     }
                 } catch (e) { console.error('[GHOST]', e?.message || e) }
                 return
-            }
-
-            // ── ChatBera mode: reply as the owner when activated ──────────────
-            // ChatBera: global mode OR per-chat mode
-            // Does NOT fire when the agent already handled the message (bera mentioned)
-            const chatberaGlobal = global.db?.data?.chatbera?.globalEnabled
-            const chatberaChat   = global.db?.data?.chatbera?.enabled?.[chat]
-            const chatberaOn = chatberaGlobal || chatberaChat
-            // Skip if message is from a group (PMs only) unless group mode enabled
-            const chatberaGroupOk = global.db?.data?.chatbera?.groupEnabled || false
-            if (chatberaOn && !m.fromMe && text && !_agentAllowed && (!m.isGroup || chatberaGroupOk)) {
-                console.log('[CHATBERA] 🔥 Triggered for msg:', text.slice(0, 30), '| from:', sender)
-                  try {
-                      const { generateSimpleReply } = require('../Library/actions/beraai')
-                      const { normalizeLanguage } = require('../Library/actions/tts')
-                      const normalizedSender = String(sender || '').replace(/:\d+@/, '@').toLowerCase()
-                      const chatberaPrefs = global.db?.data?.chatbera || {}
-                      // Language flow: an explicitly stored preference (set
-                      // when the person asked, e.g. "reply in Sheng") always
-                      // wins. Otherwise detect THIS message's language and
-                      // answer in kind, per message — Sheng gets Sheng,
-                      // Swahili gets Swahili, English gets English. The
-                      // detected language is never saved as a preference.
-                      const storedLanguage = chatberaPrefs.languagePreferences?.[normalizedSender]
-                      const { detectMessageLanguage } = require('../Library/actions/language-routing')
-                      const languagePreference = storedLanguage
-                          ? normalizeLanguage(storedLanguage)
-                          : detectMessageLanguage(text)
-                      const voiceRepliesEnabled = chatberaPrefs.voiceReplies?.[normalizedSender] === true && !m.isGroup
-                      conn.sendPresenceUpdate('composing', chat).catch(() => {})
-                      await new Promise(r => setTimeout(r, 800 + Math.random() * 1500))
-                      const result = await generateSimpleReply(text, chat, languagePreference, { chatbera: true })
-                      if (result.success && result.reply) {
-                          // Voice-reply rule (Bera, 2026-11-26): a voice note in
-                          // always gets a voice reply; a typed conversation gets
-                          // its first 3 ChatBera replies in this chat as voice
-                          // notes, then text. Voice mode (voiceRepliesEnabled)
-                          // keeps today's behaviour exactly — text plus voice.
-                          // A new-rule voice reply REPLACES the text; if the
-                          // voice send cannot happen (reply too long for TTS,
-                          // or TTS fails) the text goes out instead, so the
-                          // reply is never lost and never sent twice.
-                          const { shouldVoiceReply } = require('../Library/actions/voice-reply-rule')
-                          const repliesSent = Number(chatberaPrefs.replyCounts?.[chat]) || 0
-                          const wantVoice = shouldVoiceReply({ fromVoiceNote: m.fromVoiceNote === true, voiceModeOn: voiceRepliesEnabled, repliesSent })
-                          let replySent = false
-                          if (voiceRepliesEnabled) {
-                              await sendGroupReply(conn, m, result.reply)
-                              replySent = true
-                              await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
-                          } else if (wantVoice && await sendOptInVoiceReply(conn, m, result.reply, languagePreference, { force: true })) {
-                              replySent = true
-                          } else {
-                              await sendGroupReply(conn, m, result.reply)
-                              replySent = true
-                          }
-                          // Count every ChatBera reply actually sent, whatever
-                          // its form, persisted via db.write() (PostgreSQL-backed)
-                          // so a restart does not reset the first-3 allowance.
-                          if (replySent && global.db?.data) {
-                              const chatberaStore = global.db.data.chatbera || (global.db.data.chatbera = {})
-                              chatberaStore.replyCounts = chatberaStore.replyCounts || {}
-                              chatberaStore.replyCounts[chat] = repliesSent + 1
-                              // Register the sent reply text so ChatBera
-                              // style learning can tell bot-sent replies
-                              // apart from Bera's own messages (they both
-                              // arrive fromMe on this self-bot account).
-                              try {
-                                  const { registerSentReply } = require('../Library/actions/style-learning')
-                                  registerSentReply(chatberaStore, chat, result.reply)
-                              } catch {}
-                              await global.db.write().catch(() => {})
-                          }
-                      }
-                      conn.sendPresenceUpdate('paused', chat).catch(() => {})
-                } catch (e) {
-                    console.error('[CHATBERA]', e.message)
-                }
             }
 
             return  // ← FAST EXIT: no handler loops for non-commands
