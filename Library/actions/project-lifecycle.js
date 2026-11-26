@@ -254,7 +254,19 @@ const pushToGitHub = async (dir, owner, repo, branch = 'main', message = 'feat: 
         await git(['init'], dir, env)
         await git(['config', 'user.name', 'Bera AI'], dir, env)
         await git(['config', 'user.email', 'bera-ai@users.noreply.github.com'], dir, env)
-        await git(['add', '-A', '--', '.', ':!.env', ':!.env.*', ':!**/.env', ':!**/.env.*', ':!node_modules/**', ':!**/node_modules/**', ':!.bera-preview.log', ':!.bera-revisions', ':!.bera-revisions/**'], dir, env)
+        // Exclusions go in .git/info/exclude, NOT add pathspecs: naming
+        // node_modules in a pathspec makes git add exit 1 ("paths are
+        // ignored") when the project's .gitignore lists it too — the
+        // same failure that killed agent-os checkpoints (2026-11-26).
+        try {
+            const excludePath = path.join(dir, '.git', 'info', 'exclude')
+            fs.mkdirSync(path.dirname(excludePath), { recursive: true })
+            const patterns = ['.env', '.env.*', 'node_modules/', '.bera-preview.log', '.bera-revisions/']
+            const existing = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : ''
+            const missing = patterns.filter(pattern => !existing.split('\n').includes(pattern))
+            if (missing.length) fs.appendFileSync(excludePath, (existing && !existing.endsWith('\n') ? '\n' : '') + missing.join('\n') + '\n')
+        } catch {}
+        await git(['add', '-A'], dir, env)
         const commit = await run(`git diff --cached --quiet || git commit -m ${JSON.stringify(message)}`, dir, 120000)
         if (!commit.success) return { success: false, error: commit.output || commit.error }
         await run(`git remote remove origin 2>/dev/null || true; git remote add origin https://github.com/${owner}/${repo}.git`, dir, 30000)
