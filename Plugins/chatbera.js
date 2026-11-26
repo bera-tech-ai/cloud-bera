@@ -66,7 +66,7 @@ const handle = async (m, { conn, command, args, prefix, reply, isOwner } = {}) =
                 '┃ Status: 🟢 Active — all PMs\n' +
                 '┃\n' +
                 '┃ I will now reply to every\n' +
-                '┃ message in your exact style.\n' +
+                '┃ message in English, Kiswahili or a mix.\n' +
                 `┃ Turn off: *${prefix}chatbera off*\n` +
                 '╰══════════════════⊷'
             )
