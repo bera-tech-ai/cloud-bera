@@ -32,6 +32,7 @@ const handle = async (m, { conn, command, args, prefix, reply, isOwner } = {}) =
 
         if (!arg || arg === 'status') {
             const isOn    = global.db?.data?.chatbera?.globalEnabled || false
+            const perChatCount = Object.keys(global.db?.data?.chatbera?.enabled || {}).length
             const profile = global.db?.data?.chatbera?.profile || {}
             const msgs    = profile?.myMessages?.length || 412
             const mode    = global.db?.data?.settings?.mode || 'public'
@@ -45,6 +46,7 @@ const handle = async (m, { conn, command, args, prefix, reply, isOwner } = {}) =
                 '┃ 🧠 Trained on: *' + msgs + ' messages*\n' +
                 '┃ 🌐 Bot mode: *' + mode + '*\n' +
                 '┃ 💬 Replies: *' + (isOn ? 'All DMs — as Bera' : 'Disabled') + '*\n' +
+                '┃ 📍 Per-chat only: *' + perChatCount + ' chat(s)*\n' +
                 '┃\n' +
                 '┃ Toggle: *' + prefix + 'chatbera on* / *' + prefix + 'chatbera off*\n' +
                 '╰══════════════════⊷'
@@ -70,6 +72,45 @@ const handle = async (m, { conn, command, args, prefix, reply, isOwner } = {}) =
             )
         }
 
+        if (arg === 'here') {
+            if (!global.db.data.chatbera) global.db.data.chatbera = {}
+            if (!global.db.data.chatbera.enabled) global.db.data.chatbera.enabled = {}
+            const store = global.db.data.chatbera
+            const sub = args[1]?.toLowerCase()
+            // .chatbera here off — disable for the current chat only
+            if (sub === 'off') {
+                const target = m.chat || m.key?.remoteJid
+                if (target && store.enabled[target]) delete store.enabled[target]
+                await global.db.write()
+                return reply('🎭 ChatBera OFF for this chat. The global setting is unchanged.')
+            }
+            // .chatbera here [number] — enable for this chat, or for a
+            // person's chat when a phone number is given (usable from the
+            // self-chat). A local 07… number is converted to 254….
+            let target = m.chat || m.key?.remoteJid
+            let label = 'this chat'
+            if (sub && sub !== 'on') {
+                let digits = String(args[1]).replace(/\D/g, '')
+                if (digits.length === 10 && digits.startsWith('0')) digits = '254' + digits.slice(1)
+                if (digits.length < 9) return reply('❓ Usage: *' + prefix + 'chatbera here* inside the chat, or *' + prefix + 'chatbera here 2547XXXXXXXX*')
+                target = digits + '@s.whatsapp.net'
+                label = '+' + digits
+            }
+            if (!target) return reply('❌ Could not tell which chat this is.')
+            store.enabled[target] = true
+            await global.db.write()
+            const groupNote = target.endsWith('@g.us') && !store.groupEnabled
+                ? '\nNote: this is a group and group replies are off globally, so this takes effect once group mode is on.'
+                : ''
+            return reply(
+                '╭══〘 *🎭 CHATBERA — THIS CHAT* 〙═⊷\n' +
+                '┃ Now replying as you in: *' + label + '*\n' +
+                '┃ Global ChatBera stays ' + (store.globalEnabled ? 'ON' : 'OFF') + '.' + groupNote + '\n' +
+                '┃ Turn off here: *' + prefix + 'chatbera here off*\n' +
+                '╰══════════════════⊷'
+            )
+        }
+
         if (arg === 'off') {
             if (!global.db.data.chatbera) global.db.data.chatbera = {}
             global.db.data.chatbera.globalEnabled = false
@@ -84,7 +125,7 @@ const handle = async (m, { conn, command, args, prefix, reply, isOwner } = {}) =
             )
         }
 
-        return reply(`❓ Usage: *${prefix}chatbera on/off/status*`)
+        return reply(`❓ Usage: *${prefix}chatbera on/off/here/status*`)
     }
 
     // ── testbera <message> ────────────────────────────────────────────────
