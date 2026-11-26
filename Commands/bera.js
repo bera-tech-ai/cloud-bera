@@ -941,7 +941,7 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
         )
     }
 
-    // ── Voice note transcription (explicit only) ──────────────────────────────
+    // ── Voice note transcription (explicit, quoted) ───────────────────────────
     // Triggered by: quoting a voice note and saying "bera transcribe this"
     //           or: .transcribe command while quoting a voice note
     if (intent === 'transcribe') {
@@ -960,7 +960,7 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
                 `2. Quote (reply to) it\n` +
                 `3. Say: *bera transcribe this*\n` +
                 `   or use: *.transcribe*\n\n` +
-                `_I only transcribe when you specifically ask — I don't listen to every voice note automatically._`
+                `_Tip: you can also just send me a voice note directly — in PMs I listen automatically, and in groups I listen to the owner's voice notes._`
             )
         }
 
