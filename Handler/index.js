@@ -948,47 +948,12 @@ const handleMessage = async (conn, rawMsg) => {
         const noPrefix = global.db?.data?.settings?.noPrefix || false
         const rawText = m.text?.trim() || ''
 
-        // ── ChatBera continuous style learning ─────────────────────────────
-        // A fromMe text in a PM that the bot did NOT send is Bera typing as
-        // himself — learn it as a ChatBera style sample so ChatBera keeps
-        // sounding like him. Bot-sent replies are registered per chat
-        // (db.data.chatbera.sentReplies) at the ChatBera/ghost send sites;
-        // a fromMe echo matching one is recognised and consumed instead of
-        // learned. Runs BEFORE the fromMe guard because most of his real
-        // messages return there. Kill switch: BERA_CHATBERA_LEARN=0.
-        try {
-            if (m.fromMe && rawText && global.db?.data) {
-                const { shouldLearnFromMessage, appendStyleSample, consumeSentReply, isStyleLearningEnabled } = require('../Library/actions/style-learning')
-                const learnStore = global.db.data.chatbera || (global.db.data.chatbera = {})
-                const ownNum = String(conn.user?.id || '').split('@')[0].split(':')[0]
-                const chatNum = String(m.chat || '').split('@')[0].split(':')[0]
-                const verdict = shouldLearnFromMessage({
-                    fromMe: true,
-                    isGroup: !!m.isGroup,
-                    isSelfChat: !m.isGroup && !!ownNum && chatNum === ownNum,
-                    text: rawText,
-                    prefix,
-                    sentReplies: learnStore.sentReplies?.[m.chat] || []
-                })
-                if (verdict.reason === 'bot-sent') {
-                    if (consumeSentReply(learnStore, m.chat, verdict.sentReplyIndex)) debouncedDbWrite()
-                } else if (verdict.learn && isStyleLearningEnabled()) {
-                    if (!learnStore.profile || !Array.isArray(learnStore.profile.myMessages)) {
-                        // Seed from the trained profile so learning grows the
-                        // original set instead of replacing it (the prebuilt
-                        // systemPrompt string is not persisted back).
-                        let seed = {}
-                        try { seed = require('../Library/actions/chatbera').getPrebuiltProfile() } catch {}
-                        const { systemPrompt: _drop, ...seedFacts } = seed || {}
-                        learnStore.profile = { ...seedFacts, ...(learnStore.profile || {}), myMessages: [...(seed.myMessages || [])] }
-                    }
-                    if (appendStyleSample(learnStore.profile, verdict.text)) {
-                        console.log('[CHATBERA LEARN] style sample learned from an owner message')
-                        debouncedDbWrite()
-                    }
-                }
-            }
-        } catch (e) { console.error('[CHATBERA LEARN]', e?.message || e) }
+        // ChatBera style learning was removed on 2026-11-26 at Bera's
+        // request, together with the training in ChatBera replies (it now
+        // answers in plain English / Kiswahili / a natural mix). Bot-sent
+        // replies are still registered in chatbera.sentReplies at the send
+        // sites; nothing consumes them as style samples anymore.
+
 
         // fromMe guard — allow through if it's a "bera"/"agent" trigger
         if (m.fromMe) {
@@ -1102,7 +1067,7 @@ const handleMessage = async (conn, rawMsg) => {
                       // Language flow: an explicitly stored preference (set
                       // when the person asked, e.g. "reply in Sheng") always
                       // wins. Otherwise detect THIS message's language and
-                      // answer in kind, per message — Sheng gets Sheng,
+                      // answer in kind, per message — Sheng gets a natural English/Kiswahili mix,
                       // Swahili gets Swahili, English gets English. The
                       // detected language is never saved as a preference.
                       const storedLanguage = chatberaPrefs.languagePreferences?.[normalizedSender]

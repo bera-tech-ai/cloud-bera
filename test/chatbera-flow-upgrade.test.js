@@ -1,14 +1,17 @@
 'use strict'
 
 // ChatBera flow upgrade (2026-11-26, approved by Bera):
-//  1. ChatBera replies use his trained style profile (beraai.buildChatBeraSystemPrompt
+//  1. ChatBera replies use his persona (beraai.buildChatBeraSystemPrompt
 //     / resolveChatBeraProfile) instead of the generic Bera AI persona.
+//     UPDATED 2026-11-26: Bera had the training removed — the prompt must
+//     carry persona facts only, never the trained style samples, and
+//     ChatBera answers in English / Kiswahili / a natural mix, no Sheng.
 //  2. ChatBera language flows automatically per message
 //     (language-routing.detectMessageLanguage) unless a preference was stored.
-//  3. Continuous learning: conversation history persists to the db
-//     (beraai pushHistory/getHistory mirror + adopt), and Bera's real outgoing
-//     PM messages become style samples while bot-sent replies are recognised
-//     via the sent-reply registry (style-learning helpers).
+//  3. Conversation history persists to the db (beraai pushHistory/getHistory
+//     mirror + adopt). Style learning from Bera's outgoing messages was
+//     removed with the training; the style-learning helpers remain covered
+//     here as a library (the sent-reply registry is still maintained).
 // Fixtures here are synthetic — never the real trained profile contents.
 
 const test = require('node:test')
@@ -56,18 +59,20 @@ const FAKE_PROFILE = {
     myMessages: ['Yooh mkuu', 'Niaje man', 'Haina noma, tutaonana baadaye', 'Poa sana, niko rada']
 }
 
-test('buildChatBeraSystemPrompt: persona facts and style samples are in the prompt', () => {
+test('buildChatBeraSystemPrompt: persona facts in, trained samples OUT (training removed)', () => {
     const prompt = beraai.buildChatBeraSystemPrompt({
         profile: FAKE_PROFILE,
-        languageInstruction: 'Reply in natural Kenyan Sheng.',
+        languageInstruction: 'Reply in a natural mix of English and Kiswahili. Do not use Sheng slang.',
         memStr: '\n\nThings I remember about you:\nname: Otis'
     })
     assert.match(prompt, /Bruce Bera/)
     assert.match(prompt, /Nairobi/)
     assert.match(prompt, /Kenya/)
-    assert.match(prompt, /Yooh mkuu/)
-    assert.match(prompt, /Niaje man/)
-    assert.match(prompt, /Reply in natural Kenyan Sheng\./)
+    // The training must not leak into the prompt anymore.
+    assert.doesNotMatch(prompt, /Yooh mkuu/)
+    assert.doesNotMatch(prompt, /Niaje man/)
+    assert.doesNotMatch(prompt, /Real examples/)
+    assert.match(prompt, /natural mix of English and Kiswahili/)
     // Replies as a person, never as an AI/bot, and no markdown habits.
     assert.match(prompt, /NOT an AI/)
     assert.match(prompt, /Do not use markdown/)
@@ -76,19 +81,18 @@ test('buildChatBeraSystemPrompt: persona facts and style samples are in the prom
     assert.match(prompt, /name: Otis/)
 })
 
-test('buildChatBeraSystemPrompt: samples are bounded even for a huge profile', () => {
+test('buildChatBeraSystemPrompt: a huge profile cannot bloat the prompt', () => {
     const big = { ...FAKE_PROFILE, myMessages: Array.from({ length: 500 }, (_, i) => `sample number ${i}`) }
     const prompt = beraai.buildChatBeraSystemPrompt({ profile: big, languageInstruction: '', memStr: '' })
-    const sampleLines = prompt.split('\n').filter(l => l.startsWith('- sample number'))
-    assert.ok(sampleLines.length <= 30, `expected <=30 samples, got ${sampleLines.length}`)
-    assert.ok(sampleLines.length > 0)
+    assert.doesNotMatch(prompt, /sample number/)
+    assert.ok(prompt.length < 1500, `prompt too long: ${prompt.length}`)
 })
 
-test('buildChatBeraSystemPrompt: credential-looking samples never reach the prompt', () => {
+test('buildChatBeraSystemPrompt: credential-shaped profile entries never reach the prompt', () => {
     const dirty = { ...FAKE_PROFILE, myMessages: ['Niaje mkuu', 'mongodb+srv://user:pass@cluster.example.net/db', 'Poa sana'] }
     const prompt = beraai.buildChatBeraSystemPrompt({ profile: dirty, languageInstruction: '', memStr: '' })
     assert.doesNotMatch(prompt, /mongodb\+srv/)
-    assert.match(prompt, /Niaje mkuu/)
+    assert.doesNotMatch(prompt, /Niaje mkuu/)
 })
 
 test('resolveChatBeraProfile: an explicit profile wins', () => {
