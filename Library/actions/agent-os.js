@@ -438,6 +438,24 @@ const trimOverlap = (existing, chunk) => {
     return chunk
 }
 
+// Parse-check generated JavaScript with node's own parser. Returns the
+// first error line, or '' when the code parses.
+const jsSyntaxError = (text) => {
+    const os = require('os')
+    const tmp = path.join(os.tmpdir(), `bera-syntax-${process.pid}-${Math.random().toString(36).slice(2, 8)}.js`)
+    try {
+        fs.writeFileSync(tmp, text)
+        const { execFileSync } = require('child_process')
+        execFileSync(process.execPath, ['--check', tmp], { timeout: 15000, stdio: 'pipe' })
+        return ''
+    } catch (e) {
+        const out = String(e.stderr || e.message || 'syntax error')
+        return (out.split('\n').find(l => /SyntaxError/.test(l)) || out.split('\n')[2] || 'SyntaxError').trim().slice(0, 300)
+    } finally {
+        try { fs.unlinkSync(tmp) } catch {}
+    }
+}
+
 const generateFileContent = async (record, step, options = {}) => {
     const brief = String(step.brief || step.reason || '').trim()
     const isHtml = /\.html?$/i.test(String(step.path || ''))
@@ -473,6 +491,21 @@ const generateFileContent = async (record, step, options = {}) => {
             if (retryText && !retryText.includes('\uFFFD')) text = retryText
         }
         if (text.includes('\uFFFD')) return { success: false, error: `File generation for ${step.path} returned corrupted text (invalid characters) twice.` }
+    }
+    if (!isHtml && /\.(?:m?js|cjs)$/i.test(step.path)) {
+        // Generated JS repeatedly died on one stray backtick breaking a
+        // template literal (Kings Kutz / Kitee server.js, 2026-11-26):
+        // validation caught it, but the fix then depended on the repair
+        // planner. Parse-check the file HERE and regenerate once with
+        // the parser's own error while it is still cheap to do so.
+        const syntaxError = jsSyntaxError(text)
+        if (syntaxError) {
+            const retry = await ask([...promptLines, `The previous output failed a JavaScript syntax check: ${syntaxError} Return the complete corrected file; be careful with backticks and template literals.`].join('\n'))
+            if (retry.success) {
+                const retryText = cleanGeneratedFile(retry.text, step.path)
+                if (retryText && !retryText.includes('\uFFFD') && !jsSyntaxError(retryText)) return { success: true, text: retryText }
+            }
+        }
     }
     if (!isHtml) return { success: true, text }
     const finished = finishHtml(text)
@@ -821,6 +854,35 @@ const executeStep = async (record, step, options = {}) => {
     return { success: true, output: `Skipped unknown planner action: ${action} (not a local build step).` }
 }
 
+// Deterministic repair when the repair planner returns nothing: pull
+// the broken file's path out of the failure text (validation and boot
+// errors name it, e.g. ".../projects/x/src/server.js:24") and rewrite
+// that file from a brief. Falls back to the likeliest entrypoint.
+const deterministicRepairSteps = (record, failure) => {
+    const text = String(failure || '')
+    const dir = String(record.dir || '')
+    const found = []
+    if (dir) {
+        const escaped = dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const absRe = new RegExp(escaped + '/([^\\s:\'"()]+\\.(?:js|html|json))', 'g')
+        let m
+        while ((m = absRe.exec(text)) && found.length < 2) {
+            if (!found.includes(m[1]) && !m[1].includes('node_modules')) found.push(m[1])
+        }
+    }
+    if (!found.length) {
+        for (const candidate of ['server.js', 'src/server.js', 'index.js', 'src/index.js', 'index.html', 'src/index.html', 'app.js', 'src/app.js']) {
+            try { if (fs.statSync(path.join(dir, candidate)).isFile()) { found.push(candidate); break } } catch {}
+        }
+    }
+    const excerpt = text.slice(-600).replace(/\s+/g, ' ')
+    return found.map(rel => ({
+        action: 'write_file',
+        path: rel,
+        brief: `Rewrite this file completely as clean, valid code. It currently fails with this error: ${excerpt}. Produce the full working file for the project task (see the task text). Plain CommonJS for .js files, no ESM imports, no syntax errors, and be careful with backticks inside template literals.`
+    }))
+}
+
 const repair = async (record, failure, options) => {
     if ((record.repairs || []).length >= (options.maxRepairs ?? 2)) return { success: false, error: 'Repair limit reached.' }
     const context = `Project task: ${record.task}\nFailure output:\n${String(failure).slice(-10000)}\nProject inspection:\n${JSON.stringify(inspect(record.dir))}`
@@ -870,8 +932,18 @@ const repair = async (record, failure, options) => {
         }
     }
     if (!parsed.success) return { success: false, error: `Repair planner returned invalid JSON after recovery: ${parsed.error.message}` }
-    const plan = parsed.value
-    if (!Array.isArray(plan.steps) || !plan.steps.length) return { success: false, error: 'Repair planner returned no actionable steps.' }
+    let plan = parsed.value
+    if (!Array.isArray(plan.steps) || !plan.steps.length) {
+        // The repair planner can come back empty just like the build
+        // planner (seen live 2026-11-26, Kitee Coffee: a syntax error
+        // in src/server.js, then 'Repair planner returned no
+        // actionable steps'). Fall back to rewriting the file(s) the
+        // failure itself names, via the brief generator.
+        const fallbackSteps = deterministicRepairSteps(record, failure)
+        if (!fallbackSteps.length) return { success: false, error: 'Repair planner returned no actionable steps.' }
+        await notifyProgress(options, { phase: 'repair_fallback_plan' })
+        plan = { steps: fallbackSteps, reason: 'Deterministic repair fallback: rewrite the file(s) named in the failure.' }
+    }
     const normalizedSteps = []
     const externalActions = new Set(['deploy', 'publish', 'push', 'git', 'git_init', 'git_push', 'create_repo', 'create_repository', 'create_github_repo', 'github_push', 'deploy_to_berahost'])
     for (const [index, rawStep] of plan.steps.slice(0, 10).entries()) {
@@ -922,7 +994,11 @@ const repair = async (record, failure, options) => {
                 ? Buffer.from(String(rawStep.contentBase64).replace(/\s+/g, ''), 'base64').toString('utf8')
                 : rawStep.content
         }
-        if (action === 'write_file' && (!String(step.path || '').trim() || typeof step.content !== 'string' || !step.content.length)) {
+        // A write_file step needs content — OR a brief, in which case
+        // executeStep generates the file from the brief (the same
+        // contract as build-plan steps; the deterministic repair
+        // fallback relies on it).
+        if (action === 'write_file' && (!String(step.path || '').trim() || ((typeof step.content !== 'string' || !step.content.length) && !String(rawStep.brief || '').trim()))) {
             await notifyProgress(options, { phase: 'repair_step_skipped', index: index + 1, action, reason: 'incomplete write_file step' })
             continue
         }
@@ -1467,4 +1543,4 @@ const run = async options => {
     return { success: true, record, validation, screenshot: previewScreenshot }
 }
 
-module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, bootCheck, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson, sanitizeDependencyVersions, fixUnresolvableDependencies, ensureStartScript, sanitizeGeneratedScripts, reconcileEntrypoint }
+module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, bootCheck, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson, sanitizeDependencyVersions, fixUnresolvableDependencies, ensureStartScript, sanitizeGeneratedScripts, reconcileEntrypoint, deterministicRepairSteps, repair }
