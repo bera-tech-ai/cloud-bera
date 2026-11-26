@@ -212,3 +212,24 @@ test('generated JS that fails a syntax check is regenerated before it is written
     `)
     assert.match(output, /GEN_SYNTAX_REGEN_OK/)
 })
+
+test('checkpoint succeeds when the project .gitignore lists node_modules', () => {
+    const output = runScript(`
+        const assert = require('node:assert/strict')
+        const { execFileSync } = require('node:child_process')
+        fs.mkdirSync(dir + '/node_modules/pkg', { recursive: true })
+        fs.mkdirSync(dir + '/src', { recursive: true })
+        fs.writeFileSync(dir + '/.gitignore', 'node_modules\\n.env\\n')
+        fs.writeFileSync(dir + '/node_modules/pkg/index.js', 'module.exports = 1\\n')
+        fs.writeFileSync(dir + '/src/server.js', 'console.log(1)\\n')
+        fs.writeFileSync(dir + '/package.json', JSON.stringify({ name: 'x' }))
+        const record = { id: 't12', name: 't12', dir, task: 'site' }
+        const saved = await agentOs.checkpoint(record, 'test checkpoint')
+        assert.equal(saved.success, true, saved.output || saved.error)
+        const files = execFileSync('git', ['-C', dir, 'ls-files'], { encoding: 'utf8' })
+        assert.match(files, /src\\/server\\.js/)
+        assert.ok(!files.includes('node_modules'), 'node_modules must not be committed')
+        console.log('CHECKPOINT_GITIGNORE_OK')
+    `)
+    assert.match(output, /CHECKPOINT_GITIGNORE_OK/)
+})

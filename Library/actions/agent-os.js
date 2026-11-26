@@ -1207,8 +1207,30 @@ const validate = async (record, options = {}) => {
     return { success, checks }
 }
 
+// The bot's own git exclusions live in .git/info/exclude (repo-local,
+// invisible to the project) instead of pathspec exclusions on the add
+// command: naming node_modules in ANY pathspec makes git add exit 1
+// with "paths are ignored" whenever the project's own .gitignore also
+// lists it — which killed a fully-validated build at the checkpoint
+// step (Kitee Coffee, 2026-11-26, all four checks passed).
+const ensureGitExclude = (dir) => {
+    try {
+        const excludePath = path.join(dir, '.git', 'info', 'exclude')
+        fs.mkdirSync(path.dirname(excludePath), { recursive: true })
+        const patterns = ['.env', '.env.*', 'node_modules/', '.bera-preview.log', '.bera-revisions/']
+        const existing = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : ''
+        const missing = patterns.filter(pattern => !existing.split('\n').includes(pattern))
+        if (missing.length) fs.appendFileSync(excludePath, (existing && !existing.endsWith('\n') ? '\n' : '') + missing.join('\n') + '\n')
+    } catch {}
+}
+
 const checkpoint = async (record, message = 'checkpoint: Bera AI') => {
-    const result = await command(`git init && git config user.name "Bera AI" && git config user.email "bera-ai@users.noreply.github.com" && git add -A -- . ':!.env' ':!.env.*' ':!**/.env' ':!**/.env.*' ':!node_modules/**' ':!**/node_modules/**' ':!.bera-preview.log' ':!.bera-revisions' ':!.bera-revisions/**' && (git diff --cached --quiet || git commit -m ${JSON.stringify(message)})`, record.dir, 120000)
+    const init = await command('git init && git config user.name "Bera AI" && git config user.email "bera-ai@users.noreply.github.com"', record.dir, 120000)
+    if (!init.success) return init
+    ensureGitExclude(record.dir)
+    const add = await command('git add -A', record.dir, 120000)
+    if (!add.success) return add
+    const result = await command(`git diff --cached --quiet || git commit -m ${JSON.stringify(message)}`, record.dir, 120000)
     if (result.success) { record.checkpoint = { at: now(), message }; update(record, { stage: 'checkpointed', status: 'checkpointed' }); event(record, 'checkpoint', { message }) }
     return result
 }
