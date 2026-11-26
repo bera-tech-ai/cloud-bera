@@ -3804,16 +3804,25 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 // and falls back to the prebuilt trained profile. Samples that look like
 // credential/connection strings are never put in a prompt.
 const CHATBERA_STYLE_SAMPLE_LIMIT = 30
+// Sample picking lives in chatbera-training.js: the corpus is cleaned
+// (credential/URL-shaped entries are a hard drop, plus junk/dupes/export
+// artifacts) and the pick is stratified across BOTH registers of his
+// style — friend/dev banter AND the girlfriend register — interleaving
+// oldest-trained with freshest-learned samples instead of just taking
+// the front of the list (which was only the friend register).
 const _pickStyleSamples = (messages) => {
-    const clean = (Array.isArray(messages) ? messages : [])
-        .map(s => String(s || '').trim())
-        .filter(s => s && !/[a-z][a-z0-9+.-]*:\/\//i.test(s))
-    if (clean.length <= CHATBERA_STYLE_SAMPLE_LIMIT) return clean
-    // Keep the original trained style (front) AND the freshest learned style
-    // (tail) inside the bound.
-    const head = clean.slice(0, 12)
-    const tail = clean.slice(-(CHATBERA_STYLE_SAMPLE_LIMIT - head.length))
-    return [...new Set([...head, ...tail])]
+    try {
+        return require('./chatbera-training').selectStyleSamples(messages, CHATBERA_STYLE_SAMPLE_LIMIT)
+    } catch {
+        // Fallback: previous head+tail behaviour if the helper is missing.
+        const clean = (Array.isArray(messages) ? messages : [])
+            .map(s => String(s || '').trim())
+            .filter(s => s && !/[a-z][a-z0-9+.-]*:\/\//i.test(s))
+        if (clean.length <= CHATBERA_STYLE_SAMPLE_LIMIT) return clean
+        const head = clean.slice(0, 12)
+        const tail = clean.slice(-(CHATBERA_STYLE_SAMPLE_LIMIT - head.length))
+        return [...new Set([...head, ...tail])]
+    }
 }
 const resolveChatBeraProfile = (override) => {
     let base = null
