@@ -111,3 +111,47 @@ test('reconcileEntrypoint ignores a same-named static asset under public/', () =
     `)
     assert.match(output, /PUBLIC_NAMESAKE_IGNORED_OK/)
 })
+
+test('a plan returned under an alternate key is normalised to steps', () => {
+    const output = runScript(`
+        const assert = require('node:assert/strict')
+        xcasper.chat = async () => ({ success: true, provider: 'test', text: JSON.stringify({ plan: [{ action: 'write_file', path: 'index.html', brief: 'A coffee shop page.' }] }) })
+        const record = { id: 't6', name: 't6', dir, task: 'build a coffee shop website' }
+        const planned = await agentOs.makePlan(record, record.task)
+        assert.equal(planned.success, true, planned.error)
+        assert.equal(planned.plan.steps.length, 1)
+        console.log('ALT_KEY_PLAN_OK')
+    `)
+    assert.match(output, /ALT_KEY_PLAN_OK/)
+})
+
+test('two empty plans in a row fall back to a deterministic website plan', () => {
+    const output = runScript(`
+        const assert = require('node:assert/strict')
+        xcasper.chat = async () => ({ success: true, provider: 'test', text: JSON.stringify({ summary: 'none', steps: [] }) })
+        const record = { id: 't7', name: 't7', dir, task: 'build a one-page website for a coffee shop with a menu' }
+        const planned = await agentOs.makePlan(record, record.task)
+        assert.equal(planned.success, true, planned.error)
+        assert.equal(planned.plan.planFallback, true)
+        assert.equal(planned.plan.steps.length, 1)
+        assert.equal(planned.plan.steps[0].path, 'index.html')
+        console.log('FALLBACK_PLAN_OK')
+    `)
+    assert.match(output, /FALLBACK_PLAN_OK/)
+})
+
+test('mkdir for a file-like path is skipped and an empty dir does not block a write', () => {
+    const output = runScript(`
+        const assert = require('node:assert/strict')
+        const record = { id: 't8', name: 't8', dir, task: 'site' }
+        const mk = await agentOs.executeStep(record, { action: 'mkdir', path: 'src/public/style.css' }, {})
+        assert.equal(mk.success, true)
+        assert.equal(fs.existsSync(dir + '/src/public/style.css'), false)
+        fs.mkdirSync(dir + '/src/public/style.css', { recursive: true })
+        const wr = await agentOs.executeStep(record, { action: 'write_file', path: 'src/public/style.css', content: 'body{color:red}' }, {})
+        assert.equal(wr.success, true, wr.output)
+        assert.equal(fs.readFileSync(dir + '/src/public/style.css', 'utf8'), 'body{color:red}')
+        console.log('FILELIKE_MKDIR_OK')
+    `)
+    assert.match(output, /FILELIKE_MKDIR_OK/)
+})
