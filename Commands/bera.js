@@ -234,7 +234,7 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
         const res = await searchAndDownload(query)
         if (!res.success) {
             await react(conn, m, '❌')
-            return reply(`❌ Couldn't find that: ${res.error}`)
+            return reply(res.stage === 'download' ? `🎵 Found *${query}*, but the audio download failed — the music service glitched. Try again in a moment.` : `❌ Couldn't find that song. Try a different name or check the spelling.`)
         }
         await react(conn, m, '✅')
         const infoLine = `🎵 *${res.title}*${res.channel ? `\n${res.channel}` : ''}${res.duration ? ` · ${res.duration}` : ''}`
@@ -1927,14 +1927,15 @@ Start immediately with the code — no lengthy intro.`
                 await react(conn, m, '🎵')
                 const q = p.query || text
                 const res = await searchAndDownload(q)
-                if (!res.success) { await react(conn, m, '❌'); return reply(`❌ Couldn't find: ${q}`) }
+                if (!res.success) { await react(conn, m, '❌'); return reply(res.stage === 'download' ? `🎵 Found it, but the audio download failed — the music service glitched. Try again in a moment.` : `❌ Couldn't find: ${q}`) }
                 const audioUrl = typeof res.audioUrl === 'string' ? res.audioUrl : ''
-                if (!/^https?:\/\//i.test(audioUrl)) {
+                const audioBuf = Buffer.isBuffer(res.audioBuffer) ? res.audioBuffer : null
+                if (!audioBuf && !/^https?:\/\//i.test(audioUrl)) {
                     await react(conn, m, '❌')
-                    return reply('❌ The music service returned an invalid audio link. Please try again later.')
+                    return reply('❌ The music service returned no playable audio. Please try again later.')
                 }
                 await react(conn, m, '✅')
-                await sendAudioMessage(conn, m.chat, audioUrl, { mimetype: 'audio/mp4', fileName: `${res.title}.mp3`, quoted: m })
+                await sendAudioMessage(conn, m.chat, audioBuf || audioUrl, { mimetype: 'audio/mpeg', fileName: `${res.title}.mp3`, quoted: m })
                 return conn.sendMessage(m.chat, { text: `🎵 *${res.title}*${res.channel ? '\n👤 ' + res.channel : ''}` })
             }
             case 'lyrics': {

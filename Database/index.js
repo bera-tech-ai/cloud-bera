@@ -164,9 +164,21 @@ const releaseSessionLease = async (sessionId) => {
     )
 }
 
+// PostgreSQL jsonb rejects two things JSON.stringify happily emits:
+// \u0000 escapes (a NUL inside any stored string - e.g. binary junk that
+// leaked into a build error message) and unpaired surrogate escapes.
+// One poisoned string must never block EVERY state write, so the
+// serialized snapshot is cleaned before it is sent: NULs and lone
+// surrogates become U+FFFD. (Seen live 2026-11-26: a PNG header parsed
+// as text in a build record froze all persistence for ~an hour.)
+const sanitizeSnapshotJson = (json) => json
+    .replace(/\\u0000/g, '\\ufffd')
+    .replace(/\\u[dD][89abAB][0-9a-fA-F]{2}(?!\\u[dD][c-fC-F][0-9a-fA-F]{2})/g, '\\ufffd')
+    .replace(/(?<!\\u[dD][89abAB][0-9a-fA-F]{2})\\u[dD][c-fC-F][0-9a-fA-F]{2}/g, '\\ufffd')
+
 const persistPostgres = () => {
     if (!_pool || !_db) return Promise.resolve()
-    const snapshot = JSON.stringify(_db.getState())
+    const snapshot = sanitizeSnapshotJson(JSON.stringify(_db.getState()))
     // Phase 4 — a failed write must not silently discard state (spec §20).
     // The promise still resolves (callers must not crash the bot on a
     // transient outage), but the failure is now recorded in the write-health
@@ -403,6 +415,7 @@ const recordAudit = event => {
 const closeDb = async () => { try { await _pool?.end() } finally { _pool = null } }
 
 module.exports = {
+    sanitizeSnapshotJson,
     initDb,
     closeDb,
     acquireSessionLease,

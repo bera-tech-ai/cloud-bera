@@ -65,6 +65,7 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         const res = await searchAndDownload(text)
         if (!res.success) {
             await react(conn, m, '❌')
+            if (res.stage === 'download') return reply(`🎵 *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nFound *${text}*, but the audio download failed — the music service glitched. Try again in a moment.`)
             return reply(`❌ *ʙᴇʀᴀ ᴀɪ ᴘʟᴀʏ*\n\nTrack "${text}" not found. Try a different song name or check spelling.\n\n💡 Tip: Try being more specific — e.g. "${text} official audio"`)
         }
         const hasAudioUrl  = typeof res.audioUrl === 'string' && res.audioUrl.startsWith('http')
