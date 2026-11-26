@@ -48,7 +48,13 @@ const EXECUTOR_OWNER_ACTIONS = new Set([
     'npm_install', 'pm2_start', 'pm2_stop', 'pm2_restart', 'pm2_logs',
     'git_clone', 'git_push', 'git_status', 'docker_manage',
     'system_info', 'port_check', 'file_search', 'file_diff', 'sqlite_manage',
-    'env_manage'
+    'env_manage',
+    // Host-execution / host-mutation actions: scaffolding and building run
+    // installs and PM2, ai_code_fix overwrites arbitrary host files,
+    // mock_server starts generated code, zip_tools extracts archives.
+    'create_project', 'build_webapp', 'generate_api', 'auto_fix',
+    'scaffold_project', 'mock_server', 'self_test_fix', 'auto_install_deps',
+    'ai_code_fix', 'zip_tools', 'data_pipeline', 'berahost'
 ])
 
 // ── Xcasper AI provider chain ────────────────────────────────────────────────
@@ -1410,7 +1416,7 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
             // ── Supertools — Security ───────────────────────────────────────
             case 'jwt_tools': {
                 const st = require('./supertools')
-                const r = st.jwtTools(args.action || 'encode', args.payload || {}, args.secret || 'bera-secret', args.expiresIn || '24h')
+                const r = st.jwtTools(args.action || 'encode', args.payload || {}, args.secret || process.env.JWT_SECRET || '', args.expiresIn || '24h')
                 if (!r.success) return { success: false, output: `❌ ${r.error}`, desc }
                 const act = args.action || 'encode'
                 if (act === 'encode' || act === 'sign')

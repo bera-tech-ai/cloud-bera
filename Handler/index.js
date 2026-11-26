@@ -3145,6 +3145,7 @@ const handleMessage = async (conn, rawMsg) => {
 
                 // ── BeraHost: deploy new bot ──────────────────────────────────
                 if (intent === 'berahost_deploy') {
+                    if (!isOwner) { await reply('❌ BeraHost actions are owner-only.'); return }
                     const { deployBot } = require('../Library/actions/berahost')
                     const nameMatch = text.match(/\b(?:deploy|host|create|called|named?)\s+([\w-]+)/i)
                     const repoMatch = text.match(/https?:\/\/github\.com\/[^\s]+/)
@@ -3162,6 +3163,7 @@ const handleMessage = async (conn, rawMsg) => {
 
                 // ── BeraHost: list servers ────────────────────────────────────
                 if (intent === 'berahost_list') {
+                    if (!isOwner) { await reply('❌ BeraHost actions are owner-only.'); return }
                     const { listServers } = require('../Library/actions/berahost')
                     await react('🌐')
                     const r = await listServers()
@@ -3178,6 +3180,7 @@ const handleMessage = async (conn, rawMsg) => {
 
                 // ── BeraHost: power action ────────────────────────────────────
                 if (intent === 'berahost_power') {
+                    if (!isOwner) { await reply('❌ BeraHost actions are owner-only.'); return }
                     const { getServer, serverPower } = require('../Library/actions/berahost')
                     const actMatch  = text.match(/\b(start|stop|restart|kill)\b/i)
                     const nameMatch = text.match(/\b(?:start|stop|restart|kill)\b\s+([\w-]+)/i)
@@ -3194,6 +3197,7 @@ const handleMessage = async (conn, rawMsg) => {
 
                 // ── BeraHost: resources ───────────────────────────────────────
                 if (intent === 'berahost_resources') {
+                    if (!isOwner) { await reply('❌ BeraHost actions are owner-only.'); return }
                     const { listServers, serverResources } = require('../Library/actions/berahost')
                     await react('📊')
                     const list = await listServers()

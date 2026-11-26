@@ -150,7 +150,7 @@ const bcrypt  = require('bcryptjs')
 const Database = require('better-sqlite3')
 const app     = express()
 const PORT    = process.env.PORT || ${port}
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production'
+const JWT_SECRET = process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex')
 
 app.use(cors()); app.use(express.json())
 
@@ -843,10 +843,21 @@ const listRunningProjects = async (userId) => {
 //  PACKAGE MANAGEMENT
 // ══════════════════════════════════════════════════════════════════════════════
 
+// Package specs reach a shell command, so every token must be a plain
+// package name / version spec / flag — shell metacharacters are refused.
+const PKG_TOKEN_OK = /^(@[a-z0-9][a-z0-9\-._~]*\/)?[a-z0-9@][a-z0-9\-._~@^<>=*x[\],]*$|^--[a-z][a-z0-9-]*(=[a-z0-9\-._]+)?$|^-{1,2}[a-zA-Z]$/
+const validPackageSpec = (pkgs) => {
+    const spec = String(pkgs || '').trim()
+    if (!spec || /[;&|`$<>(){}\\\n\r'"]/.test(spec)) return null
+    const tokens = spec.split(/\s+/)
+    return tokens.every(tok => PKG_TOKEN_OK.test(tok)) ? tokens.join(' ') : null
+}
+
 const installPackages = async (userId, packages, projectName, manager = 'auto') => {
     const dir  = projectName ? projectDir(userId, projectName) : null
     const cwd  = dir && fs.existsSync(dir) ? dir : WORKSPACE_ROOT
-    const pkgs = Array.isArray(packages) ? packages.join(' ') : packages
+    const pkgs = validPackageSpec(Array.isArray(packages) ? packages.join(' ') : packages)
+    if (!pkgs) return { success: false, output: '❌ Invalid package specification — only plain package names, versions and flags are allowed.', manager, packages }
 
     // Auto-detect manager
     if (manager === 'auto') {
@@ -865,7 +876,8 @@ const installPackages = async (userId, packages, projectName, manager = 'auto') 
 const uninstallPackages = async (userId, packages, projectName, manager = 'auto') => {
     const dir  = projectName ? projectDir(userId, projectName) : null
     const cwd  = dir && fs.existsSync(dir) ? dir : WORKSPACE_ROOT
-    const pkgs = Array.isArray(packages) ? packages.join(' ') : packages
+    const pkgs = validPackageSpec(Array.isArray(packages) ? packages.join(' ') : packages)
+    if (!pkgs) return { success: false, output: '❌ Invalid package specification — only plain package names, versions and flags are allowed.' }
 
     if (manager === 'auto') {
         manager = fs.existsSync(path.join(cwd, 'requirements.txt')) ? 'pip' : 'npm'
@@ -954,8 +966,9 @@ const searchInFiles = async (userId, projectName, pattern, fileGlob = '') => {
     const dir = projectDir(userId, projectName)
     if (!fs.existsSync(dir)) return { success: false, output: 'Project not found' }
 
-    const globPart = fileGlob ? `--include="${fileGlob}"` : ''
-    const r = await run(`grep -rn ${globPart} --exclude-dir=node_modules --exclude-dir=.git --exclude="*.log" "${pattern}" . 2>&1 | head -20`, dir)
+    const safePattern = String(pattern || '').replace(/'/g, `'\\''`)
+    const globPart = fileGlob && /^[a-zA-Z0-9*._-]+$/.test(fileGlob) ? `--include='${fileGlob}'` : ''
+    const r = await run(`grep -rn ${globPart} --exclude-dir=node_modules --exclude-dir=.git --exclude="*.log" '${safePattern}' . 2>&1 | head -20`, dir)
     if (!r.output.trim()) return { success: true, output: `No matches for "${pattern}"` }
     return { success: true, output: `🔍 *"${pattern}"* in ${dir}:\n\n${r.output}` }
 }
@@ -1030,7 +1043,11 @@ const gitStatus = async (userId, projectName) => {
 
 const gitAdd = async (userId, projectName, files = '.') => {
     const dir = projectDir(userId, projectName)
-    const r = await run(`git add ${files} 2>&1`, dir)
+    const tokens = String(files || '.').trim().split(/\s+/)
+    if (!tokens.every(tok => /^[a-zA-Z0-9._\/~*-]+$/.test(tok))) {
+        return { success: false, output: '❌ Invalid file specification for git add.' }
+    }
+    const r = await run(`git add ${tokens.join(' ')} 2>&1`, dir)
     return { success: r.success, output: r.output || 'Staged' }
 }
 

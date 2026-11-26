@@ -536,6 +536,9 @@ const preDispatch = async (text, m, conn) => {
     const PM2_RX = /^pm2\s+(.+)/i
     const mPm2 = t.match(PM2_RX)
     if (mPm2) {
+        let isOwner = false
+        try { isOwner = require('../../Auth').isAuthorized(m?.sender || m?.key?.participant || '').isOwner === true } catch {}
+        if (!isOwner) return { success: false, reply: '⛔ PM2 process control is restricted to the bot owner.' }
         const safe = mPm2[1].replace(/[;&|`$<>]/g, '').slice(0, 100)
         const r = await runBash(`pm2 ${safe} --no-color 2>&1`, 15000)
         return { success: true, reply: `\`\`\`\n${(r.output || 'done').slice(0, 1500)}\n\`\`\`` }
@@ -544,13 +547,28 @@ const preDispatch = async (text, m, conn) => {
     const NPM_RX = /^npm\s+(install|i|add|ci)\s+(.+)/i
     const mNpm = t.match(NPM_RX)
     if (mNpm) {
-        const cmd = `npm ${mNpm[1]} ${mNpm[2]}`
+        let isOwner = false
+        try { isOwner = require('../../Auth').isAuthorized(m?.sender || m?.key?.participant || '').isOwner === true } catch {}
+        if (!isOwner) return { success: false, reply: '⛔ Package installation is restricted to the bot owner.' }
+        // Package specs only: no shell metacharacters, ever. Each token must
+        // look like a package name, a version spec or a plain npm flag.
+        const spec = mNpm[2].trim()
+        const tokens = spec.split(/\s+/)
+        const TOKEN_OK = /^(@[a-z0-9][a-z0-9\-._~]*\/)?[a-z0-9@][a-z0-9\-._~@^<>=*x]*$/i
+        const FLAG_OK = /^--[a-z][a-z0-9-]*(=[a-z0-9\-._]+)?$|^-{1,2}[a-zA-Z]$/
+        if (/[;&|`$<>(){}\\\n\r'"]/.test(spec) || !tokens.every(tok => TOKEN_OK.test(tok) || FLAG_OK.test(tok))) {
+            return { success: false, reply: '❌ Invalid package specification — only plain package names, versions and flags are allowed.' }
+        }
+        const cmd = `npm ${mNpm[1]} ${tokens.join(' ')}`
         const r = await runBash(cmd, 60000)
         return { success: true, reply: `\`\`\`\n${(r.output || 'done').slice(0, 1500)}\n\`\`\`` }
     }
-    
+
     const NPM_INSTALL_RX = /^npm\s+(install|i)$/i
     if (NPM_INSTALL_RX.test(t)) {
+        let isOwner = false
+        try { isOwner = require('../../Auth').isAuthorized(m?.sender || m?.key?.participant || '').isOwner === true } catch {}
+        if (!isOwner) return { success: false, reply: '⛔ Package installation is restricted to the bot owner.' }
         const r = await runBash('npm install', 60000)
         return { success: true, reply: `\`\`\`\n${(r.output || 'done').slice(0, 1500)}\n\`\`\`` }
     }
@@ -1087,7 +1105,16 @@ const _nodePath = require('path')
 
 const _safeWsPath = (p) => {
     if (!p) return null
-    return _nodePath.resolve(p.startsWith('/') ? p : _nodePath.join('./', p))
+    // Confined to the bot's own tree and the agent project area (/workspace).
+    // Absolute paths and ../ escapes to anywhere else (system files, other
+    // homes, credential stores) are refused.
+    const roots = [_nodePath.resolve(process.cwd()), '/workspace']
+    const resolved = _nodePath.isAbsolute(String(p))
+        ? _nodePath.resolve(String(p))
+        : _nodePath.resolve(roots[0], String(p))
+    const inside = roots.some(r => resolved === r || resolved.startsWith(r + _nodePath.sep))
+    if (!inside) throw new Error(`Path escapes the allowed workspace: ${p}`)
+    return resolved
 }
 
 const executeToolCall = async (tc, chatId, conn, m) => {
@@ -1133,6 +1160,24 @@ const executeToolCall = async (tc, chatId, conn, m) => {
 
     if (['bash', 'multi_bash', 'runcode'].includes(t) && !isTrustedBotOwner()) {
         return '⛔ Shell/code execution is restricted to the bot owner.'
+    }
+
+    // Host-level tools: file system writes/deletes, package installs, process
+    // control, databases, env/secrets access, outbound email, scheduling and
+    // network diagnostics whose parameters reach shell commands. These are
+    // owner-only — public agent users keep chat, search, media and the
+    // separately-gated WhatsApp actions.
+    const OWNER_ONLY_TOOLS = [
+        'readfile', 'writefile', 'multi_write', 'edit_file', 'deletefile',
+        'listfiles', 'mkdir', 'zipfolder', 'install', 'pm2_manage',
+        'hot_reload', 'create_server', 'env_manager', 'db', 'db_query',
+        'create_database', 'email', 'cron', 'monitor', 'system',
+        'status_dashboard', 'whois', 'port_scan', 'ssl_check', 'scaffold',
+        'data_pipeline', 'port_forward', 'live_preview', 'scan_project',
+        'project_analyze', 'git_push_folder'
+    ]
+    if (OWNER_ONLY_TOOLS.includes(t) && !isTrustedBotOwner()) {
+        return '⛔ This is a host-level action restricted to the bot owner.'
     }
 
     // ── Registered WhatsApp command discovery and dispatch ────────────────────
@@ -1461,7 +1506,7 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     if (t === 'news') {
         const q = tc.query || tc.topic || tc.q || 'technology news'
         try {
-            const r = await axios2.get(`https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=en&max=5&apikey=bbbc5ec9e33cb9cda571f61a1ba8cf0f`, {
+            const r = await axios2.get(`https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=en&max=5&apikey=${process.env.GNEWS_API_KEY || ''}`, {
                 timeout: 10000, validateStatus: () => true
             })
             if (r.data?.articles?.length) {

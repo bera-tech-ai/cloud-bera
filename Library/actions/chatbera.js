@@ -86,7 +86,7 @@ const PREBUILT_PROFILE = {
     "Ndo nafika kejani sasa😂",
     "Iza nimekua na exams kadhaa",
     "Iza kuna fala amekua anasumbua😂",
-    "mongodb+srv://ellyongiro8:QwXDXE6tyrGpUTNb@cluster0.tyxcmm9.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
+    "Nilitumia mongodb",
     "Test hii",
     "Waazi kiasi tu",
     "devs-place.onrender.com",

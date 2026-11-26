@@ -501,8 +501,9 @@ const loadTest = async (url, requests = 20, concurrency = 5, method = 'GET', bod
 //  6. JWT TOOLS — encode, decode, verify, generate API keys
 // ══════════════════════════════════════════════════════════════════════════════
 
-const jwtTools = (action, payload = {}, secret = 'bera-ai-secret', expiresIn = '24h') => {
+const jwtTools = (action, payload = {}, secret = process.env.JWT_SECRET || '', expiresIn = '24h') => {
     try {
+        if (!secret) return { success: false, error: 'A JWT secret is required — pass one explicitly or set the JWT_SECRET env var. There is no default secret.' }
         if (action === 'encode' || action === 'sign') {
             // Manual JWT (HS256) without external library
             const header  = { alg: 'HS256', typ: 'JWT' }

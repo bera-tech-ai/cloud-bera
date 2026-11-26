@@ -142,6 +142,17 @@ const handleAction = async (m, conn, reply, text, sender, imageBuffer) => {
 
     const intent = detectIntent(text)
 
+    // Host/account-level intents are owner-only, whichever route reached
+    // handleAction (natural language, .bera, or the Handler fallback).
+    const OWNER_ONLY_INTENTS = [
+        'shell', 'js_eval', 'code_run', 'git_clone', 'git_push',
+        'github_delete_repo', 'github_create_repo', 'github_create_project',
+        'github_push_file', 'pm2_restart', 'pm2_stop', 'file_read', 'file_write'
+    ]
+    if (OWNER_ONLY_INTENTS.includes(intent) && !isOwner) {
+        return reply('⛔ That action is restricted to the bot owner.')
+    }
+
     if (!imageBuffer) {
         const projectBuild = require('../Library/actions/project-build')
         if (projectBuild.looksLikeProjectRevision(text, sender)) {
@@ -2644,6 +2655,7 @@ const handleWrapper = async (m, ctx) => {
     //                env, tree, info, delete, git, deploy, search, templates
     // ══════════════════════════════════════════════════════════════════════
     if (command === 'replit' || command === 'rpl') {
+        if (!isOwner) return reply('⛔ Owner only — the Replit environment runs code and shell commands on the host.')
         const R = require('../Library/actions/replit')
         const args  = (text || '').trim().split(/\s+/)
         const sub   = (args[0] || '').toLowerCase()
