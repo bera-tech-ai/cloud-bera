@@ -1088,6 +1088,7 @@ const handleMessage = async (conn, rawMsg) => {
             // Does NOT fire when the agent already handled the message (bera mentioned)
             const chatberaGlobal = global.db?.data?.chatbera?.globalEnabled
             const chatberaChat   = global.db?.data?.chatbera?.enabled?.[chat]
+                || (m.key?.remoteJidAlt ? global.db?.data?.chatbera?.enabled?.[m.key.remoteJidAlt] : undefined)
             const chatberaOn = chatberaGlobal || chatberaChat
             // Skip if message is from a group (PMs only) unless group mode enabled
             const chatberaGroupOk = global.db?.data?.chatbera?.groupEnabled || false
