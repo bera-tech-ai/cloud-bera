@@ -138,9 +138,21 @@ test('sanitizeGeneratedScripts keeps a bundler build when its config exists', ()
 
 test('executeStep refuses corrupted content and invalid package.json writes', async () => {
     const dir = tmpProject({ 'package.json': '{"name":"good"}' })
-    const corrupt = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'server.js', content: 'x�e\u0013k��p' })
+    // Corrupted provided content now triggers one clean regeneration
+    // attempt; with the provider failing here, the write must still be
+    // refused and nothing corrupted may land on disk.
+    const xcasper = require('../Library/actions/xcasper')
+    const originalChat = xcasper.chat
+    xcasper.chat = async () => ({ success: false, error: 'provider down in test' })
+    let corrupt
+    try {
+        corrupt = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'server.js', content: 'x�e\u0013k��p' })
+    } finally {
+        xcasper.chat = originalChat
+    }
     assert.equal(corrupt.success, false)
     assert.match(corrupt.output, /corrupted/i)
+    assert.equal(fs.existsSync(path.join(dir, 'server.js')), false)
     const badJson = await executeStep({ dir, name: 'x' }, { action: 'write_file', path: 'package.json', content: '{not json' })
     assert.equal(badJson.success, false)
     assert.match(badJson.output, /not valid JSON/i)

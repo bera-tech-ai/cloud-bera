@@ -337,6 +337,26 @@ const makePlan = async (record, task, options = {}) => {
             if (!parsed.success) return { success: false, error: `Planner JSON remained invalid after fresh plan generation: ${parsed.error.message}` }
         }
     }
+    // A syntactically valid plan with ZERO steps used to fail the build
+    // outright ("Planner returned no steps" — seen live, Kings Kutz,
+    // 2026-11-26). Give it the same fresh-generation recovery that
+    // malformed JSON gets before giving up.
+    if (parsed.success && (!Array.isArray(parsed.value?.steps) || !parsed.value.steps.length)) {
+        await notifyProgress(options, { phase: 'planner_empty_regeneration' })
+        const regeneration = await xcasper.chat([
+            { role: 'system', content: `${prompt}\nThe previous plan contained no steps at all. Create a fresh plan with concrete steps: for a website, at minimum one write_file step for a complete root index.html (with a detailed brief carrying the real content). Return one compact, valid JSON object only.` },
+            { role: 'user', content: `Generate a fresh plan with real steps for this task: ${String(task || record.task).slice(0, 4000)}\nCurrent project inspection: ${JSON.stringify(inspect(record.dir))}` }
+        ], {
+            timeout: 45000,
+            maxChars: 24000,
+            onProviderProgress: progress => notifyProgress(options, { phase: 'planner_empty_regeneration_provider', ...progress })
+        })
+        if (regeneration.success) {
+            let reparsed = parsePlannerJson(regeneration.text)
+            if (!reparsed.success) reparsed = parsePlannerJson(regeneration.text, true)
+            if (reparsed.success && Array.isArray(reparsed.value?.steps) && reparsed.value.steps.length) parsed = reparsed
+        }
+    }
     const plan = parsed.value
     if (!Array.isArray(plan.steps) || !plan.steps.length) return { success: false, error: 'Planner returned no steps.' }
     await notifyProgress(options, { phase: 'planning_complete', provider: result.provider })
@@ -523,6 +543,62 @@ const ensureStartScript = record => {
     } catch { return null }
 }
 
+// Deterministic entrypoint reconciliation: planners regularly write
+// the entrypoint somewhere other than where package.json points
+// (start says "node app.js", the file landed in src/app.js — seen live
+// 2026-11-26, Kings Kutz run 3; the LLM repair kept missing it too).
+// If the stated target is missing and exactly one plausible file
+// exists, repoint package.json at the file that is actually there.
+const reconcileEntrypoint = record => {
+    try {
+        const root = record.dir
+        const pkgPath = path.join(root, 'package.json')
+        if (!root || !fs.existsSync(pkgPath)) return null
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+        const start = String(pkg?.scripts?.start || '')
+        const m = start.match(/(?:^|\s)node\s+(?:--\S+\s+)*([^\s&;|]+\.js)\b/) || (pkg?.main ? [null, pkg.main] : null)
+        const target = m ? m[1] : null
+        if (!target) return null
+        if (fs.existsSync(path.join(root, target))) return null
+        const wanted = path.basename(target)
+        const found = []
+        const walk = (dir, depth) => {
+            if (depth > 3) return
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (entry.name === 'node_modules' || entry.name === '.git') continue
+                const full = path.join(dir, entry.name)
+                if (entry.isDirectory()) walk(full, depth + 1)
+                else if (entry.name === wanted) found.push(path.relative(root, full))
+            }
+        }
+        walk(root, 0)
+        // public/ holds static assets — a file there is never the server
+        // entrypoint, even when it shares the name (a plan wrote both
+        // public/js/app.js and src/app.js in one live build).
+        const serverCandidates = found.filter(rel => !rel.startsWith('public/'))
+        let candidate = serverCandidates.length === 1 ? serverCandidates[0] : null
+        if (!candidate && serverCandidates.length > 1) {
+            // Several same-named server files: the entrypoint is the one
+            // that actually starts a server.
+            candidate = serverCandidates.find(rel => {
+                try { return /\.listen\(|createServer/.test(fs.readFileSync(path.join(root, rel), 'utf8')) } catch { return false }
+            }) || null
+        }
+        if (!candidate) {
+            const plausible = ['server.js', 'index.js', 'app.js', 'main.js', 'src/server.js', 'src/index.js', 'src/app.js', 'src/main.js']
+                .filter(c => fs.existsSync(path.join(root, c)))
+            if (plausible.length === 1) candidate = plausible[0]
+        }
+        if (!candidate) return null
+        pkg.main = candidate
+        pkg.scripts = { ...(pkg.scripts || {}), start: start ? start.replace(/[^\s&;|]+\.js/, candidate) : `node ${candidate}` }
+        if (!/node\s/.test(pkg.scripts.start)) pkg.scripts.start = `node ${candidate}`
+        fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+        event(record, 'entrypoint_reconciled', { from: target, to: candidate })
+        return candidate
+    } catch { return null }
+}
+
 const normalizePackageJsonStart = content => {
     let pkg
     try { pkg = JSON.parse(String(content || '')) } catch { return content }
@@ -609,7 +685,16 @@ const executeStep = async (record, step, options = {}) => {
         // (one repair wrote raw garbage over a valid package.json, which
         // then failed every later check with a package_json_reader error).
         if (content.includes('\uFFFD')) {
-            return { success: false, output: `Refused to write ${step.path}: the content is corrupted (invalid characters). Rewrite it as clean UTF-8 text.` }
+            // Provided content (usually a repair step's base64) arrived
+            // encoding-damaged. Refusing outright used to spend the whole
+            // repair round and fail the build (seen live 2026-11-26,
+            // Kings Kutz: the repair for a syntax error was itself
+            // corrupted). Regenerate this one file from a brief instead —
+            // the generation path has its own clean-text retry, and
+            // validation still judges the result.
+            const regen = await generateFileContent(record, { ...step, brief: `Rewrite this file completely as clean UTF-8 text — the previous version was corrupted and contained errors. Produce the full, working file for the project task; any .js file must be valid plain CommonJS Node with no syntax errors.` }, options)
+            if (!regen.success) return { success: false, output: `Refused to write ${step.path}: the content is corrupted (invalid characters), and regeneration failed: ${regen.error}` }
+            content = regen.text
         }
         if (path.basename(target) === 'package.json') {
             try { JSON.parse(content) } catch (error) {
@@ -681,7 +766,14 @@ const executeStep = async (record, step, options = {}) => {
         return command(raw, root, options.timeout || 120000)
     }
     if (action === 'git_init') return { success: true, output: 'Deferred git init to Bera’s local checkpoint after validation.' }
-    return { success: false, output: `Unknown plan action: ${action}` }
+    // Unknown actions are SKIPPED, never fatal: planners mirror the
+    // user's wording with invented actions (seen live 2026-11-26: a
+    // request to "capture and send me a screenshot" produced a
+    // download_screenshot step that failed the whole Kitee Coffee
+    // build). Screenshots, publishing and deployment are handled by
+    // the pipeline outside the plan; anything else unknown is not a
+    // local build step. Validation still judges the real result.
+    return { success: true, output: `Skipped unknown planner action: ${action} (not a local build step).` }
 }
 
 const repair = async (record, failure, options) => {
@@ -1278,6 +1370,7 @@ const run = async options => {
     }
     ensureRootPackageJson(record)
     ensureStartScript(record)
+    reconcileEntrypoint(record)
     sanitizeGeneratedScripts(record)
     await notifyProgress(options, { phase: 'validation' })
     let validation = await validate(record, options)
@@ -1287,7 +1380,7 @@ const run = async options => {
     // needs several heal-and-recheck cycles.
     for (let heal = 0; !validation.success && heal < 4; heal++) {
         const failureText = validation.checks.filter(c => !c.success).map(c => c.output).join('\n')
-        if (!fixUnresolvableDependencies(record, failureText)) break
+        if (!fixUnresolvableDependencies(record, failureText) && !reconcileEntrypoint(record)) break
         validation = await validate(record, options)
     }
     let repairError = null
@@ -1329,4 +1422,4 @@ const run = async options => {
     return { success: true, record, validation, screenshot: previewScreenshot }
 }
 
-module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, bootCheck, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson, sanitizeDependencyVersions, fixUnresolvableDependencies, ensureStartScript, sanitizeGeneratedScripts }
+module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, bootCheck, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson, sanitizeDependencyVersions, fixUnresolvableDependencies, ensureStartScript, sanitizeGeneratedScripts, reconcileEntrypoint }
