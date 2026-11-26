@@ -19,7 +19,7 @@ test('Agent OS repair writes a root entrypoint when the planner returns an actio
         const agentOs = require(${JSON.stringify(path.join(repoRoot, 'Library/actions/agent-os.js'))})
         const xcasper = require(${JSON.stringify(path.join(repoRoot, 'Library/actions/xcasper.js'))})
         let calls = 0
-        const html = '<!doctype html><html><body><main><h1>Local demo</h1></main></body></html>'
+        const html = '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>@media (max-width: 860px){ main{padding:8px} }</style></head><body><main><h1>Local demo</h1></main></body></html>'
         xcasper.chat = async () => {
             calls++
             if (calls === 1 || calls === 3) return { success: true, text: JSON.stringify({ steps: [{ action: 'mkdir', path: 'nested-only' }] }) }

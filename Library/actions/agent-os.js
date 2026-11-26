@@ -296,7 +296,7 @@ const parsePlannerJson = (raw, repairMalformed = false) => {
 }
 
 const makePlan = async (record, task, options = {}) => {
-    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Stack contract for ANY server app or system: the plan MUST include a package.json at the project ROOT whose start script runs a server entrypoint file that is ALSO at the project ROOT (server.js) — never put the only entrypoint inside src/. SINGLE-FILE BACKEND RULE: put ALL backend code in that one root server.js — every route, middleware, helper and the data access live in that file; store data in a JSON file under data/ (or in memory). Never split the backend into src/, routes/, models/, controllers/ or middleware/ files, and never require a relative path that is not a file the plan itself creates at exactly that path — multi-file backends generated file-by-file disagree about paths and crash on boot (Cannot find module). Static frontend files (public/*.html/css/js) may be separate. Use ONLY plain Node.js (built-in http or Express) with static HTML/CSS/JS; never use Vue, React, Angular, Svelte, TypeScript, .vue/.jsx/.tsx files, SQL schema files, bundlers, or any build/compilation step — the app is deployed exactly as written. Never invent deployment tools or commands (no surf, vercel, netlify, or firebase CLIs). Dependency versions: only use real, well-known versions (express ^4.19.2, dotenv ^16.4.5, cors ^2.8.5); never invent a version number — if unsure, use "*" as the version. Only list dependencies the code actually imports, and only packages that really exist on npm (express, dotenv, cors, morgan, bcrypt, jsonwebtoken and similar well-known ones); never invent package names. In briefs for Express servers, specify the built-in express.json() middleware for request bodies — never a body-parser package. All .js files use CommonJS (require/module.exports) — never ESM import/export syntax. Do not plan test files or a test script unless the task explicitly asks for tests. Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
+    const prompt = `You are the planning layer of Bera AI. Create a safe, executable software-project plan.\nReturn JSON only with this shape: {"summary":"...","steps":[{"action":"write_file","path":"relative path","brief":"detailed description of exactly what the file must contain","command":"...","reason":"..."}]}. The action value shown is an example, not a literal for every step.\nRules: each action must be exactly one of write_file, mkdir, install, build, test, shell; never put a list, pipe, or path in action. Put every relative path only in path. All application files must be relative to the project directory below; do not create an extra project/project_root wrapper folder. Use conventional paths such as src/ only beneath that root. Create a real runnable app, not placeholder text. For write_file steps, never include file content or contentBase64; instead give a detailed, self-contained brief describing exactly what that file must contain (every section, with the real names, prices and text to use) — each file is generated separately from its brief. Prefer few files: for a website, one complete root index.html with inline CSS and JS is best. Write real content for every section the task asks for (real names, real prices, real text) — never placeholder, lorem ipsum, or "add your own content" text, and never copy the task/request text into the page. A website must include a root index.html or a package.json with a working start/build script and its application entrypoint. Every website brief must also carry a design direction: the colour palette and theme treatment from the task (commit to it — e.g. neon means a dark site with glowing accents), Google Fonts pairing, which sections get photos (the file generator has a verified photo library — say 'use library photos for the hero and gallery'), and a mobile-first responsive layout that stacks on phones. Stack contract for ANY server app or system: the plan MUST include a package.json at the project ROOT whose start script runs a server entrypoint file that is ALSO at the project ROOT (server.js) — never put the only entrypoint inside src/. SINGLE-FILE BACKEND RULE: put ALL backend code in that one root server.js — every route, middleware, helper and the data access live in that file; store data in a JSON file under data/ (or in memory). Never split the backend into src/, routes/, models/, controllers/ or middleware/ files, and never require a relative path that is not a file the plan itself creates at exactly that path — multi-file backends generated file-by-file disagree about paths and crash on boot (Cannot find module). Static frontend files (public/*.html/css/js) may be separate. Use ONLY plain Node.js (built-in http or Express) with static HTML/CSS/JS; never use Vue, React, Angular, Svelte, TypeScript, .vue/.jsx/.tsx files, SQL schema files, bundlers, or any build/compilation step — the app is deployed exactly as written. Never invent deployment tools or commands (no surf, vercel, netlify, or firebase CLIs). Dependency versions: only use real, well-known versions (express ^4.19.2, dotenv ^16.4.5, cors ^2.8.5); never invent a version number — if unsure, use "*" as the version. Only list dependencies the code actually imports, and only packages that really exist on npm (express, dotenv, cors, morgan, bcrypt, jsonwebtoken and similar well-known ones); never invent package names. In briefs for Express servers, specify the built-in express.json() middleware for request bodies — never a body-parser package. All .js files use CommonJS (require/module.exports) — never ESM import/export syntax. Do not plan test files or a test script unless the task explicitly asks for tests. Do not use secrets or delete files; prefer write_file for source changes; use shell only for one standalone npm/pnpm/yarn install/add or build/test command, never chain commands or use node, python, or git. Do not create Git repositories, run git init/add/commit/push, configure remotes, or deploy; Bera handles its local checkpoint after validation and requires separate approval for GitHub/deployment.\nProject directory: ${record.dir}\nExisting inspection: ${JSON.stringify(inspect(record.dir))}\nTask: ${String(task || record.task).slice(0, 12000)}`
     await notifyProgress(options, { phase: 'planning' })
     const result = await xcasper.chat([{ role: 'system', content: prompt }, { role: 'user', content: String(task || record.task) }], {
         timeout: 45000,
@@ -438,6 +438,53 @@ const trimOverlap = (existing, chunk) => {
     return chunk
 }
 
+// Curated, verified stock photos (Unsplash CDN, HEAD-checked live
+// 2026-11-26). The generator may ONLY use URLs from this library —
+// invented image URLs are the top cause of broken-image sites.
+// Grouped by business category; photoLibraryFor picks by task words.
+const PHOTO_LIBRARY = {
+    gym: ['1534438327276-14e5300c3a48', '1571902943202-507ec2618e8f', '1517836357463-d25dfeac3438', '1583454110551-21f2fa2afe61'],
+    coffee: ['1509042239860-f550ce710b93', '1495474472287-4d71bcdd2085', '1442512595331-e89e73853f31'],
+    barber: ['1503951914875-452162b0f3f1', '1585747860715-2ba37e788b70'],
+    restaurant: ['1517248135467-4c7edcad34c4', '1414235077428-338989a2e8c0'],
+    salon: ['1560066984-138dadb4c035'],
+    car: ['1520340356584-f9917d1eea6f', '1558618666-fcd25c85cd64', '1605559424843-9e4c228bf1c2'],
+    general: ['1517248135467-4c7edcad34c4', '1509042239860-f550ce710b93', '1560066984-138dadb4c035']
+}
+const PHOTO_CATEGORIES = [
+    ['gym', /\b(gym|fitness|workout|crossfit|yoga|aerobics|training)\b/i],
+    ['coffee', /\b(coffee|cafe|café|espresso|bakery)\b/i],
+    ['barber', /\b(barber|barbershop|haircut|shave)\b/i],
+    ['restaurant', /\b(restaurant|kitchen|food|dining|eatery|grill)\b/i],
+    ['salon', /\b(salon|beauty|spa|nails|makeup)\b/i],
+    ['car', /\b(car wash|auto|garage|mechanic|detailing|vehicle)\b/i]
+]
+const photoLibraryFor = (text) => {
+    const t = String(text || '')
+    for (const [name, re] of PHOTO_CATEGORIES) if (re.test(t)) return PHOTO_LIBRARY[name].map(id => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1200&q=70`)
+    return PHOTO_LIBRARY.general.map(id => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1200&q=70`)
+}
+
+// Mobile-friendliness as a CHECK, not a hope (owner feedback
+// 2026-11-26: a working site that was not mobile friendly): the
+// entry HTML must carry a viewport meta and at least one CSS
+// @media query, or validation fails and the repair loop fixes it.
+const responsiveDesignCheck = (record) => {
+    const candidates = ['index.html', 'public/index.html', 'src/index.html']
+    const found = candidates.filter(rel => { try { return fs.statSync(path.join(record.dir, rel)).isFile() } catch { return false } })
+    if (!found.length) return null
+    const problems = []
+    for (const rel of found) {
+        const html = fs.readFileSync(path.join(record.dir, rel), 'utf8')
+        const missing = []
+        if (!/name\s*=\s*["']viewport["']/i.test(html)) missing.push('a viewport meta tag')
+        if (!/@media/i.test(html)) missing.push('CSS @media queries for small screens')
+        if (missing.length) problems.push(`${path.join(record.dir, rel)} is missing ${missing.join(' and ')}`)
+    }
+    if (problems.length) return { name: 'responsive-design', success: false, output: `Site is not mobile-friendly: ${problems.join('; ')}. Add <meta name="viewport" content="width=device-width, initial-scale=1"> and responsive @media CSS (stacked layouts, fluid grids) for screens under 860px and 520px.` }
+    return { name: 'responsive-design', success: true, output: 'Entry HTML has a viewport meta and responsive @media CSS.' }
+}
+
 // Parse-check generated JavaScript with node's own parser. Returns the
 // first error line, or '' when the code parses.
 const jsSyntaxError = (text) => {
@@ -477,7 +524,14 @@ const generateFileContent = async (record, step, options = {}) => {
         isHtml ? null : 'Use plain CommonJS (require/module.exports) — never ESM import/export syntax.',
         isHtml ? null : 'Every variable name must be a valid JavaScript identifier (letters, digits, _ or $ only — never hyphens: write bodyParser, never body-parser).',
         isHtml ? null : 'For Express request bodies use the built-in express.json() and express.urlencoded() — never require a body-parser package.',
-        'Return ONLY the complete file content: no explanations, no Markdown fences.'
+        'Return ONLY the complete file content: no explanations, no Markdown fences.',
+        ...(isHtml ? [
+            'Design it like a professional agency site, not a demo: a sticky header with the business name and nav, a full-width hero, clear section rhythm (generous padding, a centred max-width container), cards with soft shadows and rounded corners, hover transitions, and a footer.',
+            'Typography matters: link Google Fonts (fonts.googleapis.com) — one strong display font for headings and one clean font for body text, chosen to fit the theme.',
+            'Commit fully to the theme and colours the task names. For a neon theme: near-black background, one vivid accent colour, glowing text-shadow/box-shadow on headings and buttons, dark cards with neon borders. For luxury: dark + gold with serif display type. Never fall back to plain white-and-blue defaults when a theme is given.',
+            'MOBILE-FIRST RESPONSIVE (this is validated): include <meta name="viewport" content="width=device-width, initial-scale=1">, design fluid layouts with CSS grid/flexbox (repeat(auto-fit, minmax(...)) for card grids), images at max-width:100%, tap targets at least 44px tall, and @media queries at 860px and 520px that stack columns, shrink headings and keep every section readable on a phone. Nothing may overflow horizontally.',
+            `Photos: use ONLY these verified photo URLs for imagery (hero background or img, gallery, cards) — never invent any other image URL: ${photoLibraryFor(`${record.task || ''} ${brief || ''}`).join(' , ')}. Give every img descriptive alt text and loading="lazy" (except a hero img). If a section has no fitting photo, use a rich gradient or inline SVG pattern instead of a fake image.`
+        ] : [])
     ].filter(Boolean)
     const first = await ask(promptLines.join('\n'))
     if (!first.success) return { success: false, error: `File generation failed for ${step.path}: ${first.error}` }
@@ -1229,6 +1283,8 @@ const validate = async (record, options = {}) => {
         if (info.buildCommand) checks.push({ name: 'build', ...(await command(info.buildCommand, record.dir, options.buildTimeout || 180000)) })
         if (info.testCommand) checks.push({ name: 'test', ...(await command(info.testCommand, record.dir, options.testTimeout || 120000)) })
     }
+    const responsive = responsiveDesignCheck(record)
+    if (responsive) checks.push(responsive)
     record.checks = checks
     const success = checks.length > 0 && checks.every(c => c.success)
     update(record, { stage: success ? 'validated' : 'validation_failed', status: success ? 'validated' : 'validation_failed' })
@@ -1593,4 +1649,4 @@ const run = async options => {
     return { success: true, record, validation, screenshot: previewScreenshot }
 }
 
-module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, bootCheck, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson, sanitizeDependencyVersions, fixUnresolvableDependencies, ensureStartScript, sanitizeGeneratedScripts, reconcileEntrypoint, deterministicRepairSteps, repair }
+module.exports = { run, create, get, list: userId => Object.values(load().projects).filter(p => !userId || p.userId === userId), inspect, makePlan, executeStep, safePackageManagerCommand, validate, bootCheck, checkpoint, previewStart, previewStop, screenshot, validateRevisionEdits, normalizePackageJsonStart, ensureRootPackageJson, sanitizeDependencyVersions, fixUnresolvableDependencies, ensureStartScript, sanitizeGeneratedScripts, reconcileEntrypoint, deterministicRepairSteps, repair, photoLibraryFor, responsiveDesignCheck }
