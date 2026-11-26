@@ -93,6 +93,108 @@ const fetchPiperWav = async (content, piper, outFile) => {
     if (!stat.size) throw new Error('Piper produced an empty file.')
 }
 
+// ── Casper Orpheus voice (cloud, first choice for English) ─────────────
+// Bera asked 2026-11-26 for the Casper endpoint's voice (Orpheus, via the
+// same groq-audio API as the Whisper transcription in beraai.js). Verified
+// live from this host: POST {task:'speak', text, voice:'hannah',
+// model:'canopylabs/orpheus-v1-english'} returns a WAV in data.audioBase64
+// and a Whisper round-trip of the speech was near-perfect. Pitfall: the
+// site card documents the field as 'textToSpeak', but that 500s with
+// "text is required for task=speak" — the field MUST be `text`.
+// Limits: 200 characters per call, so longer replies are split into
+// sentence-aligned chunks and re-joined with ffmpeg. The provider notes
+// character charges may apply, so replies needing more than 3 chunks
+// (~600 chars) skip Orpheus entirely and use Piper instead of making many
+// paid calls. Any Orpheus failure falls through to Piper — it must never
+// fail the reply. Swahili/Sheng stay on Piper (resolveSpeechLanguage maps
+// Sheng to 'sw'). Disable with BERA_TTS_ORPHEUS=0.
+const ORPHEUS_URL = 'https://apiz.xcasper.space/api/ai/groq-audio'
+const ORPHEUS_MODEL = 'canopylabs/orpheus-v1-english'
+const ORPHEUS_VOICE = 'hannah'
+const ORPHEUS_CHUNK_CHARS = 200
+const ORPHEUS_MAX_CHUNKS = 3
+
+const resolveFfmpegBin = () => {
+    // Prefer the bundled ffmpeg-static binary; fall back to a system ffmpeg.
+    try { return require('ffmpeg-static') || 'ffmpeg' } catch { return 'ffmpeg' }
+}
+
+const splitOrpheusChunks = (text, maxChars = ORPHEUS_CHUNK_CHARS) => {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim()
+    if (!clean) return []
+    const sentences = clean.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [clean]
+    const chunks = []
+    let current = ''
+    const pushCurrent = () => { if (current) { chunks.push(current); current = '' } }
+    for (const rawSentence of sentences) {
+        let sentence = String(rawSentence || '').trim()
+        if (!sentence) continue
+        // Hard-split an over-long sentence at a word boundary.
+        while (sentence.length > maxChars) {
+            pushCurrent()
+            let cut = sentence.lastIndexOf(' ', maxChars)
+            if (cut <= 0) cut = maxChars
+            chunks.push(sentence.slice(0, cut).trim())
+            sentence = sentence.slice(cut).trim()
+        }
+        if (!sentence) continue
+        if (current && (current.length + 1 + sentence.length) > maxChars) pushCurrent()
+        current = current ? `${current} ${sentence}` : sentence
+    }
+    pushCurrent()
+    return chunks
+}
+
+const fetchOrpheusChunk = async (chunk) => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 30000)
+    try {
+        const response = await fetch(ORPHEUS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task: 'speak', text: chunk, voice: ORPHEUS_VOICE, model: ORPHEUS_MODEL }),
+            signal: controller.signal
+        })
+        if (!response.ok) throw new Error(`Orpheus request failed (${response.status}).`)
+        const data = await response.json()
+        const wav = data?.success && data?.data?.audioBase64 ? Buffer.from(data.data.audioBase64, 'base64') : null
+        if (!wav || wav.length < 44 || wav.toString('ascii', 0, 4) !== 'RIFF' || wav.toString('ascii', 8, 12) !== 'WAVE') {
+            throw new Error('Orpheus returned no valid WAV audio.')
+        }
+        return wav
+    } finally { clearTimeout(timer) }
+}
+
+// Returns the path of one combined WAV inside tempDir, or null when the
+// text is not Orpheus-sized (0 chunks, or more than ORPHEUS_MAX_CHUNKS).
+// Throws on provider/concat failure so the caller can fall back to Piper.
+const fetchOrpheusWav = async (content, tempDir) => {
+    const chunks = splitOrpheusChunks(content)
+    if (!chunks.length || chunks.length > ORPHEUS_MAX_CHUNKS) return null
+    const files = []
+    for (let i = 0; i < chunks.length; i++) {
+        const file = path.join(tempDir, `orpheus-${i}.wav`)
+        fs.writeFileSync(file, await fetchOrpheusChunk(chunks[i]))
+        files.push(file)
+    }
+    if (files.length === 1) return files[0]
+    // Same model + voice ⇒ identical WAV params (verified live:
+    // pcm_s16le, 24 kHz, mono), so the concat demuxer can stream-copy;
+    // if that ever fails, retry with a lossless re-encode.
+    const listFile = path.join(tempDir, 'orpheus-concat.txt')
+    fs.writeFileSync(listFile, files.map(file => `file '${file}'`).join('\n'))
+    const outFile = path.join(tempDir, 'orpheus-joined.wav')
+    const ffmpegBin = resolveFfmpegBin()
+    const concatArgs = ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', listFile]
+    try {
+        await execFileAsync(ffmpegBin, [...concatArgs, '-c', 'copy', outFile], { timeout: 30000, maxBuffer: 1024 * 1024 })
+    } catch {
+        await execFileAsync(ffmpegBin, [...concatArgs, '-c:a', 'pcm_s16le', outFile], { timeout: 30000, maxBuffer: 1024 * 1024 })
+    }
+    if (!fs.existsSync(outFile) || !fs.statSync(outFile).size) throw new Error('Orpheus concat produced an empty file.')
+    return outFile
+}
+
 const fetchGoogleMp3Parts = async (content, googleLang, tempDir) => {
     const googleTts = require('google-tts-api')
     const axios = require('axios')
@@ -146,12 +248,27 @@ const fetchTts = async (text, lang = 'en') => {
 
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bera-tts-'))
     try {
-        // Prefer the local neural voice; fall back to Google TTS if Piper
-        // is not installed on this host or synthesis fails for any reason.
-        const piper = resolvePiper(language)
         let sourceFile = null
         let sourceIsConcat = false
-        if (piper) {
+        // First choice for English: the Casper Orpheus voice. Sheng
+        // resolves to 'sw' via resolveSpeechLanguage, so it stays on
+        // Piper with Swahili; other languages keep their existing path.
+        const speechLanguage = resolveSpeechLanguage(speakable, language)
+        if (process.env.BERA_TTS_ORPHEUS !== '0' && (language === 'en' || language === 'auto') && speechLanguage === 'en') {
+            try {
+                const orpheusFile = await fetchOrpheusWav(speakable, tempDir)
+                if (orpheusFile) {
+                    sourceFile = orpheusFile
+                    console.log('[TTS] Using Casper Orpheus voice')
+                }
+            } catch (e) {
+                console.error('[TTS] Orpheus failed, falling back to Piper:', e?.message || e)
+            }
+        }
+        // Next: the local neural voice; fall back to Google TTS if Piper
+        // is not installed on this host or synthesis fails for any reason.
+        const piper = resolvePiper(language)
+        if (!sourceFile && piper) {
             try {
                 const wavFile = path.join(tempDir, 'voice.wav')
                 await fetchPiperWav(speakable, piper, wavFile)
@@ -168,9 +285,7 @@ const fetchTts = async (text, lang = 'en') => {
             sourceIsConcat = true
         }
         const outputFile = path.join(tempDir, 'voice.ogg')
-        // Prefer the bundled ffmpeg-static binary; fall back to a system ffmpeg.
-        let ffmpegBin = 'ffmpeg'
-        try { ffmpegBin = require('ffmpeg-static') || 'ffmpeg' } catch {}
+        const ffmpegBin = resolveFfmpegBin()
         const inputArgs = sourceIsConcat
             ? ['-f', 'concat', '-safe', '0', '-i', sourceFile]
             : ['-i', sourceFile]
@@ -186,4 +301,4 @@ const fetchTts = async (text, lang = 'en') => {
     }
 }
 
-module.exports = { fetchTts, VOICE_MAP, normalizeLanguage, resolveSpeechLanguage, toSpeechText, PIPER_VOICE_MAP, resolvePiper }
+module.exports = { fetchTts, VOICE_MAP, normalizeLanguage, resolveSpeechLanguage, toSpeechText, PIPER_VOICE_MAP, resolvePiper, fetchOrpheusWav, splitOrpheusChunks, ORPHEUS_CHUNK_CHARS, ORPHEUS_MAX_CHUNKS }
