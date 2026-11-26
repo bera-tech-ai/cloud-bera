@@ -17,7 +17,9 @@ const run = (cmd, cwd = WORK_DIR, env = {}) => {
         }, (err, stdout, stderr) => {
             const out = (stdout || '').trim()
             const errOut = (stderr || '').trim()
-            if (err && !out) return resolve({ success: false, output: errOut || err.message })
+            // Success means the command actually exited 0 — a failed command
+            // that printed something is still a failure.
+            if (err) return resolve({ success: false, output: out || errOut || err.message })
             resolve({ success: true, output: out || errOut || 'Done.' })
         })
     })

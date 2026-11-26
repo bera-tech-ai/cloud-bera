@@ -207,7 +207,7 @@ Requirements:
 
     const allOk = steps.filter(s => !s.ok).length === 0
     return {
-        success: true,
+        success: allOk,
         name: safeName,
         type,
         dir: projDir,
@@ -847,7 +847,7 @@ Requirements:
     const pm2 = await runShell(`pm2 delete ${apiName}-api 2>/dev/null; pm2 start ${projDir}/index.js --name ${apiName}-api`, 20000)
 
     return {
-        success: true,
+        success: install.success && pm2.success,
         name: `${apiName}-api`,
         dir: projDir,
         port,

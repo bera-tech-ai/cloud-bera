@@ -789,7 +789,7 @@ const startProject = async (userId, name) => {
 const stopProject = async (userId, name) => {
     const pName = pm2Name(userId, name)
     const r = await run(`pm2 stop "${pName}" 2>&1`)
-    return { success: r.success || r.output.includes('not found') === false, output: r.output }
+    return { success: r.success || r.output.includes('not found'), output: r.output }
 }
 
 const restartProject = async (userId, name) => {
