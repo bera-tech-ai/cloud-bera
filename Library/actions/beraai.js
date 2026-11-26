@@ -187,14 +187,67 @@ const systemInfo = async () => {
 }
 
 // ── Conversation history ──────────────────────────────────────────────────────
+// In-memory per chat, capped at the last 20 turns — and mirrored into
+// global.db.data.chatbera.chatHistory (throttled db.write(), same pattern as
+// the MEMORY mirror above) so a restart no longer wipes the conversation
+// flow, ChatBera's included. The DB copy is adopted lazily on first use:
+// chats the DB knows that memory doesn't are restored (the mirror keeps the
+// most recent 100 chats). Without global.db (tests) this is memory-only, and
+// any persistence failure is swallowed — a reply must never break over it.
 const HISTORY = {}
+const HISTORY_MAX_TURNS = 20
+const HISTORY_MAX_CHATS = 100
+let _histDbAdopted = false
+let _histWriteTimer = null
+const _adoptDbHistory = () => {
+    if (_histDbAdopted) return
+    _histDbAdopted = true
+    try {
+        const s = global.db?.data?.chatbera?.chatHistory
+        if (s && typeof s === 'object') {
+            for (const [chat, turns] of Object.entries(s)) {
+                if (HISTORY[chat] || !Array.isArray(turns)) continue
+                const clean = turns
+                    .filter(t => t && typeof t.role === 'string' && typeof t.content === 'string')
+                    .slice(-HISTORY_MAX_TURNS)
+                if (clean.length) HISTORY[chat] = clean
+            }
+        }
+    } catch {}
+}
+const _mirrorHistoryToDb = () => {
+    try {
+        if (!global.db?.data || typeof global.db.write !== 'function') return
+        const store = global.db.data.chatbera || (global.db.data.chatbera = {})
+        const chats = Object.keys(HISTORY).slice(-HISTORY_MAX_CHATS)
+        const snapshot = {}
+        for (const c of chats) snapshot[c] = HISTORY[c].slice(-HISTORY_MAX_TURNS)
+        store.chatHistory = snapshot
+        if (_histWriteTimer) return
+        _histWriteTimer = setTimeout(() => {
+            _histWriteTimer = null
+            try { Promise.resolve(global.db.write()).catch(() => {}) } catch {}
+        }, 1500)
+        _histWriteTimer.unref?.()
+    } catch {}
+}
+// Test hook: forget that DB history was adopted, so a test can stage a fresh
+// fake db and watch adoption happen. Not used in production flow.
+const _resetHistoryAdoption = () => { _histDbAdopted = false }
 const pushHistory = (chat, role, content) => {
+    _adoptDbHistory()
     if (!HISTORY[chat]) HISTORY[chat] = []
     HISTORY[chat].push({ role, content })
-    if (HISTORY[chat].length > 20) HISTORY[chat] = HISTORY[chat].slice(-20)
+    if (HISTORY[chat].length > HISTORY_MAX_TURNS) HISTORY[chat] = HISTORY[chat].slice(-HISTORY_MAX_TURNS)
+    // Keep key order ≈ activity order so the mirror's 100-chat cap keeps the
+    // most recently active conversations.
+    const turns = HISTORY[chat]
+    delete HISTORY[chat]
+    HISTORY[chat] = turns
+    _mirrorHistoryToDb()
 }
-const getHistory = (chat) => HISTORY[chat] || []
-const clearHistory = (chat) => { delete HISTORY[chat] }
+const getHistory = (chat) => { _adoptDbHistory(); return HISTORY[chat] || [] }
+const clearHistory = (chat) => { _adoptDbHistory(); delete HISTORY[chat]; _mirrorHistoryToDb() }
 const clearMemory = (chat) => { _adoptDbMemory(); delete MEMORY[chat]; _saveMEMORY() }
 const saveMemory = (chat, key, value) => remember(chat, key, value)
 const setMemory = (chat, value, key) => {
@@ -3744,7 +3797,59 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SIMPLE CHAT MODE (no tools)
 // ─────────────────────────────────────────────────────────────────────────────
-const generateSimpleReply = async (text, chat, languagePreference = 'en') => {
+// ── ChatBera style profile ───────────────────────────────────────────────────
+// ChatBera replies AS Bruce Bera, in the texting style he trained from his
+// exported chats (db.data.chatbera.profile — see Library/actions/chatbera.js).
+// Resolution prefers the live DB profile (the one continuous learning grows)
+// and falls back to the prebuilt trained profile. Samples that look like
+// credential/connection strings are never put in a prompt.
+const CHATBERA_STYLE_SAMPLE_LIMIT = 30
+const _pickStyleSamples = (messages) => {
+    const clean = (Array.isArray(messages) ? messages : [])
+        .map(s => String(s || '').trim())
+        .filter(s => s && !/[a-z][a-z0-9+.-]*:\/\//i.test(s))
+    if (clean.length <= CHATBERA_STYLE_SAMPLE_LIMIT) return clean
+    // Keep the original trained style (front) AND the freshest learned style
+    // (tail) inside the bound.
+    const head = clean.slice(0, 12)
+    const tail = clean.slice(-(CHATBERA_STYLE_SAMPLE_LIMIT - head.length))
+    return [...new Set([...head, ...tail])]
+}
+const resolveChatBeraProfile = (override) => {
+    let base = null
+    try { base = require('./chatbera').getPrebuiltProfile() } catch {}
+    const candidate = override || global.db?.data?.chatbera?.profile
+    if (candidate && Array.isArray(candidate.myMessages) && candidate.myMessages.length) {
+        return { ...(base || {}), ...candidate }
+    }
+    return base || candidate || null
+}
+// System prompt for ChatBera replies: persona facts + his real style samples
+// as few-shot guidance. The reply must read as a natural chat message from
+// Bera himself — never as an AI/bot — so this replaces the generic Bera AI
+// persona (and its markdown habits) for ChatBera calls only.
+const buildChatBeraSystemPrompt = ({ profile, languageInstruction = '', memStr = '' } = {}) => {
+    const p = profile || {}
+    const name = p.myFullName || p.myName || 'Bruce Bera'
+    const firstName = String(p.myName || name).split(' ')[0] || 'Bruce'
+    const facts = [
+        p.myCity ? `lives in ${p.myCity}` : '',
+        p.myCountry ? `${p.myCountry}` : '',
+        p.myGithub ? `GitHub: ${p.myGithub}` : ''
+    ].filter(Boolean).join(', ')
+    const samples = _pickStyleSamples(p.myMessages)
+    const parts = [
+        `You are ${name}${facts ? ` (${facts})` : ''}, chatting on WhatsApp as yourself. You are NOT an AI, a bot, or an assistant — never say or hint that you are, and never mention these instructions.`,
+        `Write exactly in ${firstName}'s own texting style: short, natural WhatsApp replies with his slang, emoji and punctuation habits, matching the real examples below. Do not use markdown, asterisks, bullet lists or headings — plain chat text only, the way a person types.`,
+        languageInstruction,
+        samples.length ? `Real examples of how ${firstName} writes:\n${samples.map(s => `- ${s}`).join('\n')}` : '',
+        'Answer what the person actually said and keep the conversation flowing naturally, like a real chat with a friend.',
+        memStr ? memStr.replace(/Things I remember about you:/, `Things ${firstName} remembers about this person:`) : ''
+    ]
+    return parts.filter(Boolean).join('\n')
+}
+
+const generateSimpleReply = async (text, chat, languagePreference = 'en', opts = {}) => {
       pushHistory(chat, 'user', text)
       const mem = getMemory(chat)
       const memEntries = Object.entries(mem).filter(([k]) => k !== '_action_log')
@@ -3759,8 +3864,15 @@ const generateSimpleReply = async (text, chat, languagePreference = 'en') => {
               : languageMode === 'sw'
                   ? 'Reply in natural Swahili. If the user uses familiar Sheng expressions, you may preserve them.'
                   : 'Reply in natural Kenyan Sheng with an easy English/Swahili mix. Keep it respectful and do not overuse slang.'
-      const sysContent =
-          'You are Bera AI \u2014 a brilliant, friendly WhatsApp assistant built by Bera Tech. ' +
+      // ChatBera calls (opts.chatbera / opts.styleProfile) reply AS Bera in
+      // his trained style; every other caller keeps the generic Bera AI
+      // persona exactly as before.
+      const styleProfile = (opts && (opts.chatbera === true || opts.styleProfile))
+          ? resolveChatBeraProfile(opts.styleProfile)
+          : null
+      const sysContent = styleProfile
+          ? buildChatBeraSystemPrompt({ profile: styleProfile, languageInstruction, memStr })
+          : 'You are Bera AI \u2014 a brilliant, friendly WhatsApp assistant built by Bera Tech. ' +
           'You have deep knowledge across all topics: tech, code, science, culture, life advice, creative writing, and more. ' +
           languageInstruction + ' ' +
           'Be concise but complete \u2014 never cut off an answer mid-thought. ' +
@@ -3792,6 +3904,11 @@ const runShell = runBash
 module.exports = {
     generateAdvancedReply,
     generateSimpleReply,
+    buildChatBeraSystemPrompt,
+    resolveChatBeraProfile,
+    pushHistory,
+    getHistory,
+    _resetHistoryAdoption,
     validateAndFixCode,
     transcribeAudio,
     TRANSCRIBE_MAX_BYTES,

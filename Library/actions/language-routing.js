@@ -28,6 +28,44 @@ const parseTranslationRequest = text => {
     return null
 }
 
+// ── Automatic language detection (ChatBera flow) ─────────────────────────────
+// Small deterministic heuristic: score the message's words against Sheng and
+// Swahili marker lists. Sheng wins ties — a Sheng/Swahili mix IS Sheng in
+// Kenyan chat. Anything with no markers is treated as English. This only
+// steers a single reply; it is never persisted as a language preference
+// (explicit "reply in X" asks own that store — see saveLanguagePreference).
+const SHENG_STRONG = new Set([
+    'niaje', 'mkuu', 'mbogi', 'rada', 'buda', 'manze', 'msee', 'fala', 'iza',
+    'kejani', 'chwani', 'noma', 'poa', 'ushenzi', 'maze', 'joh'
+])
+const SWAHILI_MARKERS = new Set([
+    'habari', 'asante', 'tafadhali', 'ndiyo', 'hapana', 'kesho', 'rafiki',
+    'jambo', 'karibu', 'samahani', 'pole', 'asubuhi', 'jioni', 'kwaheri',
+    'mzuri', 'nzuri', 'yako', 'wangu', 'msaada', 'tutaonana',
+    'sana', 'kwa', 'ya', 'wa', 'na', 'ni', 'yaani', 'kabisa', 'kidogo'
+])
+const SWAHILI_STRONG = new Set([
+    'habari', 'asante', 'tafadhali', 'ndiyo', 'hapana', 'kesho', 'rafiki',
+    'jambo', 'karibu', 'samahani', 'asubuhi', 'jioni', 'kwaheri', 'msaada', 'tutaonana'
+])
+
+const detectMessageLanguage = text => {
+    const words = String(text || '').toLowerCase().match(/[a-z']+/g) || []
+    if (!words.length) return 'en'
+    let sheng = 0
+    let swahili = 0
+    for (const w of words) {
+        if (SHENG_STRONG.has(w)) sheng += 2
+        if (SWAHILI_STRONG.has(w)) swahili += 2
+        else if (SWAHILI_MARKERS.has(w)) swahili += 1
+    }
+    // Sheng markers are distinctive slang: even a couple of them inside an
+    // otherwise-Swahili sentence mean the chat is code-switching — Sheng.
+    if (sheng > 0 && sheng * 2 >= swahili) return 'sheng'
+    if (swahili > 0) return 'sw'
+    return 'en'
+}
+
 const saveLanguagePreference = async (db, sender, language) => {
     if (!db?.data || !sender || !['en', 'sw', 'sheng', 'auto'].includes(language)) {
         throw new Error('A ready database, sender, and supported language are required.')
@@ -47,4 +85,4 @@ const saveLanguagePreference = async (db, sender, language) => {
     return key
 }
 
-module.exports = { LANGUAGE_ALIASES, parseLanguageChange, parseTranslationRequest, saveLanguagePreference }
+module.exports = { LANGUAGE_ALIASES, parseLanguageChange, parseTranslationRequest, saveLanguagePreference, detectMessageLanguage }
