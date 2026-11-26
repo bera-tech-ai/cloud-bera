@@ -948,6 +948,48 @@ const handleMessage = async (conn, rawMsg) => {
         const noPrefix = global.db?.data?.settings?.noPrefix || false
         const rawText = m.text?.trim() || ''
 
+        // ── ChatBera continuous style learning ─────────────────────────────
+        // A fromMe text in a PM that the bot did NOT send is Bera typing as
+        // himself — learn it as a ChatBera style sample so ChatBera keeps
+        // sounding like him. Bot-sent replies are registered per chat
+        // (db.data.chatbera.sentReplies) at the ChatBera/ghost send sites;
+        // a fromMe echo matching one is recognised and consumed instead of
+        // learned. Runs BEFORE the fromMe guard because most of his real
+        // messages return there. Kill switch: BERA_CHATBERA_LEARN=0.
+        try {
+            if (m.fromMe && rawText && global.db?.data) {
+                const { shouldLearnFromMessage, appendStyleSample, consumeSentReply, isStyleLearningEnabled } = require('../Library/actions/style-learning')
+                const learnStore = global.db.data.chatbera || (global.db.data.chatbera = {})
+                const ownNum = String(conn.user?.id || '').split('@')[0].split(':')[0]
+                const chatNum = String(m.chat || '').split('@')[0].split(':')[0]
+                const verdict = shouldLearnFromMessage({
+                    fromMe: true,
+                    isGroup: !!m.isGroup,
+                    isSelfChat: !m.isGroup && !!ownNum && chatNum === ownNum,
+                    text: rawText,
+                    prefix,
+                    sentReplies: learnStore.sentReplies?.[m.chat] || []
+                })
+                if (verdict.reason === 'bot-sent') {
+                    if (consumeSentReply(learnStore, m.chat, verdict.sentReplyIndex)) debouncedDbWrite()
+                } else if (verdict.learn && isStyleLearningEnabled()) {
+                    if (!learnStore.profile || !Array.isArray(learnStore.profile.myMessages)) {
+                        // Seed from the trained profile so learning grows the
+                        // original set instead of replacing it (the prebuilt
+                        // systemPrompt string is not persisted back).
+                        let seed = {}
+                        try { seed = require('../Library/actions/chatbera').getPrebuiltProfile() } catch {}
+                        const { systemPrompt: _drop, ...seedFacts } = seed || {}
+                        learnStore.profile = { ...seedFacts, ...(learnStore.profile || {}), myMessages: [...(seed.myMessages || [])] }
+                    }
+                    if (appendStyleSample(learnStore.profile, verdict.text)) {
+                        console.log('[CHATBERA LEARN] style sample learned from an owner message')
+                        debouncedDbWrite()
+                    }
+                }
+            }
+        } catch (e) { console.error('[CHATBERA LEARN]', e?.message || e) }
+
         // fromMe guard — allow through if it's a "bera"/"agent" trigger
         if (m.fromMe) {
             const firstWord = rawText.split(/\s+/)[0].toLowerCase()
@@ -4370,7 +4412,19 @@ const handleMessage = async (conn, rawMsg) => {
                         conn.sendPresenceUpdate('composing', chat).catch(() => {})
                         await new Promise(r => setTimeout(r, 600 + Math.random() * 1400))
                         const _gr = await _gp.generateGhostReply(sender.split('@')[0], text, m.pushName || '')
-                        if (_gr) await conn.sendMessage(chat, { text: _gr }, { quoted: m })
+                        if (_gr) {
+                            await conn.sendMessage(chat, { text: _gr }, { quoted: m })
+                            // Register the bot-sent text so ChatBera style
+                            // learning never mistakes this reply for one of
+                            // Bera's own messages when it echoes back fromMe.
+                            try {
+                                if (global.db?.data) {
+                                    const { registerSentReply } = require('../Library/actions/style-learning')
+                                    const ghostStore = global.db.data.chatbera || (global.db.data.chatbera = {})
+                                    if (registerSentReply(ghostStore, chat, _gr)) debouncedDbWrite()
+                                }
+                            } catch {}
+                        }
                         conn.sendPresenceUpdate('paused', chat).catch(() => {})
                     }
                 } catch (e) { console.error('[GHOST]', e?.message || e) }
@@ -4392,11 +4446,21 @@ const handleMessage = async (conn, rawMsg) => {
                       const { normalizeLanguage } = require('../Library/actions/tts')
                       const normalizedSender = String(sender || '').replace(/:\d+@/, '@').toLowerCase()
                       const chatberaPrefs = global.db?.data?.chatbera || {}
-                      const languagePreference = normalizeLanguage(chatberaPrefs.languagePreferences?.[normalizedSender] || 'en')
+                      // Language flow: an explicitly stored preference (set
+                      // when the person asked, e.g. "reply in Sheng") always
+                      // wins. Otherwise detect THIS message's language and
+                      // answer in kind, per message — Sheng gets Sheng,
+                      // Swahili gets Swahili, English gets English. The
+                      // detected language is never saved as a preference.
+                      const storedLanguage = chatberaPrefs.languagePreferences?.[normalizedSender]
+                      const { detectMessageLanguage } = require('../Library/actions/language-routing')
+                      const languagePreference = storedLanguage
+                          ? normalizeLanguage(storedLanguage)
+                          : detectMessageLanguage(text)
                       const voiceRepliesEnabled = chatberaPrefs.voiceReplies?.[normalizedSender] === true && !m.isGroup
                       conn.sendPresenceUpdate('composing', chat).catch(() => {})
                       await new Promise(r => setTimeout(r, 800 + Math.random() * 1500))
-                      const result = await generateSimpleReply(text, chat, languagePreference)
+                      const result = await generateSimpleReply(text, chat, languagePreference, { chatbera: true })
                       if (result.success && result.reply) {
                           // Voice-reply rule (Bera, 2026-11-26): a voice note in
                           // always gets a voice reply; a typed conversation gets
@@ -4428,6 +4492,14 @@ const handleMessage = async (conn, rawMsg) => {
                               const chatberaStore = global.db.data.chatbera || (global.db.data.chatbera = {})
                               chatberaStore.replyCounts = chatberaStore.replyCounts || {}
                               chatberaStore.replyCounts[chat] = repliesSent + 1
+                              // Register the sent reply text so ChatBera
+                              // style learning can tell bot-sent replies
+                              // apart from Bera's own messages (they both
+                              // arrive fromMe on this self-bot account).
+                              try {
+                                  const { registerSentReply } = require('../Library/actions/style-learning')
+                                  registerSentReply(chatberaStore, chat, result.reply)
+                              } catch {}
                               await global.db.write().catch(() => {})
                           }
                       }
