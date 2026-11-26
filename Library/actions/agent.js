@@ -294,7 +294,7 @@ const backupToGithub = async (folder, repoUrl) => {
     steps.push({ step: 'zip', ok: r.success, out: r.output.slice(0, 100) })
     if (!r.success) return { success: false, output: steps.map(s => `${s.ok?'✅':'❌'} ${s.step}: ${s.out}`).join('\n') }
     const sizeMB = (fs.statSync(zipPath).size / 1024 / 1024).toFixed(2)
-    return { success: true, output: `✅ Backup created: ${zipPath} (${sizeMB} MB)\nFolder: ${folder}`, file: zipPath }
+    return { success: true, output: `✅ Local backup created: ${zipPath} (${sizeMB} MB)\nFolder: ${folder}\n⚠️ This is a local backup only — it was NOT uploaded to GitHub.`, file: zipPath }
 }
 
 const sqliteQuery = async (dbPath, query) => {
@@ -510,13 +510,6 @@ SYSTEM & SHELL:
 - password_gen   → args: { length, noSymbols }
 - json_tools     → args: { action("format"|"minify"|"validate"|"keys"), json }
 
-PUTER CLOUD (files & folders on Puter cloud storage):
-- puter_write    → args: { path, content }   ← write/create file on Puter cloud
-- puter_mkdir    → args: { path }             ← create folder on Puter cloud
-- puter_read     → args: { path }             ← read file from Puter cloud
-- puter_list     → args: { path }             ← list files in Puter folder
-- puter_delete   → args: { path }             ← delete file/folder on Puter
-
 CODE EXECUTION (any language via Piston API):
 - run_code       → args: { code, lang, stdin }   ← owner/sudo-only; lang: js, python, php, ruby, go, rust, c, cpp, java, kotlin, swift, lua, perl, r, haskell, ts, bash, etc. Local JS/Python/Bash run without bot credentials; other languages run on the remote Piston API.
 - npm_install    → args: { packages, cwd }
@@ -687,8 +680,8 @@ AUTONOMOUS TASK PATTERNS:
 - "run these commands in order" → multi_shell
 
 RULES:
-- "create folder/directory" or "mkdir" → use file_mkdir (local) or puter_mkdir (cloud)
-- "create file" or "write file" → use file_write (local) or puter_write (cloud)
+- "create folder/directory" or "mkdir" → use file_mkdir (local)
+- "create file" or "write file" → use file_write (local)
 - "run bash/shell command" → use shell
 - "save to workspace" → workspace_save (GitHub)
 - For full app/website builds, prefer agent_os; don't use shell to generate or publish the whole project
@@ -861,33 +854,14 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                 const r = deleteWorkspaceItem(userId, args.path)
                 return { success: r.success, output: r.output, desc }
             }
-            // ── Puter cloud file system ─────────────────────────────────────
-            case 'puter_write': {
-                const puterPath = args.path || 'untitled.txt'
-                const content = args.content || ''
-                return {
-                    success: true,
-                    output: `📁 Puter file operation queued:\nPath: ${puterPath}\nSize: ${content.length} chars\n\n⚠️ Puter cloud FS requires browser auth — for server-side file ops use file_write instead.\nLocal fallback: Writing to /tmp/puter_${path.basename(puterPath)}`,
-                    desc
-                }
-            }
-            case 'puter_mkdir': {
-                return {
-                    success: true,
-                    output: `📁 Puter mkdir: ${args.path}\n\n⚠️ Puter cloud FS requires browser auth — for server-side dirs use file_mkdir instead.`,
-                    desc
-                }
-            }
-            case 'puter_read': {
-                return {
-                    success: true,
-                    output: `📁 Puter read: ${args.path}\n\n⚠️ Puter cloud FS requires browser auth — use file_read for server-side files.`,
-                    desc
-                }
-            }
+            // ── Puter cloud file system — NOT available in this deployment ──
+            // (Previously these returned success:true while writing nothing.)
+            case 'puter_write':
+            case 'puter_mkdir':
+            case 'puter_read':
             case 'puter_list':
             case 'puter_delete': {
-                return { success: true, output: `Puter cloud FS operation '${action}' on ${args.path} — requires browser auth.`, desc }
+                return { success: false, output: 'Puter storage is not available in this deployment.', desc }
             }
             case 'js_eval': {
                 // Phase 1 sandbox: owner/sudo-only (gated above). Runs in a

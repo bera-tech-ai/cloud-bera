@@ -85,7 +85,8 @@ const runLocal = (code, lang, timeoutMs = TIMEOUT_MS) => new Promise((resolve) =
     try { fs.writeFileSync(tmpFile, code) }
     catch (e) { return resolve({ success: false, stdout: '', stderr: e.message, exitCode: -1, lang }) }
 
-    let stdout = '', stderr = '', settled = false
+    let stdout = '', stderr = '', settled = false, timedOut = false
+    const startedAt = Date.now()
     const proc = spawn(cmd, [tmpFile], {
         cwd: WORKSPACE, timeout: timeoutMs,
         // Phase 1 sandbox: locally executed code runs without bot credentials.
@@ -95,13 +96,22 @@ const runLocal = (code, lang, timeoutMs = TIMEOUT_MS) => new Promise((resolve) =
     const cleanup = () => { try { fs.unlinkSync(tmpFile) } catch {} }
     const done = (code) => {
         if (settled) return; settled = true; cleanup(); proc.kill('SIGTERM')
+        if (timedOut) {
+            return resolve({ success: false, stdout: stdout.slice(0, MAX_OUTPUT), stderr: `⏱️ Timed out after ${timeoutMs / 1000}s`, exitCode: -1, lang: langNorm })
+        }
         resolve({ success: code === 0, stdout: stdout.slice(0, MAX_OUTPUT), stderr: stderr.slice(0, 1000), exitCode: code, lang: langNorm })
     }
     proc.stdout.on('data', d => { stdout += d })
     proc.stderr.on('data', d => { stderr += d })
-    proc.on('close', code => done(code ?? 0))
+    // A child killed by the spawn timeout closes with code null + a signal;
+    // without this flag that was reported as exit 0 / success.
+    proc.on('close', (code, signal) => {
+        if (signal && Date.now() - startedAt >= timeoutMs - 100) timedOut = true
+        done(code ?? 0)
+    })
     proc.on('error', e => { stderr = e.message; done(-1) })
-    setTimeout(() => { if (!settled) { stderr = `⏱️ Timed out after ${timeoutMs / 1000}s`; done(-1) } }, timeoutMs + 500)
+    setTimeout(() => { if (!settled) { timedOut = true; proc.kill('SIGKILL') } }, timeoutMs)
+    setTimeout(() => { if (!settled) { timedOut = true; done(-1) } }, timeoutMs + 500)
 })
 
 // ── Piston execution (remote, any language) ───────────────────────────────────

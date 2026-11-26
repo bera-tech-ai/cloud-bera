@@ -342,13 +342,8 @@
           if (d.success && d.data?.horoscope_data) return { success: true, sign: d.data.zodiac_name || sign, text: d.data.horoscope_data, date: d.data.date }
           throw new Error('bad response')
       } catch(e) {
-          const msgs = [
-              'Today brings unexpected opportunities. Stay alert and embrace change.',
-              'Patience is your greatest strength today. Take time to reflect before acting.',
-              'Energy is high — channel it into something creative and meaningful.',
-              'A conversation today could change your perspective entirely. Stay open.',
-          ]
-          return { success: true, sign, text: msgs[Math.floor(Math.random()*msgs.length)], date: new Date().toDateString() }
+          // No fabricated horoscope: report the failure honestly.
+          return { success: false, sign, error: 'Horoscope service is unavailable right now. Please try again later.' }
       }
   }
 

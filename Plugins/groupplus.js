@@ -68,12 +68,18 @@ handle.all = async (m, { conn, command, args, prefix, reply, isOwner, isAdmin, i
             ]
         }, [target])
 
-        // Auto-kick on 3 warns
+        // Auto-kick on 3 warns — only reset the warn record if the kick worked
         if (count >= limit) {
             await reply('🚨 ' + '@' + target.split('@')[0] + ' reached max warns (3/3). Kicking...')
-            await conn.groupParticipantsUpdate(chat, [target], 'remove').catch(() => {})
-            db[key] = { warns: 0, reasons: [] }
-            await global.db.write()
+            const kicked = await conn.groupParticipantsUpdate(chat, [target], 'remove')
+                .then(r => { const s = r?.[0]?.status; return !s || [200, '200'].includes(s) })
+                .catch(() => false)
+            if (kicked) {
+                db[key] = { warns: 0, reasons: [] }
+                await global.db.write()
+            } else {
+                await reply('❌ Auto-kick failed for @' + target.split('@')[0] + ' — their warns were NOT reset.')
+            }
         }
     }
 
@@ -267,11 +273,16 @@ handle.all = async (m, { conn, command, args, prefix, reply, isOwner, isAdmin, i
         const admins = (meta.participants || []).filter(x => x.admin === 'admin').map(x => x.id)
         if (!admins.length) return reply('✅ No co-admins to demote.')
         await reply('⏳ Demoting ' + admins.length + ' admin(s)...')
+        let demotedCount = 0
         for (const a of admins) {
-            await conn.groupParticipantsUpdate(chat, [a], 'demote').catch(() => {})
+            const ok = await conn.groupParticipantsUpdate(chat, [a], 'demote')
+                .then(r => { const s = r?.[0]?.status; return !s || [200, '200'].includes(s) })
+                .catch(() => false)
+            if (ok) demotedCount++
             await new Promise(r => setTimeout(r, 800))
         }
-        return reply('✅ Demoted *' + admins.length + '* admin(s) successfully!')
+        const failedCount = admins.length - demotedCount
+        return reply('✅ Demoted *' + demotedCount + '* admin(s) successfully!' + (failedCount ? '\n⚠️ ' + failedCount + ' could not be demoted.' : ''))
     }
 
     // ── .setinactive — find inactive members ─────────────────────────────────

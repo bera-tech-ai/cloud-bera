@@ -102,6 +102,13 @@ const callGiftedTech = async (userText, historyMessages = [], timeoutMs, systemP
     return callAI(messages, timeoutMs)
 }
 
+// Honest fallback when every AI provider call fails: tell the user the AI
+// service is unavailable instead of throwing or fabricating a reply.
+// The caller wraps the returned string as { success: false, reply }.
+const localFallback = async (userText) => {
+    return '⚠️ My AI service is temporarily unavailable, so I can\'t process that right now. Please try again in a few moments.'
+}
+
 // ── Persistent memory and non-AI helpers ─────────────────────────────────────
 const _MEM_FILE = path.join(__dirname, '../../Database/agent_memory.json')
 let MEMORY = {}
@@ -1488,7 +1495,8 @@ const executeToolCall = async (tc, chatId, conn, m) => {
             const result = await xcasper.screenshot(sUrl, { device: tc.device || 'desktop', format: 'png', delay: tc.delay || 500 })
             const img = result?.url || result?.data?.image_url
             if (img && conn && m) {
-                await conn.sendMessage(chatId, { image: { url: img }, caption: `📸 ${sUrl}` }, { quoted: m }).catch(() => {})
+                const sent = await conn.sendMessage(chatId, { image: { url: img }, caption: `📸 ${sUrl}` }, { quoted: m }).then(() => true).catch(() => false)
+                if (!sent) return `screenshot could not be sent. Image URL: ${img}`
                 return 'screenshot sent'
             }
             return img || 'screenshot unavailable'
@@ -1670,7 +1678,8 @@ const executeToolCall = async (tc, chatId, conn, m) => {
             const result = await xcasper.qr(tc.text || '', { size: tc.size || 400, format: 'png' })
             const qrUrl = xcasper.textFrom(result) || result?.url || result?.data?.url
             if (qrUrl && conn && m) {
-                await conn.sendMessage(chatId, { image: { url: qrUrl }, caption: `🔲 QR: ${tc.text}` }, { quoted: m }).catch(() => {})
+                const sent = await conn.sendMessage(chatId, { image: { url: qrUrl }, caption: `🔲 QR: ${tc.text}` }, { quoted: m }).then(() => true).catch(() => false)
+                if (!sent) return `QR code could not be sent. QR URL: ${qrUrl}`
                 return 'QR code sent'
             }
             if (qrUrl) return `QR URL: ${qrUrl}`
@@ -1690,7 +1699,8 @@ const executeToolCall = async (tc, chatId, conn, m) => {
             url = `https://barcodeapi.org/api/${bcType}/${encodeURIComponent(text)}`
         }
         if (conn && m) {
-            await conn.sendMessage(chatId, { image: { url }, caption: `📊 Barcode (${type}): ${text}` }, { quoted: m }).catch(() => {})
+            const sent = await conn.sendMessage(chatId, { image: { url }, caption: `📊 Barcode (${type}): ${text}` }, { quoted: m }).then(() => true).catch(() => false)
+            if (!sent) return `barcode could not be sent. Barcode URL: ${url}`
             return `barcode sent`
         }
         return url
@@ -1854,8 +1864,8 @@ const executeToolCall = async (tc, chatId, conn, m) => {
             switch (action) {
                 case 'list': { const d = await bhLib.listDeployments(); return JSON.stringify(d, null, 2).slice(0, 2500) }
                 case 'status': { const d = await bhLib.getDeployment(tc.id); return JSON.stringify(d, null, 2).slice(0, 1500) }
-                case 'start': { await bhLib.startDeployment(tc.id); return `✅ started #${tc.id}` }
-                case 'stop': { await bhLib.stopDeployment(tc.id); return `🛑 stopped #${tc.id}` }
+                case 'start': { const r = await bhLib.startDeployment(tc.id); if (!r?.success) return `❌ Could not start #${tc.id}: ${r?.error || 'BeraHost request failed'}`; return `✅ started #${tc.id}` }
+                case 'stop': { const r = await bhLib.stopDeployment(tc.id); if (!r?.success) return `❌ Could not stop #${tc.id}: ${r?.error || 'BeraHost request failed'}`; return `🛑 stopped #${tc.id}` }
                 case 'logs': {
                     const logs = await bhLib.getDeploymentLogs(tc.id)
                     if (!logs.success) return `BeraHost error: ${logs.error}`
@@ -2253,9 +2263,10 @@ try {
             const r = await conn.groupParticipantsUpdate(group, [jid], 'add')
             const status = r?.[0]?.status
             if (status === 200 || status === '200') return `✅ Added +${num} to the group.`
-            if (status === 403) return `❌ +${num} has privacy settings that prevent being added. Send them the invite link instead.`
-            if (status === 408) return `❌ +${num} is not on WhatsApp.`
-            return `✅ Add request sent to +${num}. Status: ${status}`
+            if (status === 403 || status === '403') return `❌ +${num} has privacy settings that prevent being added. Send them the invite link instead.`
+            if (status === 408 || status === '408') return `❌ +${num} is not on WhatsApp.`
+            if (status) return `❌ Add was not accepted for +${num}. WhatsApp status: ${status}`
+            return `✅ Add request accepted by Baileys for +${num}.`
         } catch (e) { return `❌ Add failed: ${e.message}` }
     }
 
@@ -3233,9 +3244,9 @@ ${r.output.trim().slice(0, maxLen)}`
         const port = tc.port || 3001
         const autoStart = tc.start !== false
 
-        // 1. Scaffold the project
+        // 1. Scaffold the project (scaffold reports failures starting with '❌')
         const scaffoldResult = await executeToolCall({ tool: 'scaffold', type, name, port }, chatId, conn, m)
-        if (String(scaffoldResult).startsWith('ERROR')) return scaffoldResult
+        if (String(scaffoldResult).startsWith('ERROR') || String(scaffoldResult).startsWith('❌')) return scaffoldResult
 
         // 2. Install dependencies
         const installDir = `workspace/${name}`
@@ -3245,8 +3256,9 @@ ${r.output.trim().slice(0, maxLen)}`
             await runBash(`cd "${_safeWsPath(installDir)}" && npm install 2>&1 | tail -5`, 90000).catch(() => {})
         }
 
-        // 3. Start with PM2
+        // 3. Start with PM2 — only claim a live server when the start succeeded
         let liveUrl = ''
+        let startedWithPm2 = false
         if (autoStart) {
             const mainFile = type === 'react' ? null : 'index.js'
             if (mainFile) {
@@ -3255,13 +3267,15 @@ ${r.output.trim().slice(0, maxLen)}`
                     file: `${installDir}/${mainFile}`,
                     env: { PORT: String(port), NODE_ENV: 'production' }
                 }, chatId, conn, m)
+                if (!String(pm2r).startsWith('✅')) return `❌ Server "${name}" was scaffolded in workspace/${name}, but PM2 failed to start it — it is NOT live.\n\n${pm2r}`
+                startedWithPm2 = true
                 liveUrl = `http://localhost:${port}`
             } else {
                 liveUrl = `Run: cd workspace/${name} && npm run dev`
             }
         }
 
-        return `✅ *Server Created: ${name}*\n\n🏗️ Type: ${type}\n📁 Location: workspace/${name}\n${liveUrl ? '🌐 URL: ' + liveUrl : ''}\n\n${autoStart ? '_Started with PM2. Use hot_reload to restart._' : '_Run npm install && npm start to launch._'}\n\n*Next: deploy to Sky Hosting →* ${'`'}{"tool":"skyhost","action":"deploy","repoUrl":"https://github.com/user/${name}","name":"${name}"}${'`'}`
+        return `✅ *Server Created: ${name}*\n\n🏗️ Type: ${type}\n📁 Location: workspace/${name}\n${liveUrl ? '🌐 URL: ' + liveUrl : ''}\n\n${startedWithPm2 ? '_Started with PM2. Use hot_reload to restart._' : '_Run npm install && npm start to launch._'}\n\n*Next: deploy to Sky Hosting →* ${'`'}{"tool":"skyhost","action":"deploy","repoUrl":"https://github.com/user/${name}","name":"${name}"}${'`'}`
     }
 
     // ── live_preview — get live URL for a running PM2 process ─────────────────

@@ -760,12 +760,18 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
                 !p.name && !p.pushName && !p.verifiedName
             ).map(p => p.id)
             if (!toKick.length) return reply(`✅ No clearly inactive members found (all members have display names).`)
+            let removedCount = 0
             for (let i = 0; i < toKick.length; i += 5) {
-                await conn.groupParticipantsUpdate(chat, toKick.slice(i, i + 5), 'remove').catch(() => {})
+                const batch = toKick.slice(i, i + 5)
+                const res = await conn.groupParticipantsUpdate(chat, batch, 'remove').catch(() => null)
+                if (Array.isArray(res)) {
+                    removedCount += res.filter(x => !x?.status || [200, '200'].includes(x.status)).length
+                }
                 await new Promise(r => setTimeout(r, 1000))
             }
-            await react('✅')
-            return reply(`✅ Removed *${toKick.length}* inactive member(s) (no display name).`)
+            const failedCount = toKick.length - removedCount
+            await react(removedCount ? '✅' : '❌')
+            return reply(`✅ Removed *${removedCount}* inactive member(s) (no display name).${failedCount ? `\n⚠️ ${failedCount} could not be removed.` : ''}`)
         } catch(e) { await react('❌'); return reply(`❌ ${e.message}`) }
     }
 
@@ -826,12 +832,18 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
             const ownerJid = `${config.owner}@s.whatsapp.net`
             const toKick = meta.participants.filter(p => !p.admin && !myJids.has(p.id) && !myJids.has(p.lid) && p.id !== ownerJid).map(p => p.id)
             if (!toKick.length) return reply(`No non-admin members to remove.`)
+            let removedCount = 0
             for (let i = 0; i < toKick.length; i += 5) {
-                await conn.groupParticipantsUpdate(chat, toKick.slice(i, i + 5), 'remove').catch(() => {})
+                const batch = toKick.slice(i, i + 5)
+                const res = await conn.groupParticipantsUpdate(chat, batch, 'remove').catch(() => null)
+                if (Array.isArray(res)) {
+                    removedCount += res.filter(x => !x?.status || [200, '200'].includes(x.status)).length
+                }
                 await new Promise(r => setTimeout(r, 1000))
             }
-            await react('✅')
-            return reply(`✅ Removed ${toKick.length} non-admin members.`)
+            const failedCount = toKick.length - removedCount
+            await react(removedCount ? '✅' : '❌')
+            return reply(`✅ Removed ${removedCount} non-admin members.${failedCount ? `\n⚠️ ${failedCount} could not be removed.` : ''}`)
         } catch (e) { await react('❌'); return reply(`❌ ${e.message}`) }
     }
 

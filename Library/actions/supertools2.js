@@ -420,7 +420,7 @@ const scaffoldProject = async (name, stack = 'express-rest', description = '', p
     steps.push({ step: 'pm2 start', ok: pmR.success, out: pmR.output.slice(0, 200) })
 
     return {
-        success: true,
+        success: pmR.success,
         name: safeName, dir, port: resolvedPort, stack,
         mainFile: `${dir}/${mainFile}`,
         stepsOk: steps.filter(s => s.ok).length,
@@ -428,7 +428,7 @@ const scaffoldProject = async (name, stack = 'express-rest', description = '', p
         steps,
         startCmd,
         readme: fs.existsSync(path.join(dir, 'README.md')) ? fs.readFileSync(path.join(dir, 'README.md'), 'utf8').slice(0, 500) : '',
-        summary: `✅ ${safeName} (${stack}) scaffolded with ${steps.filter(s => s.ok).length}/${steps.length} steps OK, running on port ${resolvedPort}`
+        summary: `${pmR.success ? '✅' : '❌'} ${safeName} (${stack}) scaffolded with ${steps.filter(s => s.ok).length}/${steps.length} steps OK, ${pmR.success ? `running on port ${resolvedPort}` : 'but PM2 failed to start it — not running'}`
     }
 }
 
@@ -770,7 +770,7 @@ Requirements:
     } catch {}
 
     return {
-        success: true, name, port: resolvedPort, dir,
+        success: pm.success, name, port: resolvedPort, dir,
         healthy, started: pm.success,
         endpoints: [...spec.matchAll(/(?:GET|POST|PUT|DELETE|PATCH)\s+\/\S+/gi)].map(m => m[0]),
         codePreview: code.slice(0, 600)
