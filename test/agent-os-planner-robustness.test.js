@@ -155,3 +155,60 @@ test('mkdir for a file-like path is skipped and an empty dir does not block a wr
     `)
     assert.match(output, /FILELIKE_MKDIR_OK/)
 })
+
+test('deterministicRepairSteps names the file from the failure text', () => {
+    const output = runScript(`
+        const assert = require('node:assert/strict')
+        const record = { id: 't9', name: 't9', dir, task: 'build a coffee site' }
+        const failure = 'javascript-syntax: ' + dir + '/src/server.js:24 console.log(x) SyntaxError: Unexpected identifier'
+        const steps = agentOs.deterministicRepairSteps(record, failure)
+        assert.equal(steps.length, 1)
+        assert.equal(steps[0].action, 'write_file')
+        assert.equal(steps[0].path, 'src/server.js')
+        assert.match(steps[0].brief, /SyntaxError/)
+        console.log('REPAIR_STEPS_OK')
+    `)
+    assert.match(output, /REPAIR_STEPS_OK/)
+})
+
+test('repair falls back to rewriting the named file when its planner returns no steps', () => {
+    const output = runScript(`
+        const assert = require('node:assert/strict')
+        fs.mkdirSync(dir + '/src', { recursive: true })
+        fs.writeFileSync(dir + '/src/server.js', 'const broken = \`unterminated\\n')
+        let calls = 0
+        xcasper.chat = async () => {
+            calls++
+            if (calls === 1) return { success: true, provider: 'test', text: JSON.stringify({ steps: [] }) }
+            return { success: true, provider: 'test', text: 'const http = require("http")\\nhttp.createServer((q, s) => s.end("ok")).listen(process.env.PORT || 3000)\\n' }
+        }
+        const record = { id: 't10', name: 't10', dir, task: 'build a coffee site with a small server', repairs: [] }
+        const failure = 'boot: Server exited: ' + dir + '/src/server.js:24 SyntaxError: Unexpected identifier'
+        const fixed = await agentOs.repair(record, failure, {})
+        assert.equal(fixed.success, true, fixed.error)
+        const written = fs.readFileSync(dir + '/src/server.js', 'utf8')
+        assert.match(written, /createServer/)
+        console.log('REPAIR_FALLBACK_OK calls=' + calls)
+    `)
+    assert.match(output, /REPAIR_FALLBACK_OK/)
+})
+
+test('generated JS that fails a syntax check is regenerated before it is written', () => {
+    const output = runScript(`
+        const assert = require('node:assert/strict')
+        let calls = 0
+        xcasper.chat = async () => {
+            calls++
+            if (calls === 1) return { success: true, provider: 'test', text: 'const msg = \`Price: \` + 5 + \`\\nconsole.log(\`Server running\`)\\n' }
+            return { success: true, provider: 'test', text: 'const msg = "Price: 5"\\nconsole.log("Server running")\\nmodule.exports = msg\\n' }
+        }
+        const record = { id: 't11', name: 't11', dir, task: 'build a small server' }
+        const executed = await agentOs.executeStep(record, { action: 'write_file', path: 'server.js', brief: 'A tiny node server.' }, {})
+        assert.equal(executed.success, true, executed.output)
+        const written = fs.readFileSync(dir + '/server.js', 'utf8')
+        assert.match(written, /module\\.exports/)
+        assert.ok(calls >= 2, 'expected a regeneration call, got ' + calls)
+        console.log('GEN_SYNTAX_REGEN_OK calls=' + calls)
+    `)
+    assert.match(output, /GEN_SYNTAX_REGEN_OK/)
+})
