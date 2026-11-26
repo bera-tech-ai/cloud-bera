@@ -153,6 +153,10 @@ const applyVoiceTranscript = async (m, conn, deps = {}) => {
     m.text = text
     m.body = text
     m.isVoiceNote = true
+    // Explicit marker for downstream reply paths (e.g. the ChatBera
+    // voice-reply rule): this message BEGAN as a voice note, even though
+    // it now carries text like a typed message.
+    m.fromVoiceNote = true
     m.voiceTranscript = text
     return { status: 'ok', text }
 }

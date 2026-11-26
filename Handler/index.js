@@ -183,14 +183,17 @@ const checkAutoReply = async (conn, m, text) => {
     return false
 }
 
-const sendOptInVoiceReply = async (conn, m, text, languagePreference = 'en') => {
+const sendOptInVoiceReply = async (conn, m, text, languagePreference = 'en', opts = {}) => {
     if (!conn?.sendMessage || !m?.chat) return false
     const sender = String(m.sender || '').replace(/:\d+@/, '@').toLowerCase()
     const prefs = global.db?.data?.chatbera || {}
     // PMs: per-user opt-in (.voice auto on / "from now on use voice").
     // Groups: per-chat opt-in — only the owner can switch it on, so one
     // member can't make the bot voice-note a whole group.
-    const voiceOn = m.isGroup ? prefs.voiceChats?.[m.chat] === true : prefs.voiceReplies?.[sender] === true
+    // opts.force skips the opt-in gate for callers that made their own
+    // decision (the ChatBera voice-reply rule); length/TTS failure handling
+    // and the bot-sent voice registry marking below apply either way.
+    const voiceOn = opts.force === true ? true : (m.isGroup ? prefs.voiceChats?.[m.chat] === true : prefs.voiceReplies?.[sender] === true)
     if (!voiceOn) return false
     try {
         const { fetchTts, resolveSpeechLanguage, toSpeechText } = require('../Library/actions/tts')
@@ -4395,8 +4398,38 @@ const handleMessage = async (conn, rawMsg) => {
                       await new Promise(r => setTimeout(r, 800 + Math.random() * 1500))
                       const result = await generateSimpleReply(text, chat, languagePreference)
                       if (result.success && result.reply) {
-                          await sendGroupReply(conn, m, result.reply)
-                          if (voiceRepliesEnabled) await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
+                          // Voice-reply rule (Bera, 2026-11-26): a voice note in
+                          // always gets a voice reply; a typed conversation gets
+                          // its first 3 ChatBera replies in this chat as voice
+                          // notes, then text. Voice mode (voiceRepliesEnabled)
+                          // keeps today's behaviour exactly — text plus voice.
+                          // A new-rule voice reply REPLACES the text; if the
+                          // voice send cannot happen (reply too long for TTS,
+                          // or TTS fails) the text goes out instead, so the
+                          // reply is never lost and never sent twice.
+                          const { shouldVoiceReply } = require('../Library/actions/voice-reply-rule')
+                          const repliesSent = Number(chatberaPrefs.replyCounts?.[chat]) || 0
+                          const wantVoice = shouldVoiceReply({ fromVoiceNote: m.fromVoiceNote === true, voiceModeOn: voiceRepliesEnabled, repliesSent })
+                          let replySent = false
+                          if (voiceRepliesEnabled) {
+                              await sendGroupReply(conn, m, result.reply)
+                              replySent = true
+                              await sendOptInVoiceReply(conn, m, result.reply, languagePreference)
+                          } else if (wantVoice && await sendOptInVoiceReply(conn, m, result.reply, languagePreference, { force: true })) {
+                              replySent = true
+                          } else {
+                              await sendGroupReply(conn, m, result.reply)
+                              replySent = true
+                          }
+                          // Count every ChatBera reply actually sent, whatever
+                          // its form, persisted via db.write() (PostgreSQL-backed)
+                          // so a restart does not reset the first-3 allowance.
+                          if (replySent && global.db?.data) {
+                              const chatberaStore = global.db.data.chatbera || (global.db.data.chatbera = {})
+                              chatberaStore.replyCounts = chatberaStore.replyCounts || {}
+                              chatberaStore.replyCounts[chat] = repliesSent + 1
+                              await global.db.write().catch(() => {})
+                          }
                       }
                       conn.sendPresenceUpdate('paused', chat).catch(() => {})
                 } catch (e) {
