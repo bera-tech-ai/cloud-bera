@@ -69,13 +69,19 @@ const normalizeReminder = (r) => {
     return r
 }
 
-const writeDb = (db) => {
-    try { db.write() } catch (e) { console.error('[REMINDER] db.write failed:', e.message) }
+// db.write() persists the local JSON state synchronously but returns the
+// Postgres snapshot promise — awaiting it is what makes a save durable.
+// createReminder awaits this and fails honestly; the other mutations keep
+// the fire-and-forget behaviour via writeDbQuiet (still logged on failure).
+const writeDb = async (db) => { await db.write() }
+
+const writeDbQuiet = (db) => {
+    writeDb(db).catch((e) => console.error('[REMINDER] db.write failed:', e.message))
 }
 
 // ── Create / read / update ──────────────────────────────────────────────────
 
-const createReminder = ({ chat, jid, msg, fireAt, repeat }) => {
+const createReminder = async ({ chat, jid, msg, fireAt, repeat }) => {
     const db = getDb()
     if (!db) throw new Error('Reminders are unavailable right now (database not ready).')
     if (!chat) throw new Error('No chat to send this reminder to.')
@@ -100,7 +106,16 @@ const createReminder = ({ chat, jid, msg, fireAt, repeat }) => {
         completedAt: null
     })
     list.push(reminder)
-    writeDb(db)
+    try {
+        // The success reply must only be sent after the save has landed —
+        // a reminder that was never persisted must not be claimed as set.
+        await writeDb(db)
+    } catch (e) {
+        const idx = list.indexOf(reminder)
+        if (idx >= 0) list.splice(idx, 1)
+        console.error('[REMINDER] db.write failed:', e.message)
+        throw new Error('I could not save that reminder, so it has not been set. Please try again.')
+    }
     return reminder
 }
 
@@ -133,7 +148,7 @@ const cancelReminder = (id, jid) => {
     }
     r.status = 'cancelled'
     r.completedAt = Date.now()
-    writeDb(getDb())
+    writeDbQuiet(getDb())
     return { success: true, reminder: r }
 }
 
@@ -145,7 +160,7 @@ const doneReminder = (id, jid) => {
     if (r.status === 'sent') return { success: false, error: `Reminder [#${r.id}] already fired and closed.` }
     r.status = 'done'
     r.completedAt = Date.now()
-    writeDb(getDb())
+    writeDbQuiet(getDb())
     return { success: true, reminder: r }
 }
 
@@ -165,7 +180,7 @@ const snoozeReminder = (id, jid, minutes) => {
     r.followUpSent = false
     r.firedAt = null
     r.followUpDueAt = null
-    writeDb(getDb())
+    writeDbQuiet(getDb())
     return { success: true, reminder: r }
 }
 
@@ -463,7 +478,9 @@ const deliverDue = async (conn, nowMs) => {
         changed = true
     }
 
-    if (changed) writeDb(db)
+    if (changed) {
+        try { await writeDb(db) } catch (e) { console.error('[REMINDER] db.write failed:', e.message) }
+    }
     return { fired, nudged }
 }
 

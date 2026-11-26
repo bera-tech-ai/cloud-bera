@@ -164,11 +164,11 @@ const cancelAllForChat = (chatId) => {
  * @param {object} quotedMsg  Optional quoted message key (persistent path: ignored)
  * @returns {{ success: boolean, id: string, scheduledAt: string }}
  */
-const addReminder = (conn, chatId, text, delayMs, quotedMsg = null) => {
+const addReminder = async (conn, chatId, text, delayMs, quotedMsg = null) => {
     const fireAt = Date.now() + delayMs
     try {
         const { createReminder } = require('./reminders')
-        const reminder = createReminder({ chat: chatId, jid: chatId, msg: text, fireAt, repeat: null })
+        const reminder = await createReminder({ chat: chatId, jid: chatId, msg: text, fireAt, repeat: null })
         return { success: true, id: reminder.id, scheduledAt: formatNairobi(fireAt) }
     } catch (e) {
         console.error('[scheduler] persistent reminder failed, using in-memory fallback:', e.message)

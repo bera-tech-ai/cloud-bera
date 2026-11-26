@@ -15,7 +15,7 @@ module.exports = {
     if (parsed.error) return reply(ui.notice('info', 'Reminder', `${fonts.mono(`${prefix}remind 10m drink water`)}\n${fonts.smallCaps('also: tomorrow at 9am · every monday at 9am')}\n${parsed.error}`));
     let created;
     try {
-      created = createReminder({ chat: m.chat, jid: m.sender, msg: parsed.msg, fireAt: parsed.fireAt, repeat: parsed.repeat });
+      created = await createReminder({ chat: m.chat, jid: m.sender, msg: parsed.msg, fireAt: parsed.fireAt, repeat: parsed.repeat });
     } catch (e) { return reply(ui.notice('info', 'Reminder', e.message)); }
     const repeatNote = created.repeat ? `\n${fonts.smallCaps('repeats: ' + repeatLabel(created.repeat))}` : '';
     await reply(ui.notice('success', `Reminder [#${created.id}]`, `${fonts.italic(created.msg.slice(0, 200))}\n${fonts.smallCaps(formatNairobi(created.fireAt) + ' (Africa/Nairobi)')}${repeatNote}`));

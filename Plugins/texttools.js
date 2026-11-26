@@ -250,7 +250,7 @@ handle.all = async (m, { conn, command, args, prefix, reply, sender } = {}) => {
         if (parsed.error) return reply('❌ ' + parsed.error)
         let created
         try {
-            created = createReminder({ chat: m.chat, jid: sender, msg: parsed.msg, fireAt: parsed.fireAt, repeat: parsed.repeat })
+            created = await createReminder({ chat: m.chat, jid: sender, msg: parsed.msg, fireAt: parsed.fireAt, repeat: parsed.repeat })
         } catch (e) { return reply('❌ ' + e.message) }
         return reply(
             '⏰ *Reminder set!* [#' + created.id + ']\n\n' +

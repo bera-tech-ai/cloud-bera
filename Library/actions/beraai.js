@@ -116,7 +116,10 @@ try { MEMORY = JSON.parse(fs.readFileSync(_MEM_FILE, 'utf8')) } catch {}
 const _saveMEMORY = () => {
     try {
         fs.mkdirSync(path.dirname(_MEM_FILE), { recursive: true })
-        fs.writeFileSync(_MEM_FILE, JSON.stringify(MEMORY, null, 2))
+        // Atomic write: a crash mid-write must not corrupt the memory file.
+        const tmp = `${_MEM_FILE}.tmp-${process.pid}`
+        fs.writeFileSync(tmp, JSON.stringify(MEMORY, null, 2))
+        fs.renameSync(tmp, _MEM_FILE)
     } catch {}
 }
 const remember = (chat, key, value) => {
@@ -1191,7 +1194,9 @@ const executeToolCall = async (tc, chatId, conn, m) => {
     if (t === 'find_commands') {
         const query = String(tc.query || tc.search || '').trim().slice(0, 160)
         const limit = Math.max(1, Math.min(30, Number(tc.limit) || 20))
-        const catalog = require('../../Handler').findCommands(query, limit)
+        const handler = require('../../Handler')
+        if (typeof handler.findCommands !== 'function') return JSON.stringify({ success: false, error: 'Bera command discovery is unavailable.' })
+        const catalog = handler.findCommands(query, limit)
         return JSON.stringify(catalog)
     }
     if (t === 'run_bot_command') {
@@ -1207,14 +1212,20 @@ const executeToolCall = async (tc, chatId, conn, m) => {
         // instead of an exact command, resolve it against the effective registry.
         // Ambiguous matches are returned for the model to choose; nothing runs.
         if (/\s/.test(commandSpec) || !/^[a-z0-9_-]+$/i.test(commandSpec)) {
-            const lookup = require('../../Handler').findCommands(commandSpec, 5)
-            const candidates = lookup?.commands || []
-            if (candidates.length !== 1) {
-                if (!candidates.length) return `No registered command matched: ${commandSpec}`
-                return JSON.stringify({ needsSelection: true, query: commandSpec, candidates })
+            const handler = require('../../Handler')
+            // The Handler normally exports findCommands, but a stubbed or
+            // partially-loaded Handler may not — degrade to running the
+            // parsed command name directly instead of throwing.
+            if (typeof handler.findCommands === 'function') {
+                const lookup = handler.findCommands(commandSpec, 5)
+                const candidates = lookup?.commands || []
+                if (candidates.length !== 1) {
+                    if (!candidates.length) return `No registered command matched: ${commandSpec}`
+                    return JSON.stringify({ needsSelection: true, query: commandSpec, candidates })
+                }
+                command = String(candidates[0].name || '').replace(/^[./!]+/, '')
+                if (!args && parsedCommand?.[2]) args = parsedCommand[2]
             }
-            command = String(candidates[0].name || '').replace(/^[./!]+/, '')
-            if (!args && parsedCommand?.[2]) args = parsedCommand[2]
         }
         const result = await require('../../Handler').runCommand(command, args.slice(0, 8000), m, conn, { captureOnly: true })
         return JSON.stringify(result)
@@ -3296,10 +3307,21 @@ ${r.output.trim().slice(0, maxLen)}`
         const name = tc.name || ''
         const key = tc.key || tc.var || ''
         const value = tc.value || ''
+        // Never echo secret values back into chat: show the key name and a
+        // mask that keeps only the last 2 characters (fully masked when the
+        // value is short). Storage is unchanged — this only shapes output.
+        const maskEnvValue = (v) => {
+            const s = String(v ?? '')
+            return s.length < 8 ? '••••' : '••••' + s.slice(-2)
+        }
+        const maskEnvDump = (dump) => String(dump || '').split('\n').map(line => {
+            const m = line.match(/^(\s*[^:=\s][^:=]*?)\s*[:=]\s*(.+)$/)
+            return m ? `${m[1]}: ${maskEnvValue(m[2].trim())}` : line
+        }).join('\n')
 
         if (action === 'get' || action === 'list') {
             const r = await runBash(`pm2 env ${name} 2>/dev/null | grep -v "^\s*$" | head -30`, 10000)
-            return `🔧 *Env vars for ${name}:*\n\`\`\`\n${r.output || 'none / process not found'}\n\`\`\``
+            return `🔧 *Env vars for ${name}:*\n\`\`\`\n${r.output ? maskEnvDump(r.output) : 'none / process not found'}\n\`\`\``
         }
         if (action === 'set') {
             if (!key || !value) return 'ERROR: provide key and value'
@@ -3313,7 +3335,7 @@ ${r.output.trim().slice(0, maxLen)}`
             _nodeFsSync.writeFileSync(envPath, lines.join('\n') + '\n')
             // Restart with new env
             await pm2Restart(name)
-            return `✅ Set ${key}=${value.startsWith('sk-') ? value.slice(0,8) + '...' : value} for ${name} (restarted)`
+            return `✅ Set ${key}=${maskEnvValue(value)} for ${name} (restarted)`
         }
         if (action === 'delete') {
             const envPath = _safeWsPath(`workspace/${name}/.env`)

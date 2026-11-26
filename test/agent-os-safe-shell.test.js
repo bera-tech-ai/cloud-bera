@@ -36,7 +36,7 @@ test('Agent OS safely runs allowlisted package-manager plan steps without genera
             assert.equal(invocation.registry, 'https://registry.npmjs.org/')
 
             fs.writeFileSync(path.join(projectDir, 'package.json'), JSON.stringify({ name: 'registry-test', scripts: { start: 'node index.js' } }))
-            fs.writeFileSync(path.join(projectDir, 'index.js'), 'console.log("ok")\\n')
+            fs.writeFileSync(path.join(projectDir, 'index.js'), 'require("node:http").createServer((req, res) => { res.writeHead(200, { "content-type": "text/plain" }); res.end("ok") }).listen(Number(process.env.PORT) || 3000)\\n')
             const validation = await agentOs.validate(record)
             assert.equal(validation.success, true)
             invocation = JSON.parse(fs.readFileSync(argsFile, 'utf8'))

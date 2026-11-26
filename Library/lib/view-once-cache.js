@@ -26,7 +26,10 @@ function loadIndex() {
 function saveIndex() {
     try {
         fs.mkdirSync(DIR, { recursive: true })
-        fs.writeFileSync(INDEX_FILE, JSON.stringify(index))
+        // Atomic write: a crash mid-write must not corrupt the index.
+        const tmp = `${INDEX_FILE}.tmp-${process.pid}`
+        fs.writeFileSync(tmp, JSON.stringify(index))
+        fs.renameSync(tmp, INDEX_FILE)
     } catch {}
 }
 
