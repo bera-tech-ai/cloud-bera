@@ -43,12 +43,18 @@ const detectIntent = (text) => {
         /\bwhat'?s? (running|listening|on) (port|:)\s*\d+/.test(t)) return 'port_check'
 
     // ── Docker management ────────────────────────────────────────────────────
-    if (/\bdocker\b/.test(t) ||
+    // "docker" alone mid-sentence ("explain what docker is") is a topic,
+    // not a management request — require a docker verb after the word.
+    if (/\bdocker\s+(run|ps|images?|build|list|ls|status|logs?|start|stop|restart|compose|exec|pull|rm|rmi|inspect)\b/.test(t) ||
         /\b(containers?)\b.{0,15}\b(list|show|running|status|logs?|start|stop|restart)\b/.test(t) ||
         /\b(list|show|how many)\b.{0,15}\b(containers?)\b/.test(t)) return 'docker'
 
     // ── Cron management ──────────────────────────────────────────────────────
-    if (/\bcron(tab|job|task|schedule)?\b/.test(t) ||
+    // "cron" alone mid-sentence ("what is cron used for") is a topic, not
+    // a scheduling request — require schedule/list/add context.
+    if (/\bcrontab\b/.test(t) ||
+        /\bcron\b.{0,25}\b(list|show|add|jobs?|tasks?|schedule|entries|status)\b/.test(t) ||
+        /\b(list|show|add|create|remove|delete)\b.{0,20}\bcron\b/.test(t) ||
         /\b(schedule|add|remove|list)\b.{0,20}\b(cron|scheduled task|job|recurring)\b/.test(t) ||
         /\b(every|daily|weekly|hourly|at \d+)\b.{0,30}\b(run|execute|do|trigger)\b/.test(t)) return 'cron'
 
@@ -105,12 +111,17 @@ const detectIntent = (text) => {
         /\b(word|dictionary)\b.{0,15}\b(for|of|meaning|definition)\b/.test(t)) return 'define'
 
     // ── Weather ────────────────────────────────────────────────────────────────
-    if (/\b(weather|temperature|forecast|clima|rain|sunny|hot|cold)\b.{0,30}\b(in|at|for|today|tomorrow)?\b/.test(t) ||
+    // Bare hot/cold/rain/sunny only count as weather with a location
+    // ("in <place>") or weather context (today/tomorrow/outside/forecast) —
+    // "i have a cold" and "this song is hot" are not weather requests.
+    if (/\b(weather|temperature|forecast|clima)\b/.test(t) ||
+        /\b(rain|sunny|hot|cold)\b.{0,30}\b(in\s+\w+|at\s+\w+|for\s+\w+|today|tomorrow|outside|forecast|weather)\b/.test(t) ||
         /\b(what'?s? the weather|how'?s? the weather|weather today)\b/.test(t)) return 'weather'
 
     // ── Wikipedia ─────────────────────────────────────────────────────────────
     if (/\b(wiki|wikipedia|who is|what is)\b.{0,30}\b(page|article|about|on)?\b/.test(t) &&
-        !/\b(song|music|lyrics|image|picture|weather|group|github|repo)\b/.test(t)) return 'wiki'
+        !/\b(song|music|lyrics|image|picture|weather|group|github|repo)\b/.test(t) &&
+        !/^(?:please\s+)?what\s+is\s+the\s+(time|date|day)\b/.test(t)) return 'wiki'
 
     // ── Football live scores ───────────────────────────────────────────────────
     if (/\b(live score|livescore|live result|live match|football score|soccer score)\b/.test(t) ||
@@ -163,8 +174,12 @@ const detectIntent = (text) => {
         /\b(to sky|on sky|to skyhost|on skyhost)\b/.test(t)) return 'sky_deploy'
 
     // ── Shell / Bash direct intent ────────────────────────────────────────────
+    // Bare "run"/"exec" at the start only count as shell intent when a
+    // recognisable command word follows — "run to the store and buy milk"
+    // and "run this by me again" are ordinary sentences, not commands.
     if (/\b(run|execute|run this|execute this)\b.{0,20}\b(bash|shell|command|cmd|script)\b/.test(t) ||
-        /^(bash|shell|run|exec)\s+.{3,}/.test(t)) return 'agent'
+        /^(bash|shell)\s+.{3,}/.test(t) ||
+        /^(run|exec)\s+(npm|node|git|pm2|docker|python3?|yarn|pnpm|make|ls|cat|echo|curl|ping)\b/.test(t)) return 'agent'
 
     // ── Project creation ─────────────────────────────────────────────────────
     if (/\b(create|build|make|scaffold|setup|spin up|spin)\b.{0,30}\b(project|app|application|server|api|website)\b/.test(t) &&
@@ -223,7 +238,7 @@ const detectIntent = (text) => {
     // forward verb belongs to forward_msg, not send_pm ("forward this
     // message to babe" contains the word "message").
     if (!/^\s*remind\b/i.test(t) && !/\b(forward|relay|resend)\b/i.test(t) &&
-        /\b(send|message|msg|text|tell)\b.{0,50}\bto\s+[a-z][a-z' -]{1,30}/i.test(t)) return 'send_pm'
+        /\b(send|message|msg|text|tell|say)\b.{0,50}\bto\s+[a-z][a-z' -]{1,30}/i.test(t)) return 'send_pm'
 
     // ── Schedule message ─────────────────────────────────────────────────────
     if (/\b(schedule|send|remind|remind me|set reminder|remind (me|them)|send at|send in)\b.{0,30}\b(message|msg|text|reminder)\b/.test(t) ||
@@ -246,8 +261,9 @@ const detectIntent = (text) => {
     if (/git\s*push\b|push\s+(to|code|this|changes?|my)\b/.test(t)) return 'git_push'
 
     // ── GitHub — specific intents (must come before generic github catch-all) ─
-    // Create repo
-    if (/\b(create|make|start|init|new|open|setup|build)\b.{0,25}\b(repo|repository|project)\b/i.test(t) ||
+    // Create repo ("start" removed as a creation verb: "start the project"
+    // means run an existing project, not create a repo)
+    if (/\b(create|make|init|new|open|setup|build)\b.{0,25}\b(repo|repository|project)\b/i.test(t) ||
         /\b(repo|repository)\b.{0,20}\b(for|called?|named?)\b/i.test(t) ||
         /\bnew\s+(private|public)\s+(repo|repository|project)\b/i.test(t)) return 'github_create_repo'
 
@@ -335,7 +351,7 @@ const detectIntent = (text) => {
     // Covers: "run ls", "run: ls -la", "execute pwd", "bash: echo hello",
     //         "run this command: ...", "shell command: ...", backtick commands,
     //         and bare UNIX commands that start the message
-    if (/\b(run|execute|exec|terminal|bash|shell|command)\b.{0,20}\b(this|command|script)\b/.test(t) ||
+    if (/\b(run|execute|exec|terminal|bash|shell|command)\b.{0,20}\b(command|script)\b/.test(t) ||
         /\b(run|exec(?:ute)?|bash|shell)\s*:\s*\S/.test(t) ||
         /\brun\s+(ls|pwd|whoami|df|du|top|ps|cat|echo|mkdir|chmod|kill|curl|wget|apt|npm|node|git|pip|python)\b/.test(t) ||
         /^(pwd|ls\b|whoami|df\b|du\b|ps\b|top\b|cd |mkdir|rm |echo |npm |node |git |pip |python |chmod |touch |mv |cp |curl |wget |cat |grep |find |kill |apt )/.test(t)) return 'shell'
@@ -405,7 +421,9 @@ const detectIntent = (text) => {
     if (/\b(?:promote|make|set)\b.+admin/i.test(t) || /\b(?:make|promote)\s+(?:that|this)\s+(?:person|user)\s+admin/i.test(t)) return 'promote_user'
     if (/\b(?:demote|remove)\b.+admin/i.test(t) || /\bdemote\s+(?:that|this)\b/i.test(t)) return 'demote_user'
     if (/\b(?:mute|close|lock)\s+(?:this\s+|the\s+)?group/i.test(t) || /\bgroup\s+(?:mute|close|lock)/i.test(t) || /\bclose\s+(?:down\s+|up\s+)?(?:this\s+|the\s+)?group/i.test(t) || /\block\s+(?:down\s+)?(?:this\s+|the\s+)?group/i.test(t)) return 'mute_group'
-    if (/\b(?:unmute|open|unlock)\s+(?:this\s+|the\s+)?group/i.test(t) || /\bgroup\s+(?:unmute|open|unlock)/i.test(t) || /\bopen\s+(?:up\s+)?(?:this\s+|the\s+)?group/i.test(t)) return 'unmute_group'
+    // "open" alone is not an unmute verb ("open the group" usually means
+    // show me the group) — only unmute/unlock unmute.
+    if (/\b(?:unmute|unlock)\s+(?:this\s+|the\s+)?group/i.test(t) || /\bgroup\s+(?:unmute|unlock)/i.test(t)) return 'unmute_group'
     if (/\b(?:kick\s*all|remove\s*all|clear\s*group|boot\s*all|clean\s*group)\b/i.test(t)) return 'kick_all'
     if (/\b(?:tag|mention|ping)\s+(?:all|everyone|everybody)/i.test(t) || /\bhidetag/i.test(t)) return 'tag_all'
     if (/\b(?:leave|exit|quit)\s+(?:thes+)?group/i.test(t) || /\bgroup\s+(?:leave|exit)/i.test(t)) return 'leave_group'
@@ -460,7 +478,9 @@ const detectIntent = (text) => {
     if (/\b(?:search|google|look\s+up|find\s+info(?:rmation)?\s+(?:on|about|for))\b/i.test(t)) return 'search'
 
     // ── Network tools ───────────────────────────────────────────────────
-    if (/\b(?:ping|check\s+latency)\s+\S+/i.test(t)) return 'ping'
+    // Ping needs a host-shaped target (dotted name or IP) — "ping me when
+    // you are done" is a reminder request, not a network ping.
+    if (/\b(?:ping|check\s+latency)\s+[\w-]+(?:\.[\w-]+)+\b/i.test(t)) return 'ping'
     if (/\bwhois\b/i.test(t)) return 'whois'
     if (/\b(?:ip\s+lookup|lookup\s+ip|ip\s+address\s+(?:of|for))\b/i.test(t)) return 'ip_lookup'
     if (/\b(?:check|is)\s+(?:the\s+)?(?:url|link|site|website)\s+(?:safe|working|up|alive|down)/i.test(t)) return 'url_check'
@@ -492,14 +512,17 @@ const detectIntent = (text) => {
     if (/\b(?:create|make|start|run)\s+(?:a\s+)?(?:poll|vote|survey)\b/i.test(t) || /\bpoll[:\s]/i.test(t)) return 'group_poll'
 
     // ── Fun commands ─────────────────────────────────────────────────────
-    if (/\b(?:tell|say|give|send)\s+(?:me\s+)?(?:a\s+)?joke\b/i.test(t) || /\bjokes?\b/.test(t)) return 'fun_joke'
+    if ((/\b(?:tell|say|give|send)\s+(?:me\s+)?(?:a\s+)?joke\b/i.test(t) || /\bjokes?\b/.test(t)) &&
+        !/\bno\s+(?:more\s+)?jokes?\b/i.test(t)) return 'fun_joke'
     if (/\b(?:tell|give|send|share)\s+(?:me\s+)?(?:a\s+)?(?:fun\s+)?fact\b/i.test(t)) return 'fun_fact'
     if (/\b(?:give|send|share|tell)\s+(?:me\s+)?(?:a\s+)?(?:motivational\s+)?quote\b/i.test(t)) return 'fun_quote'
     if (/\b(?:flip|toss)\s+(?:a\s+)?coin\b/i.test(t) || /\bcoinflip\b/i.test(t)) return 'fun_coin'
     if (/\b(?:ask\s+the\s+)?8\s*ball\b/i.test(t) || /\bmagic\s+ball\b/i.test(t)) return 'fun_8ball'
     if (/\b(?:give|send)\s+(?:me\s+)?(?:a\s+)?truth\b/i.test(t) || /^truth$/i.test(t)) return 'fun_truth'
     if (/\b(?:give|send)\s+(?:me\s+)?(?:a\s+)?dare\b/i.test(t) || /^dare$/i.test(t)) return 'fun_dare'
-    if (/\bship\s+@?\w+/i.test(t)) return 'fun_ship'
+    // Ship needs a pairing: a tagged person or two names joined by
+    // and/&/with/x. "ship it tomorrow" is about a parcel, not the game.
+    if (/\bship\s+(?:@\w+|\w+\s+(?:and|&|with|x)\s+@?\w+)/i.test(t)) return 'fun_ship'
     if (/\b(?:generate|create|make)\s+(?:a\s+)?(?:secure\s+)?password\b/i.test(t) || /\brandom\s+password\b/i.test(t)) return 'gen_password'
     if (/\b(?:give|ask|send)\s+(?:me\s+)?(?:a\s+)?trivia\b/i.test(t) || /^trivia$/i.test(t)) return 'fun_trivia'
     if (/\b(?:roast\s+me|roast\s+@|give\s+me\s+a\s+roast)\b/i.test(t)) return 'fun_roast'
@@ -530,10 +553,12 @@ const detectIntent = (text) => {
     if (/\bcolor\s+(?:info|code|hex)\b/i.test(t) || /\b#[0-9a-f]{6}\b/i.test(t)) return 'tools_color'
 
     // ── TTS / Voice note — must come BEFORE notes to avoid "voice note" mismatch ──
-    if (/\b(tts|text\s+to\s+speech|speak|say|read\s+aloud)\s+/i.test(t) ||
+    // "say <something> to <name>" is a send-to-name request, not TTS.
+    if (!/^say\s+.+\s+to\s+[a-z]/i.test(t) &&
+        (/\b(tts|text\s+to\s+speech|speak|say|read\s+aloud)\s+/i.test(t) ||
         /\bsend\s+(a\s+)?voice\s+(note|message)\b/i.test(t) ||
         /\b(convert|turn)\s+.{0,20}to\s+(voice|speech|audio)\b/i.test(t) ||
-        /\bvoice\s+(note|message)\s+(saying|with|that\s+says)\b/i.test(t)) return 'tts_msg'
+        /\bvoice\s+(note|message)\s+(saying|with|that\s+says)\b/i.test(t))) return 'tts_msg'
 
     // ── Notes — explicitly excluded when "voice note" is present ────────
     if (!(/\bvoice\s+note\b/i.test(t)) &&
@@ -607,25 +632,31 @@ const detectIntent = (text) => {
     if (/\b(morse\s*code|convert\s*to\s*morse|morse\s*(encode|decode))\b/i.test(t)) return 'morse'
     if (/\b(word\s*count|count\s*words|how\s*many\s*words)\b/i.test(t)) return 'wordcount'
     if (/\b(palindrome|is\s*(it\s*a\s*)?palindrome)\b/i.test(t)) return 'palindrome'
-    if (/\b(hash|sha256|md5\s*hash|encrypt\s*text)\b/i.test(t)) return 'hash'
+    // "hash" must be an instruction about a text ("hash this", "sha256 of
+    // this"), not a food word — "hash browns for breakfast" is breakfast.
+    if (/^hash\s+(?:this|that|the|my)\b/i.test(t) || /\b(sha256|md5\s*hash|encrypt\s*text)\b/i.test(t)) return 'hash'
     if (/\b(rot13|caesar\s*cipher|rot\s*13)\b/i.test(t)) return 'rot13'
     if (/\b(small\s*caps|smallcaps)\b/i.test(t)) return 'smallcaps'
     if (/\b(vaporwave|aesthetic\s*text|full\s*width\s*text)\b/i.test(t)) return 'vaporwave'
     if (/\b(clap\s*(text|it)|add\s*clap)\b/i.test(t)) return 'clap'
     if (/\b(zalgo|glitch\s*text)\b/i.test(t)) return 'zalgo'
     if (/\b(remind\s*(me|in)?|set\s*(a\s*)?reminder)\b/i.test(t)) return 'remind'
-    if (/\b(timer|countdown|count\s*down)\b/i.test(t)) return 'timer'
+    // Timer/countdown need an instruction or a duration — "the countdown
+    // to christmas" is conversation, not a timer request.
+    if (/\b(?:set|start|run)\s+(?:a\s+)?(?:timer|countdown|count\s*down)\b/i.test(t) ||
+        /\b(?:timer|countdown|count\s*down)\s+(?:for\s+)?\d/i.test(t) ||
+        /^timer\s*$/i.test(t)) return 'timer'
     if (/\b(text\s*(analysis|info|stats)|analyze\s*text)\b/i.test(t)) return 'textinfo'
     // ── FUN ──────────────────────────────────────────────────────────────────
     if (/\b(random\s*meme|get\s*me\s*a\s*meme|show\s*meme)\b/i.test(t)) return 'meme'
     if (/\b(cat\s*(pic|picture|image|photo)|show\s*me\s*a\s*cat|cute\s*cat)\b/i.test(t)) return 'cat'
     if (/\b(dog\s*(pic|picture|image|photo)|show\s*me\s*a\s*dog|cute\s*dog)\b/i.test(t)) return 'dog'
-    if (/\b(would\s*you\s*rather|wyr)\b/i.test(t)) return 'wyr'
-    if (/\b(never\s*have\s*i\s*ever|nhie)\b/i.test(t)) return 'nhie'
+    if (/\b(would\s*you\s*rather|wyr\b)\b/i.test(t)) return 'wyr'
+    if (/\b(never\s*have\s*i\s*ever|nhie\b)\b/i.test(t)) return 'nhie'
     if (/\b(give\s*me\s*a\s*compliment|compliment\s*me|say\s*something\s*nice)\b/i.test(t)) return 'compliment'
     if (/\b(dad\s*joke|tell\s*me\s*a\s*dad\s*joke)\b/i.test(t)) return 'dadjoke'
     if (/\b(slot\s*machine|spin\s*(the\s*)?(slots?))\b/i.test(t)) return 'slots'
-    if (/\b(rock\s*paper\s*scissors|rps)\b/i.test(t)) return 'rps'
+    if (/\b(rock\s*paper\s*scissors|rps\b)\b/i.test(t)) return 'rps'
     if (/\b(roast\s*me|roast\s*(the\s*)?(person|them))\b/i.test(t)) return 'roastme'
     if (/\b(cat\s*fact|tell\s*me\s*(something\s*about\s*)?cats?)\b/i.test(t)) return 'catfact'
     if (/\b(dog\s*fact|tell\s*me\s*(something\s*about\s*)?dogs?)\b/i.test(t)) return 'dogfact'
@@ -807,7 +838,9 @@ const detectIntent = (text) => {
     if (/\b(clear|delete|remove|wipe)\s+(all\s+|my\s+)?(notes?|memos?)\b/i.test(t)) return 'clear_notes'
 
     // ── Soft-mute a group member ──────────────────────────────────────────────
-    if (/\b(mute|silence|quiet)\s+(@\S+|\w+)\b/i.test(t) &&
+    // Stopword targets are not people: "quiet please" must not try to mute
+    // a member called "please".
+    if (/\b(mute|silence|quiet)\s+(@\S+|(?!please\b|everyone\b|down\b|up\b|now\b)\w+)\b/i.test(t) &&
         !/\b(group|all|everyone)\b/i.test(t)) return 'mute_member'
 
     // ── Unmute a group member ─────────────────────────────────────────────────
@@ -861,7 +894,7 @@ const detectIntent = (text) => {
     if (/\b(demote|remove\s+admin|take\s+admin|strip\s+admin)\s+(@\S+|\w+)/i.test(t)) return 'group_demote'
     if (/\b(mute|lock|close)\s+(the\s+)?group\b/i.test(t) ||
         /\bonly\s+admins?\s+(can\s+)?send\b/i.test(t)) return 'group_mute'
-    if (/\b(unmute|unlock|open)\s+(the\s+)?group\b/i.test(t) ||
+    if (/\b(unmute|unlock)\s+(the\s+)?group\b/i.test(t) ||
         /\beveryone\s+can\s+send\b/i.test(t)) return 'group_unmute'
     if (/\b(group\s+link|invite\s+link|get\s+(the\s+)?link)\b/i.test(t)) return 'group_link'
     if (/\b(tag\s+all|mention\s+all|ping\s+all|notify\s+all|@\s*everyone)\b/i.test(t)) return 'group_tagall'
@@ -897,8 +930,10 @@ const detectIntent = (text) => {
     // Natural phrases: "run this", "can you run this code for me", "execute this",
     //                  "run my code", "bera run this", "execute this script please"
     if (
+        // "run this by me again" is an idiom (explain it again), not code.
+        !/\b(run|execute|exec)\s+(this|it)\s+by\s+me\b/i.test(t) &&
         // "run/execute/exec this/it/my" or "run the code/script" (not "run the music")
-        /\b(run|execute|exec)\s+(this|it|my)\b/i.test(t) ||
+        (/\b(run|execute|exec)\s+(this|it|my)\b/i.test(t) ||
         /\b(run|execute|exec)\s+the\s+(code|script|snippet|program|function|file)\b/i.test(t) ||
         // "can you run this [code]", "please run this"
         /\b(can\s+you|please|bera|just)\s+(run|execute|exec)\s+(this|it|my|the)\b/i.test(t) ||
@@ -907,7 +942,7 @@ const detectIntent = (text) => {
         // "run this code", "execute this script" — explicit with code word
         /\b(run|execute|exec|test)\s+(this\s+|the\s+|my\s+)?(code|script|snippet|program|function)\b/i.test(t) ||
         // "this code, run it", "execute the code please"
-        /\b(code|script|snippet)\b.{0,20}\b(run|execute|exec)\b/i.test(t)
+        /\b(code|script|snippet)\b.{0,20}\b(run|execute|exec)\b/i.test(t))
     ) return 'code_run'
 
     // ── Code validate / check ─────────────────────────────────────────────────
@@ -953,9 +988,10 @@ const detectIntent = (text) => {
           /\b(reset|change|renew)\s+the\s+(invite|group)\s+link\b/i.test(t)) return 'revoke_link'
 
       // ── Text to speech ────────────────────────────────────────────────────────
-      if (/\b(tts|text\s+to\s+speech|speak|say|read\s+aloud|voice\s+note)\s+/i.test(t) ||
+      if (!/^say\s+.+\s+to\s+[a-z]/i.test(t) &&
+          (/\b(tts|text\s+to\s+speech|speak|say|read\s+aloud|voice\s+note)\s+/i.test(t) ||
           /\b(convert|turn)\s+.{0,20}to\s+(voice|speech|audio)\b/i.test(t) ||
-          /\bsend\s+(a\s+)?voice\s+(note|message)\b/i.test(t)) return 'tts_msg'
+          /\bsend\s+(a\s+)?voice\s+(note|message)\b/i.test(t))) return 'tts_msg'
 
       // ── Auto reply ────────────────────────────────────────────────────────────
       if (/\b(set|enable|turn\s+on)\s+(auto.?reply|automatic\s+reply|away\s+message)\b/i.test(t)) return 'auto_reply_set'
@@ -1007,7 +1043,7 @@ const detectIntent = (text) => {
           /\b(base64|hex|binary|morse)\s+(decode|this|to\s+text)\b/i.test(t)) return 'decode_text'
 
       // ── Hash generator ────────────────────────────────────────────────────────
-      if (/\b(hash|md5|sha(1|256|512)|checksum)\b.{0,30}(this|text|string|of|for)\b/i.test(t) ||
+      if (/\b(hash|md5|sha(1|256|512)|checksum)\s+(?:of\s+)?(?:this|that|the|my)\b/i.test(t) ||
           /\bgenerate\s+(a\s+)?(hash|md5|sha256|sha512)\b/i.test(t)) return 'hash_text'
 
       // ── Truth or Dare ─────────────────────────────────────────────────────────
@@ -1089,7 +1125,7 @@ const detectIntent = (text) => {
     // ── Show settings ──────────────────────────────────────────────────────────
       if (/\b(show|view|display|list|get|my|check)\b.{0,20}\b(settings?|config(uration)?|prefs?|preferences?)\b/i.test(t) ||
           /\b(what\s+are\s+(my|the|current)|current\s+bot)\s+settings?\b/i.test(t) ||
-          /\b(settings?\s+(panel|overview|status|list|info|summary)|bot\s+config)/i.test(t)) return 'show_settings'
+          /\b(settings?\s+(panel|overview|status|list|info|summary)|bot\s+config)\b/i.test(t)) return 'show_settings'
 
       // ── Explicit language preference and translation requests ────────────────
     if (!/\btranslate\b/i.test(t) && (

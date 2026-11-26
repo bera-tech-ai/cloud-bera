@@ -80,8 +80,10 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
     const adminOnly = async () => { if (!await senderIsAdmin()) { reply(`⛔ Admins only.`); return true } return false }
     const botAdminOnly = async () => { if (!await botIsAdmin()) { reply(`❌ Make Bera AI an admin first.`); return true } return false }
 
-    // ── UNMUTE / OPEN ────────────────────────────────────────────────────
-    if (['unmute', 'open', 'opengroup', 'unlockgroup', 'unlock'].includes(command)) {
+    // ── UNMUTE ───────────────────────────────────────────────────────────
+    // 'open' is NOT claimed here: it belongs to Plugins/vv.js (view-once
+    // reveal). This handler keeps unmute/opengroup/unlockgroup/unlock.
+    if (['unmute', 'opengroup', 'unlockgroup', 'unlock'].includes(command)) {
         if (groupOnly()) return
         if (await adminOnly()) return
         if (await botAdminOnly()) return
@@ -693,7 +695,9 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
     }
 
     // ── ANTI-VIEWONCE ─────────────────────────────────────────────────────
-    if (['antiviewonce', 'antiviewonce', 'viewonce', 'antiview', 'unviewonce'].includes(command)) {
+    // 'viewonce' is NOT claimed here: it belongs to Plugins/vv.js (the
+    // reveal command). This toggle keeps antiviewonce/antiview/unviewonce.
+    if (['antiviewonce', 'antiview', 'unviewonce'].includes(command)) {
         if (!isOwner && !isAdmin) return reply('⛔ Admins only.')
         let val = text?.toLowerCase()
         if (!val || !['on', 'off'].includes(val)) return reply(`Usage: ${prefix}antiviewonce on/off`)
@@ -964,8 +968,8 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
 }
 
 handle.command = [
-    // Lock/unlock
-    'unmute', 'open', 'opengroup', 'unlockgroup', 'unlock',
+    // Lock/unlock ('open' lives in Plugins/vv.js — view-once reveal)
+    'unmute', 'opengroup', 'unlockgroup', 'unlock',
     'mute', 'close', 'closegroup', 'lockgroup', 'lock',
     // Kick/add
     'kick', 'remove', 'removemember', 'rm', 'add',
@@ -995,7 +999,7 @@ handle.command = [
     'antidelete', 'antidel',
     'antiedit', 'antiediton', 'antieditoff',
     'anticall', 'blockcall', 'rejectcall', 'nocall',
-    'antiviewonce', 'antiview', 'viewonce', 'unviewonce',
+    'antiviewonce', 'antiview', 'unviewonce',
     'antitext', 'antitexton', 'antitextoff',
     // Welcome/goodbye
     'welcome', 'setwelcome',

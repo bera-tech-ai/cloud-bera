@@ -19,18 +19,85 @@ const MAX_CHATS = 500
 // The bot cannot read the user's phone contacts, so names come from two
 // sources only: (1) pushNames seen on inbound messages (the sender's own
 // WhatsApp display name — NOT the user's saved contact name), learned in
-// recordInbound; (2) aliases the user teaches with "remember <name> is
-// <number>", persisted in db.data.nameAliases. Never guess a recipient:
-// resolveName returns null / ambiguous and callers must ask instead.
-const names = new Map() // normalized name -> { jid, name, source, at }
+// recordInbound and persisted in db.data.learnedNames; (2) aliases the
+// user teaches with "remember <name> is <number>", persisted in
+// db.data.nameAliases. Never guess a recipient: when two distinct people
+// share one pushName and no taught alias overrides it, resolveName
+// returns ambiguous and callers must ask instead.
+const names = new Map() // normalized name -> { jid, name, source, at } (first claimant; display/fallback entry)
+const claimants = new Map() // normalized name -> Map(bareNumber -> { jid, name, at }) — EVERY pushName claimant
 const MAX_NAMES = 2000
 const normalizeName = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
+const bareNumber = (jid) => String(jid || '').split('@')[0].split(':')[0]
+
+// Learned pushNames persist in db.data.learnedNames (same store the taught
+// aliases use) so a restart does not rebuild the directory from scratch —
+// rebuilding is exactly when the first-writer race below could hand a name
+// to the wrong person. Writes are throttled: learnName runs on every
+// inbound message, db.write() persists the whole snapshot.
+let learnedSaveTimer = null
+const schedulePersistLearnedNames = () => {
+    if (learnedSaveTimer) return
+    learnedSaveTimer = setTimeout(() => {
+        learnedSaveTimer = null
+        try {
+            if (global.db?.data && typeof global.db.write === 'function') {
+                const out = {}
+                for (const [key, claims] of claimants) {
+                    out[key] = [...claims.values()].map(v => ({ jid: v.jid, name: v.name, at: v.at }))
+                }
+                global.db.data.learnedNames = out
+                global.db.write().catch(() => {})
+            }
+        } catch {}
+    }, 2000)
+    learnedSaveTimer.unref?.()
+}
+const loadLearnedNames = () => {
+    try {
+        const saved = global.db?.data?.learnedNames
+        if (saved && typeof saved === 'object') {
+            for (const [name, rows] of Object.entries(saved)) {
+                const key = normalizeName(name)
+                if (!key || !Array.isArray(rows)) continue
+                let claims = claimants.get(key)
+                if (!claims) { claims = new Map(); claimants.set(key, claims) }
+                for (const row of rows) {
+                    const id = normalizeJid(row?.jid)
+                    if (!id) continue
+                    const bare = bareNumber(id)
+                    if (!claims.has(bare)) claims.set(bare, { jid: id, name: String(row?.name || name).trim(), at: Number(row?.at || 0) })
+                }
+                if (!names.has(key) && claims.size) {
+                    const first = claims.values().next().value
+                    names.set(key, { jid: first.jid, name: first.name, source: 'pushName', at: first.at || Date.now() })
+                }
+            }
+        }
+    } catch {}
+}
+
 const learnName = (jid, name) => {
     const key = normalizeName(name)
     const id = normalizeJid(jid)
     if (!key || key.length < 2 || !id) return
+    loadLearnedNames()
+    // Track EVERY claimant of this pushName, keyed by bare number so the
+    // same person seen under a LID and a phone JID counts once. Two
+    // distinct numbers claiming one name makes the name ambiguous —
+    // resolveName must ask, never silently pick the first writer.
+    let claims = claimants.get(key)
+    if (!claims) { claims = new Map(); claimants.set(key, claims) }
+    const bare = bareNumber(id)
+    const existing = claims.get(bare)
+    const isNew = !existing
+    // Prefer the phone JID form when both forms of the same person appear.
+    const bestJid = existing && !String(id).endsWith('@s.whatsapp.net') ? existing.jid : id
+    claims.set(bare, { jid: bestJid, name: String(name).trim(), at: Date.now() })
     if (!names.has(key)) names.set(key, { jid: id, name: String(name).trim(), source: 'pushName', at: Date.now() })
     while (names.size > MAX_NAMES) names.delete(names.keys().next().value)
+    while (claimants.size > MAX_NAMES) claimants.delete(claimants.keys().next().value)
+    if (isNew) schedulePersistLearnedNames()
 }
 // Reverse lookup: the display name (pushName or user-taught alias) known for
 // a JID, or null. Used by the wa_group_members tool so a member list can
@@ -39,11 +106,19 @@ const learnName = (jid, name) => {
 const nameForJid = (jid) => {
     const id = normalizeJid(jid)
     if (!id) return null
+    loadLearnedNames()
     const bare = String(id).split('@')[0].split(':')[0]
     for (const entry of names.values()) {
         if (!entry?.jid) continue
         const entryBare = String(entry.jid).split('@')[0].split(':')[0]
         if (entry.jid === id || entryBare === bare) return entry.name
+    }
+    // The names map keeps only the first claimant per name; a second person
+    // sharing that pushName is in claimants instead.
+    for (const claims of claimants.values()) {
+        for (const [claimBare, v] of claims) {
+            if (v.jid === id || claimBare === bare) return v.name
+        }
     }
     return null
 }
@@ -80,9 +155,31 @@ const resolveName = (name) => {
     const key = normalizeName(name)
     if (!key) return null
     loadAliases()
-    if (names.has(key)) return { jid: names.get(key).jid }
+    loadLearnedNames()
+    const entry = names.get(key)
+    // A user-taught alias always wins and is never ambiguous: the user
+    // explicitly said who this name means.
+    if (entry?.source === 'alias') return { jid: entry.jid }
+    // Two or more distinct people share this pushName and no alias
+    // disambiguates it: ambiguous — callers must ask, never guess
+    // (spec §3). Returning the first writer here is how a message to
+    // "babe" could silently land on a stranger with the same display name.
+    const claims = claimants.get(key)
+    if (claims && claims.size > 1) {
+        return { ambiguous: true, candidates: [...claims.values()].map(v => ({ jid: v.jid, name: v.name })).slice(0, MAX_PERSONS) }
+    }
+    if (entry) return { jid: entry.jid }
     const pool = [...names.values()].filter(n => n.jid && (n.jid && (normalizeName(n.name).startsWith(key) || key.startsWith(normalizeName(n.name)) || normalizeName(n.name).includes(key))))
-    const deduped = [...new Map(pool.map(n => [n.jid, n])).values()]
+    // Expand pool entries whose name is claimed by several people, so a
+    // partial match on a shared name is ambiguous too, not first-writer.
+    const expanded = []
+    for (const n of pool) {
+        const nClaims = claimants.get(normalizeName(n.name))
+        if (nClaims && nClaims.size > 1) {
+            for (const v of nClaims.values()) expanded.push({ jid: v.jid, name: v.name })
+        } else expanded.push(n)
+    }
+    const deduped = [...new Map(expanded.map(n => [n.jid, n])).values()]
     if (deduped.length === 1) return { jid: deduped[0].jid }
     if (deduped.length > 1) return { ambiguous: true, candidates: deduped.slice(0, MAX_PERSONS) }
     return null
@@ -250,4 +347,5 @@ module.exports = {
     normalizeName,
     _store: store,
     _names: names,
+    _claimants: claimants,
 }

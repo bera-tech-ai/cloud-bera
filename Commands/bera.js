@@ -2346,18 +2346,9 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, isOwner }
         )
     }
 
-    if (command === 'setghtoken') {
-        if (!isOwner) return reply(`⛔ Owner only.`)
-        if (!text) return reply(`Usage: ${prefix}setghtoken <github_personal_access_token>`)
-        process.env.GITHUB_TOKEN = text.trim()
-        // Persist it too: the env-only assignment above is lost on the next
-        // restart (setenv.js resets GITHUB_TOKEN at boot). Save to settings
-        // so the token survives restarts, like .setgittoken does.
-        if (!global.db.data.settings) global.db.data.settings = {}
-        global.db.data.settings.githubToken = text.trim()
-        await global.db.write()
-        return reply(`✅ GitHub token set.`)
-    }
+    // NOTE: 'setghtoken' is deliberately NOT handled here — Plugins/github.js
+    // owns it (validates the token against GitHub, DM-only). This file used
+    // to shadow it with an unvalidated, group-usable version.
 
     if (command === 'transcribe' || command === 'listen') {
         return handleAction(m, conn, reply, 'transcribe this voice note', sender, null)
@@ -3025,7 +3016,7 @@ const handleWrapper = async (m, ctx) => {
     return _origHandle(m, ctx)
 }
 handleWrapper.before = handle.before
-handleWrapper.command = ['bera', 'agent', 'chatbot', 'beraclone', 'workspace', 'setghtoken', 'tagreply', 'transcribe', 'listen', 'beratrigger', 'beratrig', 'beralisten',
+handleWrapper.command = ['bera', 'agent', 'chatbot', 'beraclone', 'workspace', 'tagreply', 'transcribe', 'listen', 'beratrigger', 'beratrig', 'beralisten',
     'remember', 'recall', 'memories', 'forget', 'deletememory',
     'berahistory', 'apidocs', 'cron',
     'scaffold', 'create', 'init',

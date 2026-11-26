@@ -151,6 +151,17 @@ const semanticRoute = (text, threshold = 0.28) => {
     }
 
     if (bestScore < threshold) return null
+    // A lone content word must not resolve to shell_cmd: bare "run" /
+    // "execute" score 0.5 against the two-token shell examples ("run
+    // bash command" → {run, bash}) and would hijack a one-word message
+    // into the shell path. Shell intent needs at least a second word.
+    if (inputSet.size <= 1 && bestIntent === 'shell_cmd') return null
+    // Same disease, two words: "run this by me again" tokenises to
+    // {run, again} and scores 0.33 against "run in terminal" on the
+    // shared verb alone. A semantic shell match must include an actual
+    // shell noun (bash/shell/terminal/command/script), not just a verb.
+    if (bestIntent === 'shell_cmd' &&
+        !['bash', 'shell', 'terminal', 'command', 'script'].some(w => inputSet.has(w))) return null
     return { intent: bestIntent, score: bestScore }
 }
 
