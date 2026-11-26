@@ -296,24 +296,6 @@ const pollWebDeployment = async (id, maxWait = 120000, interval = 5000) => {
     return current
 }
 
-// ── COINS ─────────────────────────────────────────────────────────────────────
-
-const getCoins = async () => {
-    return { success: false, error: 'Coin balance is not available in the current documented BeraHost API.' }
-}
-
-const getTransactions = async () => {
-    return { success: false, error: 'Coin transactions are not available in the current documented BeraHost API.' }
-}
-
-const claimDailyCoins = async () => {
-    return { success: false, error: 'Daily coin claims are not available in the current documented BeraHost API.' }
-}
-
-const redeemVoucher = async (code) => {
-    return { success: false, error: 'Coin vouchers are not available in the current documented BeraHost API.' }
-}
-
 // ── PAYMENTS (M-Pesa) ─────────────────────────────────────────────────────────
 
 const getPlans = async () => {
@@ -322,16 +304,11 @@ const getPlans = async () => {
             bh({ public: true }).get('/payments/plans'),
             bh({ public: true }).get('/subscriptions/plans')
         ])
-        const coinPackages = paymentRes.data?.coinPackages || paymentRes.data?.packages || []
         const subscriptionPlans = Array.isArray(subscriptionRes.data)
             ? subscriptionRes.data
             : (subscriptionRes.data?.subscriptionPlans || subscriptionRes.data?.plans || [])
-        return { success: true, coinPackages, subscriptionPlans }
+        return { success: true, plans: subscriptionPlans, subscriptionPlans }
     } catch (e) { return { success: false, error: bhErr(e) } }
-}
-
-const initiateMpesa = async (phone, planId, amount) => {
-    return { success: false, error: 'The legacy M-Pesa initiation endpoint is not part of the current documented BeraHost API. Use the PayHero subscription or domain checkout route.' }
 }
 
 const getPaymentStatus = async (id) => {
@@ -413,8 +390,7 @@ module.exports = {
     listDeployments, deployBot, getDeployment, deleteDeployment,
     startDeployment, stopDeployment, updateEnv,
     getDeploymentLogs, exportLogs, getDeploymentMetrics, pollDeployment,
-    getCoins, getTransactions, claimDailyCoins, redeemVoucher,
-    getPlans, initiateMpesa, getPaymentStatus, getPaymentHistory,
+    getPlans, getPaymentStatus, getPaymentHistory,
     listBots, getBot,
     createWebDeployment, listWebDeployments, getWebDeployment,
     deleteWebDeployment, pollWebDeployment,

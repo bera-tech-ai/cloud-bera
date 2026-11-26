@@ -383,8 +383,6 @@ const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, 
                 `┃ Commands:\n` +
                 `┃❍ ${prefix}berahost bots — List your bots\n` +
                 `┃❍ ${prefix}berahost deploy <botId> <session> — Deploy a bot\n` +
-                `┃❍ ${prefix}berahost balance — Check your coins\n` +
-                `┃❍ ${prefix}berahost daily — Claim daily coins\n` +
                 `┃❍ ${prefix}berahost plans — View hosting plans\n` +
                 `╰══════════════════⊷`
             )
@@ -476,18 +474,6 @@ const handle = async (m, { conn, text, reply, prefix, command, isOwner, sender, 
                 const msg = e.response?.data?.message || e.message
                 return reply(`❌ Deploy failed: ${msg}`)
             }
-        }
-
-        if (sub === 'balance') {
-            await react(conn, m, '💰')
-            await react(conn, m, 'ℹ️')
-            return reply('Coin balance is not available in the current documented BeraHost API.')
-        }
-
-        if (sub === 'daily') {
-            await react(conn, m, '🎁')
-            await react(conn, m, 'ℹ️')
-            return reply('Daily coin claims are not available in the current documented BeraHost API.')
         }
 
         if (sub === 'plans') {

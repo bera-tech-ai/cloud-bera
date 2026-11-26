@@ -1079,8 +1079,6 @@ const executeStep = async (step, conn, chat, m, opts = {}) => {
                             const r = await bh.deleteDeployment(id)
                             return { success: r.success, output: r.output||r.error, desc }
                         }
-                        case 'coins':
-                            return { success: false, output: 'This BeraHost API version does not document coin balance or claim endpoints.', desc }
                         case 'bots': {
                             const r = await bh.listBots()
                             if (!r.success) return { success: false, output: r.error, desc }

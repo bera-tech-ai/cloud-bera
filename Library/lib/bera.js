@@ -255,8 +255,7 @@ Bera AI can run ANY bash command. Just ask:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • .berahost bots — List deployed bots
 • .berahost deploy beraai <number>
-• .berahost balance — Check coins
-• .berahost daily — Claim daily coins
+• .berahost plans — Subscription plans
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👥 GROUP MANAGEMENT

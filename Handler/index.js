@@ -1349,29 +1349,13 @@ const handleMessage = async (conn, rawMsg) => {
                     await reply(r.success ? r.output : 'Error: ' + r.error)
                     return
                 }
-                if (intent === 'bh_coins') {
-                    if (!isOwner) { await reply('Owner only.'); return }
-                    const bhr = require('../Library/actions/berahost')
-                    await react('🪙')
-                    const r = await bhr.getCoins()
-                    await reply(r.success ? '🪙 Balance: ' + r.balance + ' coins' : 'Error: ' + r.error)
-                    return
-                }
-                if (intent === 'bh_claim_coins') {
-                    if (!isOwner) { await reply('Owner only.'); return }
-                    const bhr = require('../Library/actions/berahost')
-                    await react('🪙')
-                    const r = await bhr.claimDailyCoins()
-                    await reply(r.success ? '✅ ' + r.output : 'Error: ' + r.error)
-                    return
-                }
                 if (intent === 'bh_plans') {
                     const bhr = require('../Library/actions/berahost')
                     await react('📦')
                     const r = await bhr.getPlans()
                     if (!r.success) { await reply('Error: ' + r.error); return }
-                    const rows = r.plans.map(p => (p.id||'?') + '. ' + (p.label||p.name||'?') + ' — ' + (p.price||p.cost||'?')).join('\n')
-                    await reply('BeraHost Plans:\n' + rows)
+                    const rows = (r.plans || []).map(p => '• *' + (p.name || p.id) + '* — ' + (p.priceKes === 0 ? 'Free' : 'KES ' + p.priceKes + '/month') + ' · ' + (p.botLimit ?? p.maxBots ?? '?') + ' bot(s), ' + (p.webLimit ?? p.maxWebApps ?? '?') + ' web app(s)').join('\n')
+                    await reply('📦 *BeraHost Plans* (subscriptions — pay via PayHero checkout on the BeraHost dashboard):\n' + rows)
                     return
                 }
                 if (intent === 'bh_list_bots') {
