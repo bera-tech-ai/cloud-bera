@@ -99,6 +99,13 @@ const diagnoseDeploymentFailure = buildLog => {
     if (/GitHub repository download failed|repository.*404|clone.*failed/i.test(log)) {
         return { fix: null, summary: 'BeraHost could not clone the GitHub repository' }
     }
+    // Transient host failures (seen live: deployment 40, FixPoint Kenya):
+    // BeraHost dies mid-clone and the log just stops — no error line, the
+    // clone never completes. Nothing is wrong with the project; a plain
+    // redeploy is the cure, so the heal loop retries once as-is.
+    if (/Cloning repository/i.test(log) && !/Repository cloned/i.test(log)) {
+        return { fix: 'redeploy', summary: 'BeraHost died while cloning the repository (the log stops mid-clone with no error — a transient host failure)' }
+    }
     return null
 }
 
@@ -456,7 +463,13 @@ const lifecycle = async (options = {}) => {
                             const log = String(detail?.deployment?.buildLog || detail?.buildLog || '')
                             failureLogLine = deploymentLogErrorLine(log) || failureLogLine
                             const diagnosis = diagnoseDeploymentFailure(log)
-                            if (diagnosis?.fix && fixDiagnosedProjectIssue(dir, diagnosis)) {
+                            // 'redeploy' needs no project change — the retry
+                            // itself is the fix. Other fixes must actually
+                            // change a file before a redeploy is worthwhile.
+                            const fixApplied = diagnosis?.fix === 'redeploy'
+                                ? true
+                                : (diagnosis?.fix ? fixDiagnosedProjectIssue(dir, diagnosis) : false)
+                            if (fixApplied) {
                                 const healed = await lifecycle({ ...options, selfHealAttempted: true })
                                 if (healed.success) {
                                     healed.record.deployment = { ...healed.record.deployment, selfHealed: { cause: diagnosis.summary, failedDeploymentId: deployment.id } }

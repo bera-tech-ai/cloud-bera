@@ -60,3 +60,18 @@ test('fixDiagnosedProjectIssue adds the missing dependency', () => {
     assert.equal(pkg.dependencies.express, '^4.18.2')
     assert.equal(fixDiagnosedProjectIssue(dir, { fix: 'missing-module', module: 'axios' }), false)
 })
+
+test('a log that stops mid-clone is a transient failure — redeploy as-is', () => {
+    const d = diagnoseDeploymentFailure('[BERAHOST] Cloning repository...\n')
+    assert.equal(d.fix, 'redeploy')
+})
+
+test('a completed clone that later fails is NOT a clone-transient', () => {
+    const d = diagnoseDeploymentFailure('[BERAHOST] Cloning repository...\n[BERAHOST] Repository cloned. Installing dependencies...\nSome random builder failure')
+    assert.equal(d, null)
+})
+
+test('a real clone 404 is still diagnosed, never auto-retried', () => {
+    const d = diagnoseDeploymentFailure('GitHub repository download failed: 404')
+    assert.equal(d.fix, null)
+})
