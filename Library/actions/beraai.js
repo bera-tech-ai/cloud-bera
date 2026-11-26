@@ -314,15 +314,66 @@ const richServerStats = async () => {
 }
 
 // ── Media AI helpers ─────────────────────────────────────────────────────────
-// Xcasper endpoints supplied for this deployment do not expose image generation
-// or binary audio transcription. Keep these capabilities explicit rather than
-// silently calling an unrelated provider.
+// Image generation is not exposed by the Xcasper endpoints supplied for this
+// deployment, so giftedImage stays explicitly unavailable. Audio transcription
+// IS available and verified live on 2026-11-26: POST /api/ai/groq-audio on
+// apiz.xcasper.space runs Whisper (whisper-large-v3-turbo, Groq server-side —
+// no client API key) and transcribes base64 audio, OGG included. The decoded
+// limit is 7 MB, so oversize buffers are rejected here instead of being sent.
 const giftedImage = async () => null
 const giftedTranscript = async () => null
-const transcribeAudio = async () => ({
-    success: false,
-    error: 'Audio transcription is not available through the configured Xcasper endpoints.'
-})
+
+const TRANSCRIBE_URL = 'https://apiz.xcasper.space/api/ai/groq-audio'
+const TRANSCRIBE_MODEL = 'whisper-large-v3-turbo'
+const TRANSCRIBE_MAX_BYTES = Math.floor(6.5 * 1024 * 1024)
+const TRANSCRIBE_TIMEOUT_MS = 60000
+
+const transcribeAudio = async (buffer, options = {}) => {
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+        return { success: false, error: 'No audio was supplied to transcribe.' }
+    }
+    if (buffer.length > TRANSCRIBE_MAX_BYTES) {
+        return { success: false, error: `Voice note is too large to transcribe (${(buffer.length / 1024 / 1024).toFixed(1)} MB; limit is about 6.5 MB).` }
+    }
+    const rawMime = String(options.mime || 'audio/ogg').split(';')[0].trim().toLowerCase()
+    const mime = /^audio\/[\w.+-]+$/.test(rawMime) ? rawMime : 'audio/ogg'
+    const body = {
+        task: 'transcribe',
+        model: TRANSCRIBE_MODEL,
+        audioBase64: `data:${mime};base64,${buffer.toString('base64')}`
+    }
+    // Language is omitted by default: Whisper auto-detects (verified live
+    // 2026-11-26), which matters for Swahili/Sheng notes. Only an explicit
+    // options.language is forwarded.
+    if (options.language) body.language = String(options.language)
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TRANSCRIBE_TIMEOUT_MS)
+    try {
+        const res = await fetch(TRANSCRIBE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify(body),
+            signal: controller.signal
+        })
+        let data = null
+        try { data = await res.json() } catch { data = null }
+        if (!res.ok) {
+            return { success: false, error: `Transcription service returned HTTP ${res.status}.` }
+        }
+        if (!data || data.success === false) {
+            return { success: false, error: data?.error || data?.message || 'Transcription service reported failure.' }
+        }
+        const text = String(data.data?.text || data.text || '').trim()
+        if (!text) return { success: false, error: 'Transcription returned no text.' }
+        return { success: true, text }
+    } catch (e) {
+        const reason = e?.name === 'AbortError' ? `timed out after ${TRANSCRIBE_TIMEOUT_MS / 1000}s` : (e?.message || 'network error')
+        return { success: false, error: `Transcription failed: ${reason}` }
+    } finally {
+        clearTimeout(timer)
+    }
+}
 
 // ── Code validation & auto-fix ───────────────────────────────────────────────
 const { writeFileSync, unlinkSync, existsSync } = require('fs')
@@ -3741,6 +3792,7 @@ module.exports = {
     generateSimpleReply,
     validateAndFixCode,
     transcribeAudio,
+    TRANSCRIBE_MAX_BYTES,
     saveMemory,
     getMemory,
     setMemory,

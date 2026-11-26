@@ -904,9 +904,31 @@ const handleMessage = async (conn, rawMsg) => {
             }
         }
 
-        // Voice notes are NOT auto-transcribed — user must explicitly request it.
-        // Use: .transcribe (while quoting a voice note)
-        //  or: quote the voice note and say "bera transcribe this"
+        // ── AUTO-LISTEN: voice notes are transcribed and handled as text ─────
+        // A voice note (ptt audio, no text) is downloaded and transcribed via
+        // Whisper (Casper groq-audio); the transcript becomes m.text/m.body so
+        // the normal flow below — chat, commands, agent, builds — treats it
+        // exactly as if typed. PMs: any voice note. Groups: owner only, so
+        // the bot does not answer every member's voice notes. The bot's own
+        // outgoing voice replies (fromMe) are never transcribed (loop guard).
+        // Quoting a voice note + .transcribe / "bera transcribe this" still
+        // works explicitly via Commands/bera.js.
+        try {
+            const { isVoiceNoteMessage, applyVoiceTranscript } = require('../Library/actions/voice-listen')
+            if (isVoiceNoteMessage(m)) {
+                const voiceAuth = isAuthorized({
+                    sender: m.sender,
+                    alternates: [m.senderAlt, m.key?.participantAlt, m.key?.remoteJidAlt, m.msg?.contextInfo?.participantAlt].filter(Boolean)
+                })
+                const heard = await applyVoiceTranscript(m, conn, { isOwner: voiceAuth.isOwner })
+                if (heard.status === 'failed') {
+                    await conn.sendMessage(m.chat, { text: "🎙️ Sorry, I couldn't hear that voice note — transcription failed. Please try again or type it." }, { quoted: m }).catch(() => {})
+                    return
+                }
+            }
+        } catch (error) {
+            console.error('[VOICE LISTEN]', error?.message || error)
+        }
 
         const prefix = getPrefix()
         const noPrefix = global.db?.data?.settings?.noPrefix || false
