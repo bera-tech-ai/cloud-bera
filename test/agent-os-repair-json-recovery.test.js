@@ -18,7 +18,7 @@ test('Agent OS recovers repair plans with missing JSON and retries boundedly', (
         const root = ${JSON.stringify(tempRoot)}
         const agentOs = require(${JSON.stringify(path.join(repoRoot, 'Library/actions/agent-os.js'))})
         const xcasper = require(${JSON.stringify(path.join(repoRoot, 'Library/actions/xcasper.js'))})
-        const html = '<!doctype html><html><body><main><h1>Kijani Coffee sample</h1></main></body></html>'
+        const html = '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>@media (max-width: 860px){ main{padding:8px} }</style></head><body><main><h1>Kijani Coffee sample</h1></main></body></html>'
         const rootRepair = { steps: [{ action: 'write_file', path: 'index.html', contentBase64: Buffer.from(html).toString('base64') }], reason: 'Write a complete root app entrypoint' }
         const noEntrypointPlan = { steps: [{ action: 'mkdir', path: 'src' }], summary: 'Initial nested-only structure' }
         const responses = [

@@ -41,7 +41,7 @@ test('Agent OS rejects projects without a valid root application entrypoint', ()
 
             const staticSite = path.join(root, 'static-site')
             fs.mkdirSync(staticSite, { recursive: true })
-            fs.writeFileSync(path.join(staticSite, 'index.html'), '<!doctype html><html><head><title>Example</title></head><body><main><h1>Hello</h1></main></body></html>')
+            fs.writeFileSync(path.join(staticSite, 'index.html'), '<!doctype html><html><head><title>Example</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>@media (max-width: 860px){ main{padding:8px} }</style></head><body><main><h1>Hello</h1></main></body></html>')
             const staticResult = await agentOs.validate({ id: 'static-site', dir: staticSite })
             assert.equal(staticResult.success, true)
             assert.equal(staticResult.checks[0].name, 'project-entrypoint')

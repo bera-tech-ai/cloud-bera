@@ -266,3 +266,36 @@ test('truncated generated JS is stitched with a continuation until it parses', (
     `)
     assert.match(output, /GEN_STITCH_OK/)
 })
+
+test('photoLibraryFor matches the business category and only returns verified URLs', () => {
+    const output = runScript(`
+        const assert = require('node:assert/strict')
+        const gym = agentOs.photoLibraryFor('build a website for my gym Iron Paradise Fitness')
+        assert.ok(gym.length >= 3)
+        assert.ok(gym.every(u => u.startsWith('https://images.unsplash.com/photo-')))
+        assert.ok(gym.some(u => u.includes('1534438327276')))
+        const coffee = agentOs.photoLibraryFor('a coffee shop in Nairobi')
+        assert.ok(coffee.some(u => u.includes('1509042239860')))
+        const other = agentOs.photoLibraryFor('a plumbing company')
+        assert.ok(other.length >= 3)
+        console.log('PHOTO_LIBRARY_OK')
+    `)
+    assert.match(output, /PHOTO_LIBRARY_OK/)
+})
+
+test('responsiveDesignCheck fails a non-mobile page and passes a responsive one', () => {
+    const output = runScript(`
+        const assert = require('node:assert/strict')
+        fs.writeFileSync(dir + '/index.html', '<!doctype html><html><head><title>x</title></head><body><main>hi</main></body></html>')
+        const bad = agentOs.responsiveDesignCheck({ dir })
+        assert.equal(bad.success, false)
+        assert.match(bad.output, /viewport/)
+        fs.writeFileSync(dir + '/index.html', '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>@media (max-width: 860px){ main{padding:8px} }</style></head><body><main>hi</main></body></html>')
+        const good = agentOs.responsiveDesignCheck({ dir })
+        assert.equal(good.success, true)
+        const none = agentOs.responsiveDesignCheck({ dir: dir + '/does-not-exist' })
+        assert.equal(none, null)
+        console.log('RESPONSIVE_CHECK_OK')
+    `)
+    assert.match(output, /RESPONSIVE_CHECK_OK/)
+})

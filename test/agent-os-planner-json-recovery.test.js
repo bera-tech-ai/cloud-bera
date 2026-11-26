@@ -18,7 +18,7 @@ test('Agent OS regenerates a plan when both AI and local JSON formatting recover
         const root = ${JSON.stringify(tempRoot)}
         const agentOs = require(${JSON.stringify(path.join(repoRoot, 'Library/actions/agent-os.js'))})
         const xcasper = require(${JSON.stringify(path.join(repoRoot, 'Library/actions/xcasper.js'))})
-        const html = '<!doctype html><html><body><main><h1>Recovered planner sample</h1></main></body></html>'
+        const html = '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>@media (max-width: 860px){ main{padding:8px} }</style></head><body><main><h1>Recovered planner sample</h1></main></body></html>'
         const malformed = '{"summary":"broken plan","steps":[{"action":"mkdir","path":"empty"}], bad}'
         let calls = 0
         xcasper.chat = async () => {
