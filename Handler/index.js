@@ -199,7 +199,9 @@ const sendOptInVoiceReply = async (conn, m, text, languagePreference = 'en') => 
         const speakable = toSpeechText(text)
         if (!speakable || speakable.length > 1200) return false
         const audio = await fetchTts(speakable, resolveSpeechLanguage(speakable, languagePreference))
-        await conn.sendMessage(m.chat, { audio, mimetype: 'audio/ogg; codecs=opus', ptt: true }, { quoted: m })
+        const sent = await conn.sendMessage(m.chat, { audio, mimetype: 'audio/ogg; codecs=opus', ptt: true }, { quoted: m })
+        // Register the bot's own voice note so auto-listen never transcribes it back (self-bot loop guard).
+        require('../Library/actions/voice-listen').markBotSentVoice(sent?.key?.id)
         return true
     } catch (error) {
         console.error('[VOICE REPLY]', error?.message || 'voice generation failed')
@@ -909,10 +911,15 @@ const handleMessage = async (conn, rawMsg) => {
         // Whisper (Casper groq-audio); the transcript becomes m.text/m.body so
         // the normal flow below — chat, commands, agent, builds — treats it
         // exactly as if typed. PMs: any voice note. Groups: owner only, so
-        // the bot does not answer every member's voice notes. The bot's own
-        // outgoing voice replies (fromMe) are never transcribed (loop guard).
-        // Quoting a voice note + .transcribe / "bera transcribe this" still
-        // works explicitly via Commands/bera.js.
+        // the bot does not answer every member's voice notes.
+        // SELF-BOT: this account IS the owner's number, so the owner's own
+        // voice notes arrive fromMe=true — in self-chat and in groups. They
+        // are eligible (self-chat detected against conn.user.id; groups via
+        // the owner check). Loop safety: bot-sent voice notes are registered
+        // by id in voice-listen.js and skipped, and any fromMe transcript
+        // still has to pass the fromMe trigger guard below, exactly like the
+        // owner's typed messages. Quoting a voice note + .transcribe /
+        // "bera transcribe this" still works explicitly via Commands/bera.js.
         try {
             const { isVoiceNoteMessage, applyVoiceTranscript } = require('../Library/actions/voice-listen')
             if (isVoiceNoteMessage(m)) {
@@ -920,8 +927,12 @@ const handleMessage = async (conn, rawMsg) => {
                     sender: m.sender,
                     alternates: [m.senderAlt, m.key?.participantAlt, m.key?.remoteJidAlt, m.msg?.contextInfo?.participantAlt].filter(Boolean)
                 })
-                const heard = await applyVoiceTranscript(m, conn, { isOwner: voiceAuth.isOwner })
+                const ownNumber = String(conn.user?.id || '').split('@')[0].split(':')[0]
+                const chatNumber = String(m.chat || '').split('@')[0].split(':')[0]
+                const isSelfChat = !m.isGroup && !!ownNumber && chatNumber === ownNumber
+                const heard = await applyVoiceTranscript(m, conn, { isOwner: voiceAuth.isOwner, isSelfChat })
                 if (heard.status === 'failed') {
+                    console.error('[VOICE LISTEN] failed', heard.stage || '', heard.error || '')
                     await conn.sendMessage(m.chat, { text: "🎙️ Sorry, I couldn't hear that voice note — transcription failed. Please try again or type it." }, { quoted: m }).catch(() => {})
                     return
                 }

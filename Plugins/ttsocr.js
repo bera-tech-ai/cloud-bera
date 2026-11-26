@@ -74,12 +74,14 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
             return reply(`❌ TTS failed — all voice providers are unavailable. Try again shortly.${ttsError ? `\n${ttsError}` : ''}`)
         }
 
-        await conn.sendMessage(chat, {
+        const sentTts = await conn.sendMessage(chat, {
             audio: buf,
             mimetype: 'audio/mpeg',
             ptt: true,
             waveform: [0, 30, 60, 90, 120, 100, 80, 60, 40, 20, 0],
         }, { quoted: m })
+        // Register the bot's own voice note so auto-listen never transcribes it back (self-bot loop guard).
+        require('../Library/actions/voice-listen').markBotSentVoice(sentTts?.key?.id)
         await react(conn, m, '✅')
     }
 

@@ -8,7 +8,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { transcribeAudio, TRANSCRIBE_MAX_BYTES } = require('../Library/actions/beraai')
-const { isVoiceNoteMessage, voiceListenEligible, applyVoiceTranscript } = require('../Library/actions/voice-listen')
+const { isVoiceNoteMessage, voiceListenEligible, applyVoiceTranscript, markBotSentVoice, isBotSentVoice } = require('../Library/actions/voice-listen')
 
 const withFetch = async (impl, fn) => {
     const original = global.fetch
@@ -87,6 +87,9 @@ test('transcribeAudio rejects empty / non-buffer input without calling fetch', a
 
 // ── Auto-listen routing (voice-listen helper) ───────────────────────────────
 
+// A realistic-sized fake voice note (download validation requires >= 100 bytes).
+const goodAudio = () => Buffer.alloc(256, 0x4f)
+
 const pmVoiceNote = () => ({
     mtype: 'audioMessage',
     msg: { ptt: true, mimetype: 'audio/ogg; codecs=opus' },
@@ -99,7 +102,7 @@ test('isVoiceNoteMessage only matches bare ptt audio notes', () => {
     assert.equal(isVoiceNoteMessage(pmVoiceNote()), true)
     assert.equal(isVoiceNoteMessage({ ...pmVoiceNote(), msg: { ptt: false } }), false, 'ordinary audio files are not voice notes')
     assert.equal(isVoiceNoteMessage({ ...pmVoiceNote(), text: 'caption' }), false, 'audio with text is left to the normal flow')
-    assert.equal(isVoiceNoteMessage({ ...pmVoiceNote(), fromMe: true }), false, "the bot's own voice replies must not loop")
+    assert.equal(isVoiceNoteMessage({ ...pmVoiceNote(), fromMe: true }), true, 'shape only: on this self-bot account fromMe is the owner — eligibility, not shape, gates it')
     assert.equal(isVoiceNoteMessage({ ...pmVoiceNote(), mtype: 'viewOnceMessageV2' }), false, 'view-once media is never auto-transcribed')
     assert.equal(isVoiceNoteMessage({ ...pmVoiceNote(), mtype: 'conversation', msg: {} }), false)
     assert.equal(isVoiceNoteMessage(null), false)
@@ -114,7 +117,7 @@ test('voiceListenEligible: PMs always, groups owner-only', () => {
 
 test('applyVoiceTranscript injects the transcript as the message text', async () => {
     const m = pmVoiceNote()
-    const conn = { downloadMediaMessage: async () => Buffer.from('ogg-bytes') }
+    const conn = { downloadMediaMessage: async () => goodAudio() }
     const seen = []
     const result = await applyVoiceTranscript(m, conn, {
         isOwner: false,
@@ -138,9 +141,159 @@ test('applyVoiceTranscript skips a non-owner group voice note without downloadin
     assert.equal(m.text, '')
 })
 
+// ── Self-bot cases: the owner IS this account, so his notes are fromMe ──────
+// Regression tests for the live bug where Bera's self-chat voice notes got
+// no response at all: isVoiceNoteMessage used to reject every fromMe note.
+
+const OWN = '254743982206@s.whatsapp.net'
+const selfChatVoiceNote = () => ({
+    ...pmVoiceNote(), fromMe: true, chat: OWN, sender: OWN, key: { id: 'OWNER-SELF-1', fromMe: true }
+})
+
+test('self-chat: the owner\'s own (fromMe) voice note is eligible and transcribed', async () => {
+    const m = selfChatVoiceNote()
+    assert.equal(voiceListenEligible(m, { isOwner: true, isSelfChat: true }), true)
+    const conn = { downloadMediaMessage: async () => goodAudio() }
+    const result = await applyVoiceTranscript(m, conn, {
+        isOwner: true, isSelfChat: true,
+        transcribeAudio: async () => ({ success: true, text: 'Agent, remind me to call the supplier at nine' })
+    })
+    assert.equal(result.status, 'ok')
+    assert.equal(m.text, 'Agent, remind me to call the supplier at nine')
+    assert.equal(m.isVoiceNote, true)
+})
+
+test('group: a fromMe voice note from the owner is eligible', async () => {
+    const m = { ...groupVoiceNote(), fromMe: true, sender: OWN, key: { id: 'OWNER-GRP-1', fromMe: true } }
+    assert.equal(voiceListenEligible(m, { isOwner: true }), true)
+    assert.equal(voiceListenEligible(m, { isOwner: false }), false, 'group stays owner-only even for fromMe notes')
+    const conn = { downloadMediaMessage: async () => goodAudio() }
+    const result = await applyVoiceTranscript(m, conn, {
+        isOwner: true,
+        transcribeAudio: async () => ({ success: true, text: 'agent, who is casper' })
+    })
+    assert.equal(result.status, 'ok')
+    assert.equal(m.text, 'agent, who is casper')
+})
+
+test('a voice note registered as bot-sent is skipped, even in self-chat', async () => {
+    markBotSentVoice('BOT-SENT-1')
+    assert.equal(isBotSentVoice('BOT-SENT-1'), true)
+    const m = { ...selfChatVoiceNote(), key: { id: 'BOT-SENT-1', fromMe: true } }
+    assert.equal(isVoiceNoteMessage(m), false, 'registered bot voice notes are never voice-note candidates')
+    let downloads = 0
+    const conn = { downloadMediaMessage: async () => { downloads++; return Buffer.from('x') } }
+    const result = await applyVoiceTranscript(m, conn, {
+        isOwner: true, isSelfChat: true,
+        transcribeAudio: async () => ({ success: true, text: 'bot reply transcript' })
+    })
+    assert.equal(result.status, 'skip')
+    assert.equal(downloads, 0)
+    assert.equal(m.text, '')
+})
+
+test('a fromMe voice note in a PM that is not self-chat and not the owner is skipped', async () => {
+    const m = { ...pmVoiceNote(), fromMe: true, key: { id: 'STRANGER-PM-1', fromMe: true } }
+    assert.equal(voiceListenEligible(m, { isOwner: false, isSelfChat: false }), false)
+    let downloads = 0
+    const conn = { downloadMediaMessage: async () => { downloads++; return Buffer.from('x') } }
+    const result = await applyVoiceTranscript(m, conn, {
+        isOwner: false, isSelfChat: false,
+        transcribeAudio: async () => ({ success: true, text: 'hi' })
+    })
+    assert.equal(result.status, 'skip')
+    assert.equal(downloads, 0)
+    assert.equal(m.text, '')
+})
+
+// ── Download stage: codebase shape, robust fallback, stage-tagged failures ──
+// Regression tests for the live failure where every real voice note got
+// "transcription failed": applyVoiceTranscript used to pass the whole
+// processed wrapper `m` to conn.downloadMediaMessage instead of the
+// codebase's minimal { key, message } shape, and the real error was
+// swallowed. These lock the download pattern and the failure observability.
+
+const rawVoiceNote = () => ({
+    ...pmVoiceNote(),
+    key: { id: 'RAW-VN-1', remoteJid: '254700000000@s.whatsapp.net', fromMe: false },
+    message: { audioMessage: { ptt: true, mimetype: 'audio/ogg; codecs=opus', seconds: 3 } }
+})
+
+test('download uses the codebase { key, message } shape, not the whole wrapper', async () => {
+    const m = rawVoiceNote()
+    const seenArgs = []
+    const conn = {
+        downloadMediaMessage: async (arg) => {
+            seenArgs.push(arg)
+            const shaped = arg && typeof arg === 'object' && arg.key === m.key && arg.message === m.message &&
+                Object.keys(arg).length === 2
+            if (!shaped) throw new Error('downloadMediaMessage called with the wrong shape')
+            return goodAudio()
+        }
+    }
+    const result = await applyVoiceTranscript(m, conn, {
+        isOwner: false,
+        transcribeAudio: async () => ({ success: true, text: 'agent, hello' })
+    })
+    assert.equal(result.status, 'ok')
+    assert.equal(m.text, 'agent, hello')
+    assert.equal(seenArgs.length, 1)
+})
+
+test('when the shaped download throws, the robust raw-media fallback is used', async () => {
+    const m = rawVoiceNote()
+    let fallbackRaw = null
+    const conn = {
+        downloadMediaMessage: async () => { throw new Error('No valid media URL or directPath present in message') },
+        updateMediaMessage: async () => {}
+    }
+    const result = await applyVoiceTranscript(m, conn, {
+        isOwner: false,
+        downloadRawMedia: async (raw, media, sock) => {
+            fallbackRaw = raw
+            assert.equal(media.type, 'audioMessage', 'fallback receives the findMedia descriptor')
+            assert.equal(sock, conn, 'fallback receives the connection for re-upload requests')
+            return goodAudio()
+        },
+        transcribeAudio: async () => ({ success: true, text: 'agent, fallback worked' })
+    })
+    assert.equal(result.status, 'ok')
+    assert.equal(m.text, 'agent, fallback worked')
+    assert.deepEqual(fallbackRaw, { key: m.key, message: m.message })
+})
+
+test('a tiny/empty download (fallback also empty) fails at the download stage, transcribe never called', async () => {
+    const m = rawVoiceNote()
+    let transcribeCalls = 0
+    const conn = { downloadMediaMessage: async () => Buffer.alloc(10) }
+    const result = await applyVoiceTranscript(m, conn, {
+        isOwner: false,
+        downloadRawMedia: async () => Buffer.alloc(0),
+        transcribeAudio: async () => { transcribeCalls++; return { success: true, text: 'hi' } }
+    })
+    assert.equal(result.status, 'failed')
+    assert.equal(result.stage, 'download')
+    assert.match(result.error, /download/i)
+    assert.equal(transcribeCalls, 0)
+    assert.equal(m.text, '')
+})
+
+test('a transcription failure after a good download is tagged stage transcribe', async () => {
+    const m = rawVoiceNote()
+    const conn = { downloadMediaMessage: async () => goodAudio() }
+    const result = await applyVoiceTranscript(m, conn, {
+        isOwner: false,
+        transcribeAudio: async () => ({ success: false, error: 'Whisper provider unavailable.' })
+    })
+    assert.equal(result.status, 'failed')
+    assert.equal(result.stage, 'transcribe')
+    assert.match(result.error, /Whisper provider/)
+    assert.equal(m.text, '')
+})
+
 test('applyVoiceTranscript reports failure and leaves the text untouched', async () => {
     const m = pmVoiceNote()
-    const conn = { downloadMediaMessage: async () => Buffer.from('ogg-bytes') }
+    const conn = { downloadMediaMessage: async () => goodAudio() }
     const result = await applyVoiceTranscript(m, conn, {
         isOwner: false,
         transcribeAudio: async () => ({ success: false, error: 'Transcription service returned HTTP 500.' })

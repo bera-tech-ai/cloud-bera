@@ -75,11 +75,13 @@ const handle = async (m, { conn, text, reply, prefix, command, sender, chat, isO
         try {
             const buf = await conn.downloadMediaMessage({ key: target.key, message: target.message })
             if (!buf) throw new Error('Could not download media')
-            await conn.sendMessage(chat, {
+            const sentPtt = await conn.sendMessage(chat, {
                 audio: buf,
                 mimetype: 'audio/ogg; codecs=opus',
                 ptt: true
             }, { quoted: m })
+            // Register the bot-sent voice note so auto-listen never transcribes it back (self-bot loop guard).
+            require('../Library/actions/voice-listen').markBotSentVoice(sentPtt?.key?.id)
             await react(conn, m, '✅')
         } catch (e) {
             await react(conn, m, '❌')

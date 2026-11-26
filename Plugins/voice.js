@@ -90,12 +90,14 @@ module.exports = {
         try { await sock.sendMessage(jid, { react: { text: '🔊', key: message.key } }) } catch {}
         try {
             const buf = await fetchTts(text, lang)
-            await sock.sendMessage(jid, {
+            const sent = await sock.sendMessage(jid, {
                 audio: buf,
                 mimetype: 'audio/ogg; codecs=opus',
                 ptt: true,
                 waveform: [0, 24, 48, 76, 108, 126, 105, 76, 48, 22, 0]
             }, { quoted: message })
+            // Register the bot's own voice note so auto-listen never transcribes it back (self-bot loop guard).
+            require('../Library/actions/voice-listen').markBotSentVoice(sent?.key?.id)
             try { await sock.sendMessage(jid, { react: { text: '✅', key: message.key } }) } catch {}
         } catch (error) {
             try { await sock.sendMessage(jid, { react: { text: '❌', key: message.key } }) } catch {}
