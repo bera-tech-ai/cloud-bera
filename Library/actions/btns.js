@@ -134,6 +134,51 @@ const sendUrlBtn = async (conn, jid, opts = {}) => {
     }
 }
 
+// ── Native buttons via Baileys directly ───────────────────────────────────────
+// gifted-btns' sendButtons throws against the installed Baileys v7
+// (verified live 2026-11-27: confirmation previews silently degraded
+// to the numbered text list), so confirmations are built by hand with
+// the Baileys proto the runtime already ships: an interactiveMessage
+// with nativeFlow quick_reply buttons, relayed as a view-once message
+// (the construction modern WhatsApp clients render as tappable
+// buttons). Any failure is LOGGED (the gifted path failed silently)
+// and degrades to the same numbered text fallback.
+const sendNativeButtons = async (conn, jid, opts = {}) => {
+    try {
+        const baileys = require('@whiskeysockets/baileys')
+        const proto = baileys.proto
+        const gen = baileys.generateWAMessageFromContent || baileys.default?.generateWAMessageFromContent
+        if (!proto?.Message?.InteractiveMessage?.create || typeof gen !== 'function' || typeof conn?.relayMessage !== 'function') {
+            throw new Error('baileys interactive-message support unavailable')
+        }
+        const buttons = (opts.buttons || []).map(b => {
+            if (b.buttonParamsJson) return { name: 'quick_reply', buttonParamsJson: b.buttonParamsJson }
+            return { name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: b.text || b.label || 'Option', id: b.id }) }
+        })
+        if (!buttons.length) throw new Error('no buttons given')
+        const interactive = proto.Message.InteractiveMessage.create({
+            body: { text: opts.text || '' },
+            footer: { text: opts.footer || '' },
+            header: { title: opts.title || '', subtitle: '', hasMediaAttachment: false },
+            nativeFlowMessage: { buttons, messageParamsJson: '' }
+        })
+        const content = {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
+                    interactiveMessage: interactive
+                }
+            }
+        }
+        const msg = gen(jid, content, { userJid: conn.user?.id, quoted: opts.quoted || undefined })
+        await conn.relayMessage(jid, msg.message, { messageId: msg.key.id })
+        return msg
+    } catch (e) {
+        console.error('[BTN] native buttons failed, using text fallback:', e?.message || e)
+        return sendBtnFallback(conn, jid, opts)
+    }
+}
+
 // ── Plain-text fallbacks (when gifted-btns is unavailable) ────────────────────
 const sendBtnFallback = async (conn, jid, opts) => {
     const lines = []
@@ -161,4 +206,4 @@ const sendListFallback = async (conn, jid, opts) => {
     await conn.sendMessage(jid, { text: lines.join('\n') })
 }
 
-module.exports = { sendBtn, sendList, sendUrlBtn }
+module.exports = { sendBtn, sendList, sendUrlBtn, sendNativeButtons }

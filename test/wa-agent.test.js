@@ -36,8 +36,13 @@ const handle = require('../Plugins/waagent')
     // TARGET before the token is confirmed.
     const popPreview = () => {
         const idx = sent.findLastIndex(entry => /Confirmation preview/.test(entry.content?.text || ''))
-        assert.ok(idx >= 0, 'a confirmation preview was delivered')
-        return sent.splice(idx, 1)[0].content.text
+        if (idx >= 0) return sent.splice(idx, 1)[0].content.text
+        // Native-button previews are relayed as interactive messages:
+        // the preview text lives in the interactive body.
+        const ridx = relayed.findLastIndex(entry =>
+            /Confirmation preview/.test(entry.message?.viewOnceMessage?.message?.interactiveMessage?.body?.text || ''))
+        assert.ok(ridx >= 0, 'a confirmation preview was delivered')
+        return relayed.splice(ridx, 1)[0].message.viewOnceMessage.message.interactiveMessage.body.text
     }
     const confirm = async (preview) => {
         const token = preview.match(/confirm ([A-F0-9]{8})/)[1]

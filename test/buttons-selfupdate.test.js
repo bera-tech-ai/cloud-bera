@@ -77,4 +77,48 @@ test('wiring: taps route through executeConfirmed; previews carry buttons; updat
     assert.match(updater, /require\('\.\.\/Library\/actions\/self-update'\)/)
     assert.match(updater, /'restart', 'reboot'/)
     assert.doesNotMatch(updater, /bera-tech-ai\/bera-ai/)
+    // Previews go through the DIRECT native sender: gifted-btns throws
+    // against Baileys v7 and silently degraded to text (live finding
+    // 2026-11-27), so confirmations no longer route through sendBtn.
+    assert.match(waagent, /sendNativeButtons/)
+    assert.match(dispatch, /sendNativeButtons/)
+})
+
+test('sendNativeButtons builds a real interactive message with the token ids', async () => {
+    const { sendNativeButtons } = require('../Library/actions/btns')
+    const relayed = []
+    const conn = {
+        user: { id: '254116763755@s.whatsapp.net' },
+        relayMessage: async (jid, message, opts) => { relayed.push({ jid, message, opts }); return {} },
+        sendMessage: async () => { throw new Error('fallback must not run') }
+    }
+    await sendNativeButtons(conn, '254743982206@s.whatsapp.net', {
+        text: 'Confirmation preview — nothing was sent yet', footer: 'Bera AI',
+        buttons: waActions.confirmationButtons('AB12CD34')
+    })
+    assert.equal(relayed.length, 1)
+    const im = relayed[0].message.viewOnceMessage.message.interactiveMessage
+    assert.match(im.body.text, /Confirmation preview/)
+    const params = im.nativeFlowMessage.buttons.map(b => JSON.parse(b.buttonParamsJson))
+    assert.deepEqual(params.map(p => p.id), ['wact_confirm_AB12CD34', 'wact_cancel_AB12CD34'])
+    assert.match(params[0].display_text, /Yes/)
+})
+
+test('sendNativeButtons falls back to numbered text when relaying fails', async () => {
+    const { sendNativeButtons } = require('../Library/actions/btns')
+    const sent = []
+    const conn = {
+        user: { id: '254116763755@s.whatsapp.net' },
+        relayMessage: async () => { throw new Error('relay boom') },
+        sendMessage: async (jid, content) => { sent.push(content); return {} }
+    }
+    const origErr = console.error; console.error = () => {}
+    try {
+        await sendNativeButtons(conn, '254743982206@s.whatsapp.net', {
+            text: 'Confirmation preview X', buttons: waActions.confirmationButtons('AB12CD34')
+        })
+    } finally { console.error = origErr }
+    assert.equal(sent.length, 1)
+    assert.match(sent[0].text, /Confirmation preview X/)
+    assert.match(sent[0].text, /\[1\] ✅ Yes/)
 })
