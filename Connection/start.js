@@ -54,6 +54,9 @@ let _sessionLeaseId = null
 let _sessionLeaseTimer = null
 let _sessionLeaseHeld = false
 let _shutdownStarted = false
+let _isOnline          = false
+let _lastConnActivityAt = Date.now()
+let _watchdogTimer     = null
 
 const closeActiveConn = async () => {
     if (!_activeConn) return
@@ -77,9 +80,35 @@ const scheduleReconnect = (delayMs = 5000) => {
         await closeActiveConn()
         startBot().catch(e => {
             console.error('[FATAL]', e.message)
-            setTimeout(() => startBot().catch(() => {}), 10000)
+            // Never let the retry chain die: a failed start (e.g. the
+            // database briefly unreachable during a network hiccup)
+            // schedules another attempt instead of leaving the bot
+            // offline until a manual restart.
+            scheduleReconnect(15000)
         })
     }, delayMs)
+}
+
+// ── Connection watchdog ─────────────────────────────────────────────────────
+// Polls the pure decision in Library/lib/reconnect-watchdog.js: if the
+// socket shows no connection activity for too long and no reconnect is
+// in flight, force one. This is the safety net for every failure path
+// that cannot schedule its own reconnect (a startBot that throws before
+// any socket exists, a socket stuck connecting, a close handler that
+// dies early). Started once, from startBot.
+const ensureConnectionWatchdog = () => {
+    if (_watchdogTimer) return
+    const { shouldReconnect } = require('../Library/lib/reconnect-watchdog')
+    _watchdogTimer = setInterval(() => {
+        try {
+            if (shouldReconnect({ isOnline: _isOnline, reconnecting: _reconnecting, shuttingDown: _shutdownStarted, lastActivityAt: _lastConnActivityAt, now: Date.now() })) {
+                console.warn('[WATCHDOG] No connection activity for over 2 minutes — forcing a reconnect')
+                _lastConnActivityAt = Date.now()
+                scheduleReconnect(1000)
+            }
+        } catch {}
+    }, 30000)
+    _watchdogTimer.unref?.()
 }
 
 // ── Suppress all internal crypto / pre-key / baileys noise ───────────────
@@ -316,6 +345,7 @@ const startReminderLoop = (conn) => {
 
 const startBot = async () => {
     if (!_bannerShown) { printBanner(); _bannerShown = true }
+    ensureConnectionWatchdog()
     await initDb()
 
     // Restore confirmation tokens staged before a restart. Expired entries
@@ -460,6 +490,7 @@ const startBot = async () => {
 
     conn.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update
+        _lastConnActivityAt = Date.now()
 
         if (qr && phoneNumber && !pairingRequested) {
             pairingRequested = true
@@ -482,6 +513,7 @@ const startBot = async () => {
         }
 
         if (connection === 'close') {
+            _isOnline = false
             const err        = lastDisconnect?.error
             const statusCode = err instanceof Boom ? err.output.statusCode : null
             saveSession('whatsapp', { status: 'disconnected', statusCode, sessionDir: SESSION_DIR, disconnectedAt: Date.now() })
@@ -517,6 +549,7 @@ const startBot = async () => {
         }
 
         if (connection === 'open') {
+            _isOnline = true
             if (fs.existsSync(PHONE_FILE)) fs.unlinkSync(PHONE_FILE)
             if (!global.botReadyAt) global.botReadyAt = Math.floor(Date.now() / 1000)
             const botJid = jidNormalizedUser(conn.user?.id || '')
