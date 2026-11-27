@@ -135,97 +135,6 @@ const sendUrlBtn = async (conn, jid, opts = {}) => {
 }
 
 // ── Native buttons via Baileys directly ───────────────────────────────────────
-// gifted-btns' sendButtons throws against the installed Baileys v7
-// (verified live 2026-11-27: confirmation previews silently degraded
-// to the numbered text list), so confirmations are built by hand with
-// the Baileys proto the runtime already ships: an interactiveMessage
-// with nativeFlow quick_reply buttons, relayed as a view-once message.
-// The relay MUST carry WhatsApp's binary wrapper nodes or clients
-// silently drop the buttons (documented by gifted-btns' and
-// baileys-buttons' READMEs, cross-checked 2026-11-27):
-//   biz > interactive(type=native_flow, v=1) > native_flow(v=9, name=mixed)
-// plus, in private chats only, a bot node (biz_bot=1). Any failure is
-// LOGGED (the gifted path failed silently) and degrades to the same
-// numbered text fallback.
-const sendNativeButtons = async (conn, jid, opts = {}) => {
-    try {
-        const baileys = require('@whiskeysockets/baileys')
-        const proto = baileys.proto
-        const gen = baileys.generateWAMessageFromContent || baileys.default?.generateWAMessageFromContent
-        if (!proto?.Message?.InteractiveMessage?.create || typeof gen !== 'function' || typeof conn?.relayMessage !== 'function') {
-            throw new Error('baileys interactive-message support unavailable')
-        }
-        const buttons = (opts.buttons || []).map(b => {
-            if (b.buttonParamsJson) return { name: 'quick_reply', buttonParamsJson: b.buttonParamsJson }
-            return { name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: b.text || b.label || 'Option', id: b.id }) }
-        })
-        if (!buttons.length) throw new Error('no buttons given')
-        const interactive = proto.Message.InteractiveMessage.create({
-            body: { text: opts.text || '' },
-            footer: { text: opts.footer || '' },
-            header: { title: opts.title || '', subtitle: '', hasMediaAttachment: false },
-            nativeFlowMessage: { buttons, messageParamsJson: '' }
-        })
-        const content = {
-            viewOnceMessage: {
-                message: {
-                    messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
-                    interactiveMessage: interactive
-                }
-            }
-        }
-        const msg = gen(jid, content, { userJid: conn.user?.id, quoted: opts.quoted || undefined })
-        const bizNode = {
-            tag: 'biz', attrs: {},
-            content: [{
-                tag: 'interactive', attrs: { type: 'native_flow', v: '1' },
-                content: [{ tag: 'native_flow', attrs: { v: '9', name: 'mixed' } }]
-            }]
-        }
-        const isGroup = String(jid).endsWith('@g.us')
-        const additionalNodes = isGroup
-            ? [bizNode]
-            : [bizNode, { tag: 'bot', attrs: { biz_bot: '1' } }]
-        // The relay is raced against a timeout: live tests on
-        // 2026-11-27 showed .wact previews vanishing with no reply,
-        // no fallback and no error — consistent with relayMessage
-        // never settling for this message shape. A timeout turns
-        // that silent hang into a logged text fallback, and the
-        // success line proves the relay actually completed.
-        const timeoutMs = opts.relayTimeoutMs || 20000
-        let relayTimer
-        try {
-            await Promise.race([
-                conn.relayMessage(jid, msg.message, { messageId: msg.key.id, additionalNodes }),
-                new Promise((_, reject) => {
-                    relayTimer = setTimeout(() => reject(new Error(`relay timed out after ${timeoutMs}ms`)), timeoutMs)
-                    relayTimer.unref?.()
-                })
-            ])
-        } finally { clearTimeout(relayTimer) }
-        console.log(`[BTN] native buttons relayed to ${jid}`)
-        return msg
-    } catch (e) {
-        console.error('[BTN] native buttons failed, using text fallback:', e?.message || e)
-        return sendBtnFallback(conn, jid, opts)
-    }
-}
-
-// ── Plain-text fallbacks (when gifted-btns is unavailable) ────────────────────
-const sendBtnFallback = async (conn, jid, opts) => {
-    const lines = []
-    if (opts.title)  lines.push('*' + opts.title + '*')
-    if (opts.text)   lines.push(opts.text)
-    const btnLines = (opts.buttons || []).map((b, i) => {
-        const lbl = b.text || b.label ||
-            (b.buttonParamsJson ? (() => { try { return JSON.parse(b.buttonParamsJson).display_text } catch { return 'Option '+(i+1) } })() : 'Option '+(i+1))
-        return '  [' + (i+1) + '] ' + lbl
-    }).join('\n')
-    if (btnLines) lines.push('\n' + btnLines)
-    if (opts.footer) lines.push('\n_' + opts.footer + '_')
-    await conn.sendMessage(jid, { text: lines.join('\n') })
-}
-
 const sendListFallback = async (conn, jid, opts) => {
     const rows  = (opts.sections || []).flatMap(s => s.rows || [])
     const lines = []
@@ -238,4 +147,4 @@ const sendListFallback = async (conn, jid, opts) => {
     await conn.sendMessage(jid, { text: lines.join('\n') })
 }
 
-module.exports = { sendBtn, sendList, sendUrlBtn, sendNativeButtons }
+module.exports = { sendBtn, sendList, sendUrlBtn }

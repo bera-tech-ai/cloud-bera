@@ -569,23 +569,6 @@ const executeConfirmed = async (conn, owner, token) => {
 
 const getAudit = (owner) => audit.filter(item => item.owner === String(owner || '')).slice(-20)
 
-// Native Yes/No buttons for a staged confirmation (Bera, 2026-11-27):
-// instead of typing ".wact confirm <token>", the user taps a button.
-// The tap comes back with the button id; parseConfirmationButtonId
-// turns it back into (kind, token) for the Handler's tap route, which
-// runs the exact same executeConfirmed/cancel path as the typed
-// commands. The typed commands stay as the fallback (and the preview
-// text still shows them), so nothing depends on buttons rendering.
-const confirmationButtons = (token) => ([
-    { id: `wact_confirm_${token}`, text: '✅ Yes — do it' },
-    { id: `wact_cancel_${token}`, text: '❌ No — cancel' }
-])
-const parseConfirmationButtonId = (btnId) => {
-    const match = /^(wact_confirm|wact_cancel)_([A-Za-z0-9]+)$/.exec(String(btnId || ''))
-    if (!match) return null
-    return { kind: match[1] === 'wact_confirm' ? 'confirm' : 'cancel', token: match[2] }
-}
-
 module.exports = {
     CLOSE_FRIENDS_UNSUPPORTED,
     PENDING_TTL_MS,
@@ -602,8 +585,6 @@ module.exports = {
     persistPending,
     execute,
     executeConfirmed,
-    confirmationButtons,
-    parseConfirmationButtonId,
     formatPreview,
     formatPreviewMany,
     formatNairobiTime,

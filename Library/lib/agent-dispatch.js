@@ -260,13 +260,11 @@ const dispatch = async (ctx) => {
             try {
                 const target = await waActions.resolveTarget(conn, m, targetSpec, { allowSpecial: true })
                 const token = waActions.stage(sender, { type: 'send', jid: target.jid, number: target.number, text: msg })
-                // The preview carries native Yes/No buttons; a tap runs
-                // the same token path as typing ".wact confirm <token>".
+                // Plain-text preview; confirming is typing
+                // ".wact confirm <token>" (native buttons removed
+                // 2026-11-27 — the bot's own account can't tap them).
                 const previewText = `⏳ Preview only — nothing was sent.\nTarget: ${target.jid}\nMessage: ${msg}\nToken: ${token}\nReply: .wact confirm ${token} within 2 minutes to send it.`
-                try {
-                    const { sendNativeButtons } = require('../actions/btns')
-                    await sendNativeButtons(conn, chat, { text: previewText, footer: 'Bera AI', buttons: waActions.confirmationButtons(token), quoted: m })
-                } catch { await reply(previewText) }
+                await reply(previewText)
             } catch (error) {
                 await react('❌')
                 await reply(`❌ Failed to send: ${error.message}`)
