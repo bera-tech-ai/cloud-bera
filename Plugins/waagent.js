@@ -44,6 +44,18 @@ const mentionedJids = (m) => m?.mentionedJid
     || m?.message?.extendedTextMessage?.contextInfo?.mentionedJid
     || []
 
+// Confirmation previews go out with native Yes/No buttons (tap =
+// confirm/cancel via the Handler's tap route). sendBtn falls back to
+// plain text when buttons are unavailable, and the preview text keeps
+// the typed .wact instructions either way.
+const replyPreview = async (conn, m, reply, previewText, token) => {
+    try {
+        const { sendBtn } = require('../Library/actions/btns')
+        const { confirmationButtons } = require('../Library/lib/wa-actions')
+        await sendBtn(conn, m.chat, { text: previewText, footer: 'Bera AI', buttons: confirmationButtons(token) })
+    } catch { return reply(previewText) }
+}
+
 const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, isOwner, sender } = {}) => {
     // Forwarding is confirmation-gated for authorized users (spec §12), not
     // owner-only; Handler already blocks unauthorized callers before dispatch.
@@ -107,7 +119,7 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
             const target = await resolveTarget(conn, m, match[1], sender)
             const action = { type: 'send', number: target.number, jid: target.jid, text: match[2].trim() }
             const token = stage(sender, action)
-            return reply(formatPreview(action, token))
+            return replyPreview(conn, m, reply, formatPreview(action, token), token)
         } catch (error) { return reply(`❌ ${error.message}`) }
     }
 
@@ -116,7 +128,7 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
         if (!story) return reply('❓ Usage: *.wact story Bera AI is online*')
         const action = { type: 'story', text: story }
         const token = stage(sender, action)
-        return reply(formatPreview(action, token))
+        return replyPreview(conn, m, reply, formatPreview(action, token), token)
     }
 
     if (sub === 'groupstory' || sub === 'groupstatus') {
@@ -125,7 +137,7 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
         if (!story) return reply('❓ Usage: *.wact groupstory Hello group*')
         const action = { type: 'groupstory', groupJid: m.chat, text: story }
         const token = stage(sender, action)
-        return reply(formatPreview(action, token))
+        return replyPreview(conn, m, reply, formatPreview(action, token), token)
     }
 
     if (sub === 'react') {
@@ -180,7 +192,7 @@ const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, 
             for (const spec of specs) targets.push(await resolveTarget(conn, m, spec))
             if (targets.length === 1) {
                 const token = stage(sender, { type: 'forward', jid: targets[0].jid, number: targets[0].number, message: m.quoted })
-                return reply(`⚠️ *Forward preview*\n\nTo: +${targets[0].number}\n\nReply with *.wact confirm ${token}* within 2 minutes to forward it.`)
+                return replyPreview(conn, m, reply, `⚠️ *Forward preview*\n\nTo: +${targets[0].number}\n\nReply with *.wact confirm ${token}* within 2 minutes to forward it.`, token)
             }
             const tokens = targets.map(t => stage(sender, { type: 'forward', jid: t.jid, number: t.number, message: m.quoted }))
             return reply(`⚠️ *Forward preview (${targets.length} destinations)*\n\n${targets.map((t, i) => `• +${t.number} — confirm ${tokens[i]}`).join('\n')}\n\nReply with *.wact confirm <token>* within 2 minutes for each destination.`)
