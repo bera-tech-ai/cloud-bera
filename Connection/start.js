@@ -26,6 +26,7 @@ const {
     releaseSessionLease
 } = require('../Database')
 const { handleMessage, handleGroupEvents, handleAntiDelete, handleAntiEdit } = require('../Handler')
+const { shouldProcessUpsertMessage } = require('../Library/lib/upsert-filter')
 const config = require('../Config')
 
 let SESSION_DIR = path.resolve(process.env.BERA_SESSION_DIR || config.sessionDir || './session')
@@ -668,8 +669,14 @@ const startBot = async () => {
         // invisible to it) and clear any probe suspicion.
         _lastConnActivityAt = Date.now()
         _probeFailures = 0
-        if (type !== 'notify') return
+        // 'notify' batches are processed whole, exactly as before. The
+        // owner's own phone messages (self-chat, incl. voice notes) arrive
+        // as 'append' instead — process only the fresh fromMe ones and
+        // drop the rest of the batch, so history sync never replays old
+        // messages. See Library/lib/upsert-filter.js for the full why.
+        if (type !== 'notify' && type !== 'append') return
         for (const msg of messages) {
+            if (!shouldProcessUpsertMessage(type, msg)) continue
             // Auto status view
             if (msg.key?.remoteJid === 'status@broadcast') {
                 if (global.db?.data?.settings?.autoStatusView) {
