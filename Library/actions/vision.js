@@ -1,52 +1,116 @@
 'use strict'
 
 // ── Image vision / analysis (spec §16) ───────────────────────────────────────
-// Status verified live from this environment on 2026-11-24: the Xcasper vision
-// endpoint POST https://apiz.xcasper.space/api/ai/vision returns HTTP 500
-// ("Cloudflare Workers AI request failed (HTTP 401): Authentication error").
-// The provider's own auth is broken, so no client-side fix can make vision
-// work. Image analysis is therefore explicitly UNAVAILABLE — it is not
-// attempted, and callers get an honest error with alternatives instead of a
-// silent failure or a fake description.
+// TRUE VISION is provided by Casper's Qwen endpoint, verified live from this
+// environment on 2026-11-26 and re-verified 2026-11-27:
+//   POST https://apiz.xcasper.space/api/ai/qwen
+//   body { imageBase64: 'data:image/jpeg;base64,...', query: '<question>' }
+//   → { success: true, data: { model: 'qwen/qwen3.8-27b', reply: '...' } }
+// No API key, no cost. (The endpoint's own error hints "?query=" — the field
+// belongs in the JSON body; the URL-param form is rejected, both verified.)
 //
-// Alternatives that DO work today: OCR (read text from the image) via the
-// bundled Tesseract.js engine (`.ocr`, Plugins/ttsocr.js), and sticker
-// conversion. To re-test vision after the provider fixes its auth, set
-// BERA_VISION_FORCE_ENABLE=1; the forced path still reports the real
-// provider error instead of inventing a description.
+// The older /api/ai/vision endpoint stays dead (its own auth returns
+// HTTP 500, verified 2026-11-24) and is only attempted when
+// BERA_VISION_FORCE_ENABLE=1, as before.
+//
+// Behaviour:
+// - Qwen is the default path. BERA_VISION_QWEN=0 disables it (kill switch),
+//   restoring the previous unavailable behaviour.
+// - If Qwen fails, callers get an honest error that names the failure and
+//   points at the working alternative: OCR (.ocr) for reading text.
+// - Nothing here ever invents a description.
 
-const VISION_CHECKED_AT = '2026-11-24'
+const VISION_CHECKED_AT = '2026-11-27'
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
 const VISION_UNAVAILABLE_MESSAGE =
-    'Image analysis is currently unavailable: the vision provider returns HTTP 500 (its own authentication failed) — verified 2026-11-24. ' +
-    'Alternative: use .ocr to read text from the image, or describe the image yourself and ask about that. ' +
-    'Vision will be re-enabled once the provider fixes its authentication.'
+    'Image analysis is unavailable right now: the vision provider (Casper Qwen) could not be reached or returned an error — verified working 2026-11-27, so this may be temporary. ' +
+    'Alternative: use .ocr to read text from the image.'
+
+const qwenEnabled = () => process.env.BERA_VISION_QWEN !== '0'
 
 const visionStatus = () => ({
-    available: process.env.BERA_VISION_FORCE_ENABLE === '1',
+    available: qwenEnabled(),
     checkedAt: VISION_CHECKED_AT,
-    provider: 'xcasper vision (/api/ai/vision)',
-    error: 'HTTP 500 — Cloudflare Workers AI request failed (HTTP 401): Authentication error',
-    message: VISION_UNAVAILABLE_MESSAGE
+    provider: 'xcasper qwen (/api/ai/qwen, qwen/qwen3.8-27b)',
+    message: qwenEnabled() ? 'Vision is available via Casper Qwen.' : VISION_UNAVAILABLE_MESSAGE
 })
+
+const qwenVision = async (buffer, question, mime = 'image/jpeg') => {
+    const xcasper = require('./xcasper')
+    const data = await xcasper.requestPost('/api/ai/qwen', {
+        imageBase64: `data:${mime};base64,${buffer.toString('base64')}`,
+        query: question
+    }, 60000)
+    if (data?.success === false) {
+        return { success: false, error: `Qwen vision error: ${data?.error || 'unknown provider error'}` }
+    }
+    const reply = data?.data?.reply || data?.reply || xcasper.textFrom?.(data)
+    return reply
+        ? { success: true, result: String(reply).trim(), provider: 'qwen' }
+        : { success: false, error: 'Qwen vision returned no text' }
+}
+
+const legacyVision = async (dataUriOrUrl, question) => {
+    const xcasper = require('./xcasper')
+    const result = await xcasper.vision(dataUriOrUrl, question)
+    return result.success ? { success: true, result: result.text, provider: 'legacy-vision' } : { success: false, error: result.error }
+}
 
 const analyzeImageFromBuffer = async (buffer, question = 'Describe this image in detail.') => {
     if (!buffer || !Buffer.isBuffer(buffer)) return { success: false, error: 'No image supplied.' }
-    if (process.env.BERA_VISION_FORCE_ENABLE !== '1') {
-        return { success: false, error: VISION_UNAVAILABLE_MESSAGE }
+    if (buffer.length > MAX_IMAGE_BYTES) return { success: false, error: 'Image is too large to analyse (over 8 MB).' }
+
+    if (qwenEnabled()) {
+        try {
+            const result = await qwenVision(buffer, question)
+            if (result.success) return result
+            console.error('[VISION] Qwen failed:', result.error)
+        } catch (e) {
+            console.error('[VISION] Qwen failed:', e.response?.status || e.message)
+        }
     }
-    // Lazy: the gated path never touches the provider client.
-    const xcasper = require('./xcasper')
-    const result = await xcasper.vision(`data:image/jpeg;base64,${buffer.toString('base64')}`, question)
-    return result.success ? { success: true, result: result.text } : { success: false, error: result.error }
+
+    if (process.env.BERA_VISION_FORCE_ENABLE === '1') {
+        const legacy = await legacyVision(`data:image/jpeg;base64,${buffer.toString('base64')}`, question)
+        if (legacy.success) return legacy
+    }
+
+    return { success: false, error: VISION_UNAVAILABLE_MESSAGE }
 }
 
 const analyzeImageFromUrl = async (imageUrl, question = 'Describe this image in detail.') => {
-    if (process.env.BERA_VISION_FORCE_ENABLE !== '1') {
+    if (!imageUrl) return { success: false, error: 'No image URL supplied.' }
+    // Kill switch on and no legacy force-enable: don't download what we
+    // would not analyse anyway.
+    if (!qwenEnabled() && process.env.BERA_VISION_FORCE_ENABLE !== '1') {
         return { success: false, error: VISION_UNAVAILABLE_MESSAGE }
     }
-    const xcasper = require('./xcasper')
-    const result = await xcasper.vision(imageUrl, question)
-    return result.success ? { success: true, result: result.text } : { success: false, error: result.error }
+    // Qwen takes base64, not URLs (the URL-based endpoint is the dead one),
+    // so download the image ourselves and run the same Qwen call.
+    try {
+        const axios = require('axios')
+        const res = await axios.get(imageUrl, {
+            responseType: 'arraybuffer',
+            timeout: 20000,
+            maxContentLength: MAX_IMAGE_BYTES,
+            headers: { 'User-Agent': 'BeraAI/Vision/1.0' }
+        })
+        const buffer = Buffer.from(res.data)
+        const mime = String(res.headers?.['content-type'] || 'image/jpeg').split(';')[0].trim()
+        if (qwenEnabled()) {
+            const result = await qwenVision(buffer, question, mime.startsWith('image/') ? mime : 'image/jpeg')
+            if (result.success) return result
+            console.error('[VISION] Qwen failed (url):', result.error)
+        }
+        return { success: false, error: VISION_UNAVAILABLE_MESSAGE }
+    } catch (e) {
+        if (process.env.BERA_VISION_FORCE_ENABLE === '1') {
+            const legacy = await legacyVision(imageUrl, question)
+            if (legacy.success) return legacy
+        }
+        return { success: false, error: `Could not fetch that image to analyse it (${e.message}). ` + VISION_UNAVAILABLE_MESSAGE }
+    }
 }
 
 module.exports = { analyzeImageFromBuffer, analyzeImageFromUrl, visionStatus, VISION_UNAVAILABLE_MESSAGE, VISION_CHECKED_AT }

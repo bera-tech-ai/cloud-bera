@@ -144,19 +144,27 @@ test('splitMessage never exceeds the limit, keeps URLs whole and balances code f
 
 // ── Media / voice reliability (§16) ──────────────────────────────────────────
 
-test('vision is explicitly unavailable with an alternative, without a network call', async () => {
+test('vision is available via Qwen; with the kill switch it is honestly unavailable, without a network call', async () => {
+    // Since 2026-11-27 vision runs on Casper Qwen (see test/qwen-vision.test.js
+    // for the stubbed provider behaviour). The old /api/ai/vision endpoint is
+    // still dead; it is no longer the gate.
     const status = visionStatus()
-    assert.equal(status.available, false)
-    assert.match(status.error, /HTTP 500/)
-    assert.match(status.error, /401/)
-    const fromBuffer = await analyzeImageFromBuffer(Buffer.from('fake-image'))
-    assert.equal(fromBuffer.success, false)
-    assert.equal(fromBuffer.error, VISION_UNAVAILABLE_MESSAGE)
-    assert.match(fromBuffer.error, /unavailable/i)
-    assert.match(fromBuffer.error, /\.ocr/)
-    const fromUrl = await analyzeImageFromUrl('https://example.com/x.jpg')
-    assert.equal(fromUrl.success, false)
-    assert.equal((await analyzeImageFromBuffer(null)).error, 'No image supplied.')
+    assert.equal(status.available, true)
+    assert.match(status.provider, /qwen/i)
+    process.env.BERA_VISION_QWEN = '0'
+    try {
+        assert.equal(visionStatus().available, false)
+        const fromBuffer = await analyzeImageFromBuffer(Buffer.from('fake-image'))
+        assert.equal(fromBuffer.success, false)
+        assert.equal(fromBuffer.error, VISION_UNAVAILABLE_MESSAGE)
+        assert.match(fromBuffer.error, /unavailable/i)
+        assert.match(fromBuffer.error, /\.ocr/)
+        const fromUrl = await analyzeImageFromUrl('https://example.com/x.jpg')
+        assert.equal(fromUrl.success, false)
+        assert.equal((await analyzeImageFromBuffer(null)).error, 'No image supplied.')
+    } finally {
+        delete process.env.BERA_VISION_QWEN
+    }
 })
 
 test('image generation reports disabled, never a silent failure', async () => {
