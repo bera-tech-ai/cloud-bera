@@ -3649,6 +3649,16 @@ ${r.output.trim().slice(0, maxLen)}`
 // MAIN AGENT LOOP
 // ─────────────────────────────────────────────────────────────────────────────
 const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
+    // People memory: learn durable facts the sender states about
+    // themselves, whichever agent path answers. Fire-and-forget; the
+    // owner's own agent sessions (m.fromMe) are never mined.
+    try {
+        if (!m?.fromMe && m?.sender) {
+            require('./people-memory')
+                .learnFromMessage({ jid: m.sender, altJid: m?.key?.remoteJidAlt, text, stripTrigger: true })
+                .catch(() => {})
+        }
+    } catch {}
     try {
         const pd = await preDispatch(text, m, conn)
         if (pd?.reply) {
@@ -3662,8 +3672,14 @@ const generateAdvancedReply = async (text, chat, conn, m, opts = {}) => {
 
     const mem = getMemory(chat)
     const memEntries = Object.entries(mem).filter(([k]) => k !== '_action_log')
-    const memStr = memEntries.length
+    const baseMemStr = memEntries.length
         ? '\n\nStored memory:\n' + memEntries.map(([k, v]) => `${k}: ${v}`).join('\n') : ''
+    // People memory: durable facts learned about the PERSON chatting
+    // (Library/actions/people-memory.js) — recalled alongside the
+    // per-chat store so the agent remembers people, not just chats.
+    let peopleMemStr = ''
+    try { peopleMemStr = require('./people-memory').formatForPrompt(m?.sender, m?.key?.remoteJidAlt) } catch {}
+    const memStr = baseMemStr + peopleMemStr
 
     let wsCtx = ''
     try {
@@ -3839,8 +3855,12 @@ const generateSimpleReply = async (text, chat, languagePreference = 'en', opts =
       pushHistory(chat, 'user', text)
       const mem = getMemory(chat)
       const memEntries = Object.entries(mem).filter(([k]) => k !== '_action_log')
-      const memStr = memEntries.length
+      const baseMemStr = memEntries.length
           ? '\n\nThings I remember about you:\n' + memEntries.map(([k, v]) => k + ': ' + v).join('\n') : ''
+      // People memory (Library/actions/people-memory.js): durable facts
+      // learned about the PERSON chatting, supplied by the caller —
+      // appended verbatim; it carries its own header.
+      const memStr = baseMemStr + (opts?.peopleMemStr ? String(opts.peopleMemStr) : '')
       const languageMode = ['auto', 'en', 'sw', 'sheng', 'mixed'].includes(String(languagePreference).toLowerCase())
           ? String(languagePreference).toLowerCase() : 'en'
       const languageInstruction = languageMode === 'auto'
