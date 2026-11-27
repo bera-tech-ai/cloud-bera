@@ -57,6 +57,9 @@ let _shutdownStarted = false
 let _isOnline          = false
 let _lastConnActivityAt = Date.now()
 let _watchdogTimer     = null
+let _probeFailures     = 0
+let _lastProbeAt       = 0
+let _probeInFlight     = false
 
 const closeActiveConn = async () => {
     if (!_activeConn) return
@@ -90,21 +93,39 @@ const scheduleReconnect = (delayMs = 5000) => {
 }
 
 // ── Connection watchdog ─────────────────────────────────────────────────────
-// Polls the pure decision in Library/lib/reconnect-watchdog.js: if the
-// socket shows no connection activity for too long and no reconnect is
-// in flight, force one. This is the safety net for every failure path
-// that cannot schedule its own reconnect (a startBot that throws before
-// any socket exists, a socket stuck connecting, a close handler that
-// dies early). Started once, from startBot.
+// Polls the pure decision in Library/lib/reconnect-watchdog.js every
+// 30s and acts on it: 'reconnect' forces a reconnect; 'probe' actively
+// checks a socket that claims to be online but has been silent — the
+// half-open case that stalled the bot on 2026-11-27 ~09:32 EAT, where
+// no 'close' ever fired, _isOnline stayed true, and the old decision
+// ("online → never reconnect") could not see the failure. A failed
+// probe is only a suspicion; two in a row force the reconnect, and a
+// successful probe counts as activity, so a healthy-but-quiet bot is
+// probed once per silence window and otherwise left alone. Started
+// once, from startBot.
 const ensureConnectionWatchdog = () => {
     if (_watchdogTimer) return
-    const { shouldReconnect } = require('../Library/lib/reconnect-watchdog')
-    _watchdogTimer = setInterval(() => {
+    const { watchdogAction, probeSocket } = require('../Library/lib/reconnect-watchdog')
+    _watchdogTimer = setInterval(async () => {
         try {
-            if (shouldReconnect({ isOnline: _isOnline, reconnecting: _reconnecting, shuttingDown: _shutdownStarted, lastActivityAt: _lastConnActivityAt, now: Date.now() })) {
-                console.warn('[WATCHDOG] No connection activity for over 2 minutes — forcing a reconnect')
+            const action = watchdogAction({ isOnline: _isOnline, reconnecting: _reconnecting, shuttingDown: _shutdownStarted, lastActivityAt: _lastConnActivityAt, probeFailures: _probeFailures, lastProbeAt: _lastProbeAt, now: Date.now() })
+            if (action === 'reconnect') {
+                console.warn('[WATCHDOG] Connection is dead or unreachable — forcing a reconnect')
                 _lastConnActivityAt = Date.now()
+                _probeFailures = 0
                 scheduleReconnect(1000)
+            } else if (action === 'probe' && !_probeInFlight) {
+                _probeInFlight = true
+                _lastProbeAt = Date.now()
+                const alive = await probeSocket(_activeConn)
+                _probeInFlight = false
+                if (alive) {
+                    _probeFailures = 0
+                    _lastConnActivityAt = Date.now()
+                } else {
+                    _probeFailures += 1
+                    console.warn(`[WATCHDOG] Liveness probe failed (${_probeFailures}) — a second failure will force a reconnect`)
+                }
             }
         } catch {}
     }, 30000)
@@ -641,6 +662,12 @@ const startBot = async () => {
     }
 
     conn.ev.on('messages.upsert', async ({ messages, type }) => {
+        // Any inbound traffic proves the socket is alive — stamp the
+        // watchdog's activity clock (it otherwise only ticks on
+        // connection.update, which is what made a half-open socket
+        // invisible to it) and clear any probe suspicion.
+        _lastConnActivityAt = Date.now()
+        _probeFailures = 0
         if (type !== 'notify') return
         for (const msg of messages) {
             // Auto status view
