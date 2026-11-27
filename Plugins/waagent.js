@@ -50,9 +50,9 @@ const mentionedJids = (m) => m?.mentionedJid
 // the typed .wact instructions either way.
 const replyPreview = async (conn, m, reply, previewText, token) => {
     try {
-        const { sendBtn } = require('../Library/actions/btns')
+        const { sendNativeButtons } = require('../Library/actions/btns')
         const { confirmationButtons } = require('../Library/lib/wa-actions')
-        await sendBtn(conn, m.chat, { text: previewText, footer: 'Bera AI', buttons: confirmationButtons(token) })
+        await sendNativeButtons(conn, m.chat, { text: previewText, footer: 'Bera AI', buttons: confirmationButtons(token), quoted: m })
     } catch { return reply(previewText) }
 }
 

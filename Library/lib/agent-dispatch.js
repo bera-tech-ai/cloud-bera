@@ -264,8 +264,8 @@ const dispatch = async (ctx) => {
                 // the same token path as typing ".wact confirm <token>".
                 const previewText = `⏳ Preview only — nothing was sent.\nTarget: ${target.jid}\nMessage: ${msg}\nToken: ${token}\nReply: .wact confirm ${token} within 2 minutes to send it.`
                 try {
-                    const { sendBtn } = require('../actions/btns')
-                    await sendBtn(conn, chat, { text: previewText, footer: 'Bera AI', buttons: waActions.confirmationButtons(token) })
+                    const { sendNativeButtons } = require('../actions/btns')
+                    await sendNativeButtons(conn, chat, { text: previewText, footer: 'Bera AI', buttons: waActions.confirmationButtons(token), quoted: m })
                 } catch { await reply(previewText) }
             } catch (error) {
                 await react('❌')
