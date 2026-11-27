@@ -132,6 +132,25 @@ test('sendNativeButtons omits the bot node in group chats', async () => {
     assert.ok(!nodes.some(n => n.tag === 'bot'), 'no bot node in group')
 })
 
+test('sendNativeButtons falls back to numbered text when the relay hangs', async () => {
+    const { sendNativeButtons } = require('../Library/actions/btns')
+    const sent = []
+    const conn = {
+        user: { id: '254116763755@s.whatsapp.net' },
+        relayMessage: () => new Promise(() => {}), // never settles — the live 2026-11-27 symptom
+        sendMessage: async (jid, content) => { sent.push(content); return {} }
+    }
+    const origErr = console.error; console.error = () => {}
+    try {
+        await sendNativeButtons(conn, '254743982206@s.whatsapp.net', {
+            text: 'Confirmation preview hung', buttons: waActions.confirmationButtons('AB12CD34'),
+            relayTimeoutMs: 60
+        })
+    } finally { console.error = origErr }
+    assert.equal(sent.length, 1)
+    assert.match(sent[0].text, /Confirmation preview hung/)
+})
+
 test('sendNativeButtons falls back to numbered text when relaying fails', async () => {
     const { sendNativeButtons } = require('../Library/actions/btns')
     const sent = []
