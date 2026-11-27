@@ -89,3 +89,27 @@ test('global on/off behaviour unchanged; off clears the per-chat map', async () 
     assert.strictEqual(db.data.chatbera.globalEnabled, false)
     assert.deepStrictEqual(db.data.chatbera.enabled, {}, 'global off clears per-chat chats')
 })
+
+test('group on/off toggles groupEnabled only', async () => {
+    const db = freshDb()
+    await run(['group', 'on'])
+    assert.strictEqual(db.data.chatbera.groupEnabled, true)
+    assert.strictEqual(db.data.chatbera.globalEnabled, false, 'global switch untouched')
+    assert.deepStrictEqual(db.data.chatbera.enabled, {}, 'per-chat map untouched')
+    await run(['group', 'off'])
+    assert.strictEqual(db.data.chatbera.groupEnabled, false)
+})
+
+test('group with no sub-arg reports state and changes nothing', async () => {
+    const db = freshDb()
+    const replies = await run(['group'])
+    assert.strictEqual(db.data.chatbera.groupEnabled, undefined)
+    assert.ok(replies.join(' ').includes('Group replies are currently *OFF*'))
+})
+
+test('status shows the group state', async () => {
+    freshDb()
+    await run(['group', 'on'])
+    const replies = await run([])
+    assert.ok(replies.join(' ').includes('Groups: *ON*'), replies.join(' '))
+})

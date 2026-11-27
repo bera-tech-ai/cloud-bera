@@ -33,6 +33,7 @@ const handle = async (m, { conn, command, args, prefix, reply, isOwner } = {}) =
         if (!arg || arg === 'status') {
             const isOn    = global.db?.data?.chatbera?.globalEnabled || false
             const perChatCount = Object.keys(global.db?.data?.chatbera?.enabled || {}).length
+            const groupOn    = global.db?.data?.chatbera?.groupEnabled || false
             const profile = global.db?.data?.chatbera?.profile || {}
             const msgs    = profile?.myMessages?.length || 412
             const mode    = global.db?.data?.settings?.mode || 'public'
@@ -47,6 +48,7 @@ const handle = async (m, { conn, command, args, prefix, reply, isOwner } = {}) =
                 '┃ 🌐 Bot mode: *' + mode + '*\n' +
                 '┃ 💬 Replies: *' + (isOn ? 'All DMs — as Bera' : 'Disabled') + '*\n' +
                 '┃ 📍 Per-chat only: *' + perChatCount + ' chat(s)*\n' +
+                '┃ 👥 Groups: *' + (groupOn ? 'ON' : 'OFF') + '*\n' +
                 '┃\n' +
                 '┃ Toggle: *' + prefix + 'chatbera on* / *' + prefix + 'chatbera off*\n' +
                 '╰══════════════════⊷'
@@ -111,6 +113,25 @@ const handle = async (m, { conn, command, args, prefix, reply, isOwner } = {}) =
             )
         }
 
+        if (arg === 'group') {
+            if (!global.db.data.chatbera) global.db.data.chatbera = {}
+            const store = global.db.data.chatbera
+            const sub = args[1]?.toLowerCase()
+            if (sub === 'on' || sub === 'off') {
+                store.groupEnabled = sub === 'on'
+                await global.db.write()
+                return reply(
+                    '╭══〘 *🎭 CHATBERA — GROUPS ' + (store.groupEnabled ? 'ON' : 'OFF') + '* 〙═⊷\n' +
+                    (store.groupEnabled
+                        ? '┃ ChatBera can now reply in groups where it\n┃ is enabled — global on, or *' + prefix + 'chatbera here*\n┃ inside the group.\n'
+                        : '┃ ChatBera will no longer reply in any group.\n') +
+                    '┃ PMs are unaffected.\n' +
+                    '╰══════════════════⊷'
+                )
+            }
+            return reply('👥 Group replies are currently *' + (store.groupEnabled ? 'ON' : 'OFF') + '*. Use *' + prefix + 'chatbera group on/off*')
+        }
+
         if (arg === 'off') {
             if (!global.db.data.chatbera) global.db.data.chatbera = {}
             global.db.data.chatbera.globalEnabled = false
@@ -125,7 +146,7 @@ const handle = async (m, { conn, command, args, prefix, reply, isOwner } = {}) =
             )
         }
 
-        return reply(`❓ Usage: *${prefix}chatbera on/off/here/status*`)
+        return reply(`❓ Usage: *${prefix}chatbera on/off/here/group/status*`)
     }
 
     // ── testbera <message> ────────────────────────────────────────────────
