@@ -914,7 +914,10 @@ const handleMessage = async (conn, rawMsg) => {
         // Whisper (Casper groq-audio); the transcript becomes m.text/m.body so
         // the normal flow below — chat, commands, agent, builds — treats it
         // exactly as if typed. PMs: any voice note. Groups: owner only, so
-        // the bot does not answer every member's voice notes.
+        // the bot does not answer every member's voice notes — UNLESS
+        // ChatBera is active in that group: ChatBera is the path answering
+        // members there, and it can only answer (and voice-reply to) a
+        // voice note that has been transcribed.
         // SELF-BOT: this account IS the owner's number, so the owner's own
         // voice notes arrive fromMe=true — in self-chat and in groups. They
         // are eligible (self-chat detected against conn.user.id; groups via
@@ -933,7 +936,16 @@ const handleMessage = async (conn, rawMsg) => {
                 const ownNumber = String(conn.user?.id || '').split('@')[0].split(':')[0]
                 const chatNumber = String(m.chat || '').split('@')[0].split(':')[0]
                 const isSelfChat = !m.isGroup && !!ownNumber && chatNumber === ownNumber
-                const heard = await applyVoiceTranscript(m, conn, { isOwner: voiceAuth.isOwner, isSelfChat })
+                // ChatBera-active group (same activation test the ChatBera
+                // branch below uses): members' voice notes are transcribed
+                // so ChatBera can answer them — and, per its voice-reply
+                // rule, answer in voice (m.fromVoiceNote).
+                const _cbPrefs = global.db?.data?.chatbera || {}
+                const groupChatBeraActive = !!m.isGroup
+                    && _cbPrefs.groupEnabled === true
+                    && !!(_cbPrefs.globalEnabled || _cbPrefs.enabled?.[m.chat]
+                        || (m.key?.remoteJidAlt ? _cbPrefs.enabled?.[m.key.remoteJidAlt] : undefined))
+                const heard = await applyVoiceTranscript(m, conn, { isOwner: voiceAuth.isOwner, isSelfChat, groupChatBeraActive })
                 if (heard.status === 'failed') {
                     console.error('[VOICE LISTEN] failed', heard.stage || '', heard.error || '')
                     await conn.sendMessage(m.chat, { text: "🎙️ Sorry, I couldn't hear that voice note — transcription failed. Please try again or type it." }, { quoted: m }).catch(() => {})

@@ -176,6 +176,69 @@ test('group: a fromMe voice note from the owner is eligible', async () => {
     assert.equal(m.text, 'agent, who is casper')
 })
 
+// ── ChatBera groups: members' voice notes must be hearable (2026-11-27) ────
+// Regression tests for the live failure where ChatBera's voice-reply rule
+// ("a voice note in always gets a voice reply") never fired in groups: the
+// ChatBera branch only answers !fromMe messages, but group transcription
+// was owner-only and the only owner is the bot account itself (always
+// fromMe in a group) — so no answerable group message ever got transcribed,
+// m.fromVoiceNote was never set, and members' voice notes got no reply at
+// all. Where ChatBera is active in a group, its members' voice notes are
+// now transcribed too; every other group stays owner-only.
+
+test('group: a member voice note is eligible only when ChatBera is active in that group', () => {
+    assert.equal(voiceListenEligible(groupVoiceNote(), { isOwner: false, groupChatBeraActive: true }), true)
+    assert.equal(voiceListenEligible(groupVoiceNote(), { isOwner: false, groupChatBeraActive: false }), false)
+    assert.equal(voiceListenEligible(groupVoiceNote(), { isOwner: false }), false, 'no ChatBera flag → owner-only, as before')
+    assert.equal(voiceListenEligible(groupVoiceNote(), { isOwner: true }), true, 'owner needs no ChatBera flag')
+    assert.equal(voiceListenEligible(groupVoiceNote(), { isOwner: true, groupChatBeraActive: true }), true)
+})
+
+test('group: the ChatBera flag does not widen PM eligibility', () => {
+    const strangerPm = { ...pmVoiceNote(), fromMe: true, key: { id: 'STRANGER-PM-2', fromMe: true } }
+    assert.equal(voiceListenEligible(strangerPm, { isOwner: false, isSelfChat: false, groupChatBeraActive: true }), false)
+})
+
+test('group: a member voice note in a ChatBera group is transcribed and marked fromVoiceNote', async () => {
+    const m = groupVoiceNote()
+    const conn = { downloadMediaMessage: async () => goodAudio() }
+    const result = await applyVoiceTranscript(m, conn, {
+        isOwner: false, groupChatBeraActive: true,
+        transcribeAudio: async () => ({ success: true, text: 'sasa, habari yako' })
+    })
+    assert.equal(result.status, 'ok')
+    assert.equal(m.text, 'sasa, habari yako')
+    assert.equal(m.isVoiceNote, true)
+    // The marker the ChatBera voice-reply rule keys on: with it set, the
+    // reply is voice no matter how many replies the chat already had —
+    // in a group exactly as in a PM.
+    assert.equal(m.fromVoiceNote, true)
+    const { shouldVoiceReply } = require('../Library/actions/voice-reply-rule')
+    assert.equal(shouldVoiceReply({ fromVoiceNote: m.fromVoiceNote === true, voiceModeOn: false, repliesSent: 99 }), true)
+})
+
+test('group: a member voice note without ChatBera active is still skipped untouched', async () => {
+    const m = groupVoiceNote()
+    let downloads = 0
+    const conn = { downloadMediaMessage: async () => { downloads++; return Buffer.from('x') } }
+    const result = await applyVoiceTranscript(m, conn, { isOwner: false, groupChatBeraActive: false, transcribeAudio: async () => ({ success: true, text: 'hi' }) })
+    assert.equal(result.status, 'skip')
+    assert.equal(downloads, 0)
+    assert.equal(m.text, '')
+    assert.equal(m.fromVoiceNote, undefined)
+})
+
+test('Handler wiring: the auto-listen call passes the group ChatBera activation through', () => {
+    const fs = require('node:fs')
+    const path = require('node:path')
+    const src = fs.readFileSync(path.join(__dirname, '..', 'Handler', 'index.js'), 'utf8')
+    assert.match(src, /groupChatBeraActive/)
+    assert.match(src, /applyVoiceTranscript\(m, conn, \{[^}]*groupChatBeraActive \}\)/)
+    // Activation mirrors the ChatBera branch: group toggle + global or per-chat on.
+    assert.match(src, /_cbPrefs\.groupEnabled === true/)
+    assert.match(src, /_cbPrefs\.enabled\?\.\[m\.chat\]/)
+})
+
 test('a voice note registered as bot-sent is skipped, even in self-chat', async () => {
     markBotSentVoice('BOT-SENT-1')
     assert.equal(isBotSentVoice('BOT-SENT-1'), true)

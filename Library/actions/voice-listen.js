@@ -17,6 +17,16 @@
 //   voice notes are transcribed (caller passes isSelfChat).
 // - Groups: owner only (caller passes isOwner via Auth.isAuthorized), fromMe
 //   or not, so the bot does not transcribe/answer every member's voice notes.
+//   ONE exception: a group where ChatBera is active (caller passes
+//   groupChatBeraActive). ChatBera is the owner's public face there and the
+//   only path that answers members — and it can only answer a voice note
+//   once the note is transcribed (which is also what sets m.fromVoiceNote,
+//   the marker its voice-reply rule keys on). Owner-only eligibility made
+//   that rule unreachable in groups: the only owner is the bot account
+//   itself, whose group messages are always fromMe, and ChatBera never
+//   answers fromMe messages — so no group voice note was ever transcribed
+//   and members' voice notes got no reply at all. The transcript flows
+//   through the same Handler gates as a typed message from that member.
 // - A fromMe voice note in an ordinary PM is eligible only for the owner /
 //   self-chat — never for anyone else.
 //
@@ -77,13 +87,14 @@ const isVoiceNoteMessage = (m) => {
     return true
 }
 
-// deps: { isOwner, isSelfChat } — both computed by the caller (Handler), which
-// owns the Auth check and knows the bot account's own JID (conn.user.id).
+// deps: { isOwner, isSelfChat, groupChatBeraActive } — computed by the
+// caller (Handler), which owns the Auth check, knows the bot account's own
+// JID (conn.user.id), and knows whether ChatBera is active in the chat.
 // A bare boolean is still accepted as shorthand for { isOwner }.
 const voiceListenEligible = (m, deps = {}) => {
     if (typeof deps === 'boolean') deps = { isOwner: deps }
     if (!isVoiceNoteMessage(m)) return false
-    if (m.isGroup) return deps.isOwner === true
+    if (m.isGroup) return deps.isOwner === true || deps.groupChatBeraActive === true
     if (m.fromMe) return deps.isSelfChat === true || deps.isOwner === true
     return true
 }
