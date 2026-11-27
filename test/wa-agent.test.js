@@ -29,20 +29,15 @@ const handle = require('../Plugins/waagent')
         sender: '254116763755@s.whatsapp.net',
         ...overrides,
     })
-    // Confirmation previews are delivered as button messages through
-    // conn.sendMessage (native buttons in production; the text fallback
-    // in this harness) — pop the latest one from `sent`. The invariant
-    // the assertions below protect is unchanged: nothing reaches the
+    // Confirmation previews are plain-text replies — pop the latest
+    // one from `replies`. (Native-button delivery via relayMessage
+    // was tried and removed on 2026-11-27.) The invariant the
+    // assertions below protect is unchanged: nothing reaches the
     // TARGET before the token is confirmed.
     const popPreview = () => {
-        const idx = sent.findLastIndex(entry => /Confirmation preview/.test(entry.content?.text || ''))
-        if (idx >= 0) return sent.splice(idx, 1)[0].content.text
-        // Native-button previews are relayed as interactive messages:
-        // the preview text lives in the interactive body.
-        const ridx = relayed.findLastIndex(entry =>
-            /Confirmation preview/.test(entry.message?.viewOnceMessage?.message?.interactiveMessage?.body?.text || ''))
-        assert.ok(ridx >= 0, 'a confirmation preview was delivered')
-        return relayed.splice(ridx, 1)[0].message.viewOnceMessage.message.interactiveMessage.body.text
+        const idx = replies.findLastIndex(text => /Confirmation preview/.test(text || ''))
+        assert.ok(idx >= 0, 'a confirmation preview was delivered')
+        return replies.splice(idx, 1)[0]
     }
     const confirm = async (preview) => {
         const token = preview.match(/confirm ([A-F0-9]{8})/)[1]

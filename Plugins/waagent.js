@@ -44,17 +44,13 @@ const mentionedJids = (m) => m?.mentionedJid
     || m?.message?.extendedTextMessage?.contextInfo?.mentionedJid
     || []
 
-// Confirmation previews go out with native Yes/No buttons (tap =
-// confirm/cancel via the Handler's tap route). sendBtn falls back to
-// plain text when buttons are unavailable, and the preview text keeps
-// the typed .wact instructions either way.
-const replyPreview = async (conn, m, reply, previewText, token) => {
-    try {
-        const { sendNativeButtons } = require('../Library/actions/btns')
-        const { confirmationButtons } = require('../Library/lib/wa-actions')
-        await sendNativeButtons(conn, m.chat, { text: previewText, footer: 'Bera AI', buttons: confirmationButtons(token), quoted: m })
-    } catch { return reply(previewText) }
-}
+// Confirmation previews are plain text: the user confirms by typing
+// ".wact confirm <token>". Native Yes/No buttons were tried on
+// 2026-11-27 (PRs #69-#72) and removed the same day at Bera's call:
+// the bot runs as a linked device of his own account, so WhatsApp
+// treats its messages as authored by him — and a sender can never
+// tap buttons on their own messages (recipients could; he couldn't).
+const replyPreview = async (conn, m, reply, previewText, token) => reply(previewText)
 
 const handle = async (m, { conn, args = [], text = '', command = 'wact', reply, isOwner, sender } = {}) => {
     // Forwarding is confirmation-gated for authorized users (spec §12), not
