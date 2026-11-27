@@ -102,6 +102,34 @@ test('sendNativeButtons builds a real interactive message with the token ids', a
     const params = im.nativeFlowMessage.buttons.map(b => JSON.parse(b.buttonParamsJson))
     assert.deepEqual(params.map(p => p.id), ['wact_confirm_AB12CD34', 'wact_cancel_AB12CD34'])
     assert.match(params[0].display_text, /Yes/)
+    // The relay MUST carry WhatsApp's binary wrapper nodes or clients
+    // silently drop the buttons: biz > interactive(native_flow) >
+    // native_flow(v=9, mixed), plus a bot node in private chats.
+    const nodes = relayed[0].opts.additionalNodes
+    const biz = nodes.find(n => n.tag === 'biz')
+    assert.ok(biz, 'biz wrapper node present')
+    const interactive = biz.content.find(n => n.tag === 'interactive')
+    assert.equal(interactive.attrs.type, 'native_flow')
+    const flow = interactive.content.find(n => n.tag === 'native_flow')
+    assert.deepEqual(flow.attrs, { v: '9', name: 'mixed' })
+    const bot = nodes.find(n => n.tag === 'bot')
+    assert.equal(bot?.attrs?.biz_bot, '1', 'bot node present in a private chat')
+})
+
+test('sendNativeButtons omits the bot node in group chats', async () => {
+    const { sendNativeButtons } = require('../Library/actions/btns')
+    const relayed = []
+    const conn = {
+        user: { id: '254116763755@s.whatsapp.net' },
+        relayMessage: async (jid, message, opts) => { relayed.push({ jid, message, opts }); return {} },
+        sendMessage: async () => { throw new Error('fallback must not run') }
+    }
+    await sendNativeButtons(conn, '120363000000000000@g.us', {
+        text: 'Confirmation preview — group', buttons: waActions.confirmationButtons('AB12CD34')
+    })
+    const nodes = relayed[0].opts.additionalNodes
+    assert.ok(nodes.some(n => n.tag === 'biz'), 'biz node present in group')
+    assert.ok(!nodes.some(n => n.tag === 'bot'), 'no bot node in group')
 })
 
 test('sendNativeButtons falls back to numbered text when relaying fails', async () => {

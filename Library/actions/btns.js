@@ -139,10 +139,14 @@ const sendUrlBtn = async (conn, jid, opts = {}) => {
 // (verified live 2026-11-27: confirmation previews silently degraded
 // to the numbered text list), so confirmations are built by hand with
 // the Baileys proto the runtime already ships: an interactiveMessage
-// with nativeFlow quick_reply buttons, relayed as a view-once message
-// (the construction modern WhatsApp clients render as tappable
-// buttons). Any failure is LOGGED (the gifted path failed silently)
-// and degrades to the same numbered text fallback.
+// with nativeFlow quick_reply buttons, relayed as a view-once message.
+// The relay MUST carry WhatsApp's binary wrapper nodes or clients
+// silently drop the buttons (documented by gifted-btns' and
+// baileys-buttons' READMEs, cross-checked 2026-11-27):
+//   biz > interactive(type=native_flow, v=1) > native_flow(v=9, name=mixed)
+// plus, in private chats only, a bot node (biz_bot=1). Any failure is
+// LOGGED (the gifted path failed silently) and degrades to the same
+// numbered text fallback.
 const sendNativeButtons = async (conn, jid, opts = {}) => {
     try {
         const baileys = require('@whiskeysockets/baileys')
@@ -171,7 +175,18 @@ const sendNativeButtons = async (conn, jid, opts = {}) => {
             }
         }
         const msg = gen(jid, content, { userJid: conn.user?.id, quoted: opts.quoted || undefined })
-        await conn.relayMessage(jid, msg.message, { messageId: msg.key.id })
+        const bizNode = {
+            tag: 'biz', attrs: {},
+            content: [{
+                tag: 'interactive', attrs: { type: 'native_flow', v: '1' },
+                content: [{ tag: 'native_flow', attrs: { v: '9', name: 'mixed' } }]
+            }]
+        }
+        const isGroup = String(jid).endsWith('@g.us')
+        const additionalNodes = isGroup
+            ? [bizNode]
+            : [bizNode, { tag: 'bot', attrs: { biz_bot: '1' } }]
+        await conn.relayMessage(jid, msg.message, { messageId: msg.key.id, additionalNodes })
         return msg
     } catch (e) {
         console.error('[BTN] native buttons failed, using text fallback:', e?.message || e)
