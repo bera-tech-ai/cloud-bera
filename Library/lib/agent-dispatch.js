@@ -19,7 +19,7 @@ const { PIN_ACCEPTED_MESSAGE, BAILEYS_ACCEPTED_MESSAGE, groupPermissionFailure, 
 const HANDLED_INTENTS = new Set([
     'react_msg', 'remove_reaction', 'pin_msg', 'unpin_msg', 'edit_msg',
     'delete_msg', 'delete_this', 'poll_create', 'group_poll',
-    'forward_msg', 'send_pm', 'remember_name',
+    'forward_msg', 'send_pm', 'remember_name', 'bot_update', 'bot_restart',
 ])
 
 const CLOSE_FRIENDS_RE = /\b(close[- ]?friends?|close friends|restricted (audience|status)|only (my )?close friends)\b/i
@@ -260,11 +260,36 @@ const dispatch = async (ctx) => {
             try {
                 const target = await waActions.resolveTarget(conn, m, targetSpec, { allowSpecial: true })
                 const token = waActions.stage(sender, { type: 'send', jid: target.jid, number: target.number, text: msg })
-                await reply(`⏳ Preview only — nothing was sent.\nTarget: ${target.jid}\nMessage: ${msg}\nToken: ${token}\nReply: .wact confirm ${token} within 2 minutes to send it.`)
+                // The preview carries native Yes/No buttons; a tap runs
+                // the same token path as typing ".wact confirm <token>".
+                const previewText = `⏳ Preview only — nothing was sent.\nTarget: ${target.jid}\nMessage: ${msg}\nToken: ${token}\nReply: .wact confirm ${token} within 2 minutes to send it.`
+                try {
+                    const { sendBtn } = require('../actions/btns')
+                    await sendBtn(conn, chat, { text: previewText, footer: 'Bera AI', buttons: waActions.confirmationButtons(token) })
+                } catch { await reply(previewText) }
             } catch (error) {
                 await react('❌')
                 await reply(`❌ Failed to send: ${error.message}`)
             }
+            return true
+        }
+
+        if (intent === 'bot_restart' || intent === 'bot_update') {
+            // Owner-only: the bot updates/restarts itself for nobody else.
+            if (!isOwner) { await reply('⛔ Updating or restarting the bot is owner-only.'); return true }
+            const { applyUpdate, restartBot } = require('../actions/self-update')
+            if (intent === 'bot_restart') {
+                await reply('🔁 Restarting Bera AI… I will be back in a few seconds.')
+                restartBot(1500)
+                return true
+            }
+            const result = await applyUpdate({ notify: (text) => reply(text) })
+            if (!result.ok) { await reply(`❌ Update failed: ${result.error}`); return true }
+            if (!result.updateAvailable) { await reply('✅ Bera AI is already on the latest version.'); return true }
+            await reply(`✅ *Update complete* — now on \`${String(result.latest).slice(0, 7)}\`.` +
+                (result.npm === false ? '\n⚠️ Dependency install failed — check npm before relying on new code.' : '') +
+                '\n\n🔁 Restarting…')
+            restartBot(2000)
             return true
         }
     } catch (error) {

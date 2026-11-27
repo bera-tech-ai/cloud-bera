@@ -724,6 +724,33 @@ const handleMessage = async (conn, rawMsg) => {
                     return
                 }
 
+                // ─── Staged-action confirmations: Yes/No button taps ──────────
+                // A tap runs the same single-use, owner-bound token path as
+                // typing ".wact confirm <token>" — executeConfirmed consumes
+                // the token before anything reaches Baileys.
+                const _wactTap = require('../Library/lib/wa-actions').parseConfirmationButtonId(btnId)
+                if (_wactTap) {
+                    const waActions = require('../Library/lib/wa-actions')
+                    if (_wactTap.kind === 'confirm') {
+                        const staged = waActions.getPending(_wactTap.token)
+                        const result = await waActions.executeConfirmed(conn, sender, _wactTap.token)
+                        if (!result.ok) {
+                            await conn.sendMessage(m.chat, { text: `❌ ${result.error}` }, { quoted: m }).catch(() => {})
+                            return
+                        }
+                        const target = staged?.action?.number ? `+${staged.action.number}` : (staged?.action?.jid || staged?.action?.groupJid || result.jid || '')
+                        await conn.sendMessage(m.chat, { text: staged?.action?.type === 'send' ? `${result.message}\nTarget: ${target}` : result.message }, { quoted: m }).catch(() => {})
+                        return
+                    }
+                    const staged = waActions.getPending(_wactTap.token)
+                    if (staged && staged.owner !== String(sender || '')) {
+                        await conn.sendMessage(m.chat, { text: '❌ That confirmation belongs to another session.' }, { quoted: m }).catch(() => {})
+                        return
+                    }
+                    await conn.sendMessage(m.chat, { text: waActions.cancel(sender, _wactTap.token) ? '✅ Pending action cancelled. The token can no longer be used.' : '❌ Token is invalid, expired, or already used.' }, { quoted: m }).catch(() => {})
+                    return
+                }
+
                 // ─── play_pick: user selected a track → show format buttons ──────────
                 if (btnId.startsWith('play_pick_')) {
                     const segs5  = btnId.split('_')

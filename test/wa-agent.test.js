@@ -29,6 +29,16 @@ const handle = require('../Plugins/waagent')
         sender: '254116763755@s.whatsapp.net',
         ...overrides,
     })
+    // Confirmation previews are delivered as button messages through
+    // conn.sendMessage (native buttons in production; the text fallback
+    // in this harness) — pop the latest one from `sent`. The invariant
+    // the assertions below protect is unchanged: nothing reaches the
+    // TARGET before the token is confirmed.
+    const popPreview = () => {
+        const idx = sent.findLastIndex(entry => /Confirmation preview/.test(entry.content?.text || ''))
+        assert.ok(idx >= 0, 'a confirmation preview was delivered')
+        return sent.splice(idx, 1)[0].content.text
+    }
     const confirm = async (preview) => {
         const token = preview.match(/confirm ([A-F0-9]{8})/)[1]
         await handle({}, ctx({ args: ['confirm', token], text: `confirm ${token}` }))
@@ -39,7 +49,7 @@ const handle = require('../Plugins/waagent')
     assert.match(replies.pop(), /registered on WhatsApp/)
 
     await handle({}, ctx({ args: ['send', '254712345678', '|', 'hello'], text: 'send 254712345678 | hello' }))
-    let preview = replies.pop()
+    let preview = popPreview()
     assert.match(preview, /Confirmation preview/)
     assert.match(preview, /Africa\/Nairobi/, 'preview must show the Nairobi expiry time')
     assert.match(preview, /\.wact cancel [A-F0-9]{8}/, 'preview must show the cancellation instruction')
@@ -52,7 +62,7 @@ const handle = require('../Plugins/waagent')
         args: ['send', 'reply', '|', 'reply hello'],
         text: 'send reply | reply hello',
     }))
-    preview = replies.pop()
+    preview = popPreview()
     assert.match(preview, /To: \+254700000001/)
     assert.match(await confirm(preview), /Request accepted by Baileys\. Final device-side visibility depends on WhatsApp processing\./)
     assert.equal(sent.at(-1).jid, '254700000001@s.whatsapp.net')
@@ -61,7 +71,7 @@ const handle = require('../Plugins/waagent')
         args: ['send', 'tag', '|', 'tag hello'],
         text: 'send tag | tag hello',
     }))
-    preview = replies.pop()
+    preview = popPreview()
     assert.match(preview, /To: \+254700000002/)
     assert.match(await confirm(preview), /Request accepted by Baileys\. Final device-side visibility depends on WhatsApp processing\./)
     assert.equal(sent.at(-1).jid, '254700000002@s.whatsapp.net')
@@ -70,12 +80,12 @@ const handle = require('../Plugins/waagent')
         args: ['send', 'this pm', '|', 'private hello'],
         text: 'send this pm | private hello',
     }))
-    preview = replies.pop()
+    preview = popPreview()
     assert.match(await confirm(preview), /Request accepted by Baileys\. Final device-side visibility depends on WhatsApp processing\./)
     assert.equal(sent.at(-1).jid, '254700000003@s.whatsapp.net')
 
     await handle({}, ctx({ args: ['story', 'Bera is online'], text: 'story Bera is online' }))
-    const storyPreview = replies.pop()
+    const storyPreview = popPreview()
     assert.match(await confirm(storyPreview), /Request accepted by Baileys\. Final device-side visibility depends on WhatsApp processing\./)
     assert.equal(sent.at(-1).jid, 'status@broadcast')
     assert.equal(sent.at(-1).content.text, 'Bera is online')
@@ -84,7 +94,7 @@ const handle = require('../Plugins/waagent')
         args: ['groupstory', 'Hello group'],
         text: 'groupstory Hello group',
     }))
-    const groupPreview = replies.pop()
+    const groupPreview = popPreview()
     assert.match(groupPreview, /Confirmation preview/)
     assert.match(groupPreview, /Post group story/)
     assert.match(await confirm(groupPreview), /Request accepted by Baileys\. Final device-side visibility depends on WhatsApp processing\./)

@@ -230,6 +230,13 @@ const detectIntent = (text) => {
         /\b(send|message)\s+(him|her|them|this\s+number|that\s+number)\b/.test(t)) return 'send_pm'
 
     // ── Teach a contact name ("remember babe is 254712345678") ─────────────
+    // ── Bot self update / restart ("update yourself", "restart") ─────
+    // Anchored to the WHOLE message so "update my status", "restart my
+    // project" and "update this message" keep their existing meanings.
+    // Owner-only is enforced in agent-dispatch, not here.
+    if (/^(please\s+)?restart(\s+(yourself|the\s+bot|bera(\s+ai)?|now|please))*\s*[.!]?$/.test(t)) return 'bot_restart'
+    if (/^(please\s+)?(update|upgrade)(\s+(yourself|the\s+bot|bera(\s+ai)?|now|please|to\s+(the\s+)?latest(\s+version)?))*\s*[.!]?$/.test(t)) return 'bot_update'
+
     if (/\bremember\s+[a-z][a-z' -]{1,30}\s+(is|=|as)\s+\+?\d{7,15}\b/i.test(t)) return 'remember_name'
 
     // ── Send to a named person ("send hello to babe") ───────────────────────
