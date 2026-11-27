@@ -1057,7 +1057,17 @@ const handleMessage = async (conn, rawMsg) => {
             const chatberaOn = chatberaGlobal || chatberaChat
             // Skip if message is from a group (PMs only) unless group mode enabled
             const chatberaGroupOk = global.db?.data?.chatbera?.groupEnabled || false
-            if (chatberaOn && !m.fromMe && text && !_cbAgentClaimed && (!m.isGroup || chatberaGroupOk)) {
+            // Media replies (2026-11-27): with ChatBera on, an image,
+            // sticker or GIF gets looked at via vision and answered
+            // too — a bare image has no text, so without this the
+            // branch below never fires for it. describeChatMedia
+            // returns null for non-media and on any failure, which
+            // keeps today's fallback: caption-only, or silence.
+            let _cbMedia = null
+            if (chatberaOn && !m.fromMe && !_cbAgentClaimed && (!m.isGroup || chatberaGroupOk)) {
+                _cbMedia = await require('../Library/actions/chatbera-media').describeChatMedia(conn, m).catch(() => null)
+            }
+            if (chatberaOn && !m.fromMe && (text || _cbMedia) && !_cbAgentClaimed && (!m.isGroup || chatberaGroupOk)) {
                 console.log('[CHATBERA] 🔥 Triggered for msg:', text.slice(0, 30), '| from:', sender)
                   try {
                       const { generateSimpleReply } = require('../Library/actions/beraai')
@@ -1079,7 +1089,10 @@ const handleMessage = async (conn, rawMsg) => {
                       conn.sendPresenceUpdate('composing', chat).catch(() => {})
                       await new Promise(r => setTimeout(r, 800 + Math.random() * 1500))
                       const peopleMemStr = require('../Library/actions/people-memory').formatForPrompt(sender, m.key?.remoteJidAlt)
-                      const result = await generateSimpleReply(text, chat, languagePreference, { chatbera: true, peopleMemStr })
+                      const turnText = _cbMedia
+                          ? require('../Library/actions/chatbera-media').composeMediaTurnText({ kind: _cbMedia.kind, description: _cbMedia.description, caption: text })
+                          : text
+                      const result = await generateSimpleReply(turnText, chat, languagePreference, { chatbera: true, peopleMemStr })
                       if (result.success && result.reply) {
                           // Voice-reply rule (Bera, 2026-11-26): a voice note in
                           // always gets a voice reply; a typed conversation gets
