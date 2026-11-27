@@ -1078,7 +1078,8 @@ const handleMessage = async (conn, rawMsg) => {
                       const voiceRepliesEnabled = chatberaPrefs.voiceReplies?.[normalizedSender] === true && !m.isGroup
                       conn.sendPresenceUpdate('composing', chat).catch(() => {})
                       await new Promise(r => setTimeout(r, 800 + Math.random() * 1500))
-                      const result = await generateSimpleReply(text, chat, languagePreference, { chatbera: true })
+                      const peopleMemStr = require('../Library/actions/people-memory').formatForPrompt(sender, m.key?.remoteJidAlt)
+                      const result = await generateSimpleReply(text, chat, languagePreference, { chatbera: true, peopleMemStr })
                       if (result.success && result.reply) {
                           // Voice-reply rule (Bera, 2026-11-26): a voice note in
                           // always gets a voice reply; a typed conversation gets
@@ -1120,6 +1121,14 @@ const handleMessage = async (conn, rawMsg) => {
                               } catch {}
                               await global.db.write().catch(() => {})
                           }
+                          // People memory: learn durable facts this person
+                          // stated about themselves. Fire-and-forget — the
+                          // reply is already sent; learning never delays it
+                          // and never learns from the owner's own messages
+                          // (this branch only runs for !m.fromMe).
+                          require('../Library/actions/people-memory')
+                              .learnFromMessage({ jid: sender, altJid: m.key?.remoteJidAlt, text })
+                              .catch(() => {})
                       }
                       conn.sendPresenceUpdate('paused', chat).catch(() => {})
                 } catch (e) {
