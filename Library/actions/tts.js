@@ -37,16 +37,16 @@ const resolveSpeechLanguage = (text, preference = 'en') => {
 // The user asked 2026-11-24 for a voice that sounds like a normal human,
 // "even in Sheng" — the Google Translate TTS voice sounds robotic. Piper
 // (VITS, runs fully offline) is the human-sounding voice: en_US-lessac.
-// Microsoft Edge neural voices were tried first: the voices-list endpoint
-// answers 200, but the synthesis WebSocket 403s from this VM even with
-// browser headers and the exact origin the edge-tts package uses —
-// Microsoft blocks this host, so Edge is unusable here (Google stays as
-// the fallback). The Piper Swahili model (sw_CD lanfrica) is NOT used: it
-// crashes on every input with this Piper build ("Phonemes must be one
-// codepoint"), a known voice/build incompatibility — so Swahili and Sheng
-// also use the English lessac voice for now (it reads Swahili words with
-// English phonetics, but with human prosody). If a working Swahili Piper
-// model is ever installed, point PIPER_VOICE_MAP.sw at it.
+// Microsoft Edge neural voices were tried first in Nov 2026: the
+// synthesis WebSocket 403'd from this VM then — but a retest on
+// 2026-11-27 found the block gone (host routing changed), and Edge is
+// now the first-choice Swahili voice (see the Edge section below). The
+// Piper Swahili model (sw_CD lanfrica) is NOT used: it crashes on every
+// input with this Piper build ("Phonemes must be one codepoint"), a
+// known voice/build incompatibility — so on the Piper rung, Swahili and
+// Sheng use the English lessac voice (it reads Swahili words with
+// English phonetics, but with human prosody). If a working Swahili
+// Piper model is ever installed, point PIPER_VOICE_MAP.sw at it.
 // The binary + models live in Library/assets/piper/ (binary and ~63 MB
 // models are NOT committed to git — install them on the host, or set
 // BERA_PIPER_BIN / BERA_PIPER_MODEL_<LANG>). When Piper is missing, Google
@@ -91,6 +91,49 @@ const fetchPiperWav = async (content, piper, outFile) => {
     })
     const stat = fs.statSync(outFile)
     if (!stat.size) throw new Error('Piper produced an empty file.')
+}
+
+// ── Microsoft Edge neural voice (cloud, first choice for Swahili) ──────
+// Bera picked the Kenyan neural voice Zuri on 2026-11-27 after hearing
+// samples (Zuri / Rafiki / Google): Swahili replies must not be read by
+// an English voice any more. Edge TTS is free and keyless; it runs via
+// the `edge-tts` Python CLI (the maintained client for Microsoft's
+// Read-Aloud service), driven with spawn — the same lesson as Piper:
+// execFile is not used for speech subprocesses in this codebase.
+// Install: python3 -m venv ~/workspace/bera-bot/edge-tts-venv &&
+//   ~/workspace/bera-bot/edge-tts-venv/bin/pip install edge-tts
+// Override the binary with BERA_EDGE_TTS_BIN; override the voice with
+// BERA_TTS_SW_VOICE. Ladder for Swahili (incl. Sheng, which resolves to
+// 'sw'): Edge → Google → Piper. Any Edge failure falls through — it
+// must never fail the reply. Disable with BERA_TTS_EDGE=0.
+const EDGE_SW_VOICE_DEFAULT = 'sw-KE-ZuriNeural'
+const resolveEdgeTts = () => {
+    try {
+        if (process.env.BERA_EDGE_TTS_BIN) return process.env.BERA_EDGE_TTS_BIN
+        const venvBin = path.join(os.homedir(), 'workspace', 'bera-bot', 'edge-tts-venv', 'bin', 'edge-tts')
+        if (fs.existsSync(venvBin)) return venvBin
+        return null
+    } catch { return null }
+}
+const fetchEdgeMp3 = async (content, voice, outFile, bin = resolveEdgeTts()) => {
+    if (!bin) throw new Error('Edge TTS is not installed on this host.')
+    await new Promise((resolve, reject) => {
+        const { spawn } = require('child_process')
+        const child = spawn(bin, ['--voice', voice, '--text', content, '--write-media', outFile])
+        let stderr = ''
+        const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('Edge TTS timed out after 45s')) }, 45000)
+        child.stderr.on('data', (d) => { stderr += String(d) })
+        child.on('error', (e) => { clearTimeout(timer); reject(e) })
+        child.on('close', (code) => {
+            clearTimeout(timer)
+            if (code !== 0) return reject(new Error(`Edge TTS exited with code ${code}: ${stderr.split('\n').filter(Boolean).slice(-2).join(' | ').slice(0, 200)}`))
+            resolve()
+        })
+        child.stdin.on('error', () => {})
+        child.stdin.end()
+    })
+    const stat = fs.statSync(outFile)
+    if (!stat.size) throw new Error('Edge TTS produced an empty file.')
 }
 
 // ── Casper Orpheus voice (cloud, first choice for English) ─────────────
@@ -265,6 +308,33 @@ const fetchTts = async (text, lang = 'en') => {
                 console.error('[TTS] Orpheus failed, falling back to Piper:', e?.message || e)
             }
         }
+        // Swahili ladder (Bera's pick, 2026-11-27): the Edge Zuri voice
+        // first, then Google's Swahili voice, and Piper only as the last
+        // resort — Piper's Swahili is an English voice reading Swahili.
+        // Sheng resolves to 'sw' in resolveSpeechLanguage, so it takes
+        // this ladder too.
+        if (!sourceFile && speechLanguage === 'sw' && process.env.BERA_TTS_EDGE !== '0') {
+            try {
+                const edgeFile = path.join(tempDir, 'edge.mp3')
+                await fetchEdgeMp3(speakable, process.env.BERA_TTS_SW_VOICE || VOICE_MAP.sw || EDGE_SW_VOICE_DEFAULT, edgeFile)
+                sourceFile = edgeFile
+                console.log('[TTS] Using Edge Zuri voice (Swahili)')
+            } catch (e) {
+                console.error('[TTS] Edge TTS failed, falling back to Google (Swahili):', e?.message || e)
+            }
+        }
+        if (!sourceFile && speechLanguage === 'sw') {
+            try {
+                const inputFiles = await fetchGoogleMp3Parts(speakable, 'sw', tempDir)
+                const listFile = path.join(tempDir, 'concat.txt')
+                fs.writeFileSync(listFile, inputFiles.map(file => `file '${file}'`).join('\n'))
+                sourceFile = listFile
+                sourceIsConcat = true
+                console.log('[TTS] Using Google voice (Swahili)')
+            } catch (e) {
+                console.error('[TTS] Google TTS failed, falling back to Piper (Swahili):', e?.message || e)
+            }
+        }
         // Next: the local neural voice; fall back to Google TTS if Piper
         // is not installed on this host or synthesis fails for any reason.
         const piper = resolvePiper(language)
@@ -301,4 +371,4 @@ const fetchTts = async (text, lang = 'en') => {
     }
 }
 
-module.exports = { fetchTts, VOICE_MAP, normalizeLanguage, resolveSpeechLanguage, toSpeechText, PIPER_VOICE_MAP, resolvePiper, fetchOrpheusWav, splitOrpheusChunks, ORPHEUS_CHUNK_CHARS, ORPHEUS_MAX_CHUNKS }
+module.exports = { fetchTts, VOICE_MAP, normalizeLanguage, resolveSpeechLanguage, toSpeechText, PIPER_VOICE_MAP, resolvePiper, fetchOrpheusWav, splitOrpheusChunks, ORPHEUS_CHUNK_CHARS, ORPHEUS_MAX_CHUNKS, resolveEdgeTts, fetchEdgeMp3, EDGE_SW_VOICE_DEFAULT }
