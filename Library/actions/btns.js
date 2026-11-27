@@ -186,7 +186,24 @@ const sendNativeButtons = async (conn, jid, opts = {}) => {
         const additionalNodes = isGroup
             ? [bizNode]
             : [bizNode, { tag: 'bot', attrs: { biz_bot: '1' } }]
-        await conn.relayMessage(jid, msg.message, { messageId: msg.key.id, additionalNodes })
+        // The relay is raced against a timeout: live tests on
+        // 2026-11-27 showed .wact previews vanishing with no reply,
+        // no fallback and no error — consistent with relayMessage
+        // never settling for this message shape. A timeout turns
+        // that silent hang into a logged text fallback, and the
+        // success line proves the relay actually completed.
+        const timeoutMs = opts.relayTimeoutMs || 20000
+        let relayTimer
+        try {
+            await Promise.race([
+                conn.relayMessage(jid, msg.message, { messageId: msg.key.id, additionalNodes }),
+                new Promise((_, reject) => {
+                    relayTimer = setTimeout(() => reject(new Error(`relay timed out after ${timeoutMs}ms`)), timeoutMs)
+                    relayTimer.unref?.()
+                })
+            ])
+        } finally { clearTimeout(relayTimer) }
+        console.log(`[BTN] native buttons relayed to ${jid}`)
         return msg
     } catch (e) {
         console.error('[BTN] native buttons failed, using text fallback:', e?.message || e)
